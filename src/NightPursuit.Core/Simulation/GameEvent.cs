@@ -1,4 +1,5 @@
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Simulation;
 
@@ -18,3 +19,5 @@ public sealed record PlayerDamaged(double Time, double Amount, string Reason) : 
 public sealed record VehicleSpun(double Time, int VehicleId, string Reason) : GameEvent(Time);
 
 public sealed record PlayerWrecked(double Time, string Reason) : GameEvent(Time);
+
+public sealed record WeaponUsed(double Time, WeaponKind Weapon, int OwnerId) : GameEvent(Time);

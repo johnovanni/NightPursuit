@@ -6,6 +6,8 @@ public abstract class Hazard
     public double Distance { get; set; }
     public double Lateral { get; set; }
     public bool Expired { get; set; }
+    /// <summary>Dropped by an enemy rather than the player.</summary>
+    public bool Hostile { get; set; }
 
     public abstract void Update(double dt, double playerDistance);
 }

@@ -12,7 +12,7 @@ namespace NightPursuit.Core.Simulation;
 /// Owns the whole simulation and advances it in fixed <see cref="Step"/> increments, so the same seed and
 /// the same inputs always give the same result.
 /// </summary>
-public sealed class World
+public sealed partial class World
 {
     public const double Step = 1.0 / 120;
     const double MaxFrameSeconds = 0.25;
@@ -111,7 +111,7 @@ public sealed class World
         }
 
         StepWeapons(input);
-        Loadout.Oil.Update(Step);
+        Loadout.Update(Step);
         StepHazards();
         StepAgents();
         Collisions.Resolve(this);
@@ -290,24 +290,13 @@ public sealed class World
                 Scheme.Handle(a, Player.Speed, Feel);
                 break;
             case ActionKind.DropRear:
-                DropOil();
+                DropRear();
+                break;
+            case ActionKind.CycleRear:
+                CycleRear();
                 break;
             // Pause, ToggleHelp, Restart: handled by the mission run.
         }
-    }
-
-    void DropOil()
-    {
-        if (Player.State == VehicleState.Wrecked) return;
-        if (Loadout.Oil.TryDrop())
-        {
-            Hazards.Add(new OilSlick { Distance = Player.Distance - 5, Lateral = Player.Lateral });
-            Publish(new Message(Time, "OIL SLICK DROPPED", Tone.Info));
-        }
-        else if (Loadout.Oil.Charges <= 0)
-            Publish(new Message(Time, "NO OIL LEFT (recharging)", Tone.Bad));
-        else
-            Publish(new Message(Time, "OIL NOT READY", Tone.Info));
     }
 
     /// <summary>The next unused vehicle id (the player is 0).</summary>
