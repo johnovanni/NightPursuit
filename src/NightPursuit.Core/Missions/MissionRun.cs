@@ -35,7 +35,7 @@ public sealed class MissionRun
 
     void Rebuild()
     {
-        World = new World(new Track(_def.Road), _feel, new SeededRng(_seed)) { Loadout = new Loadout(_def.StartingOil) };
+        World = new World(new Track(_def.Road), _feel, new SeededRng(_seed)) { Loadout = new Loadout(_def.Loadout) };
         Director = new MissionDirector(_def);
         State = RunState.Playing;
         StateTimer = 0;

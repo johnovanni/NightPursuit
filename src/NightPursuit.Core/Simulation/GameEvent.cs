@@ -29,4 +29,5 @@ public sealed record VehicleSpun(double Time, int VehicleId, string Reason) : Ga
 public sealed record PlayerWrecked(double Time, string Reason) : GameEvent(Time);
 
 public sealed record WeaponUsed(double Time, WeaponKind Weapon, int OwnerId) : GameEvent(Time);
+public sealed record SupplyCollected(double Time, SupplyItem Item, int Added) : GameEvent(Time);
 public sealed record StrikeLanded(double Time, int Destroyed) : GameEvent(Time);

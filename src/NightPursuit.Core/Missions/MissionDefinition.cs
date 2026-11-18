@@ -1,5 +1,6 @@
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Missions;
 
@@ -11,7 +12,13 @@ public sealed record MissionDefinition(
     TrackProfile Road,
     double ApproachLength,
     int StartingOil,
-    IReadOnlyList<WaveDefinition> Waves);
+    IReadOnlyList<WaveDefinition> Waves,
+    LoadoutDefinition? StartingLoadout = null,
+    IReadOnlyList<CrateDefinition>? Crates = null)
+{
+    /// <summary>What the player starts with; oil always follows <see cref="StartingOil"/>.</summary>
+    public LoadoutDefinition Loadout => (StartingLoadout ?? LoadoutDefinition.Default) with { Oil = StartingOil };
+}
 
 /// <summary>
 /// Enemies that appear once the player passes <paramref name="AtDistance"/>. A positive (or zero)

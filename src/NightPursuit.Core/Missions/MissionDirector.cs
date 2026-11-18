@@ -1,3 +1,4 @@
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
@@ -9,7 +10,10 @@ public sealed class MissionDirector(MissionDefinition def)
 {
     const double WaveSpacing = 40;
 
+    const double CrateLeadDistance = 800;
+
     int _nextWave;
+    int _nextCrate;
 
     public bool Completed { get; private set; }
 
@@ -20,6 +24,15 @@ public sealed class MissionDirector(MissionDefinition def)
         double at = w.Player.Distance;
         while (_nextWave < def.Waves.Count && at >= def.Waves[_nextWave].AtDistance)
             Spawn(w, def.Waves[_nextWave++]);
+        var crates = def.Crates;
+        while (crates is not null && _nextCrate < crates.Count && at >= crates[_nextCrate].AtDistance - CrateLeadDistance)
+        {
+            var c = crates[_nextCrate++];
+            w.Hazards.Add(new SupplyCrate(c.Item, c.Amount)
+            {
+                Distance = c.AtDistance, PrevDistance = c.AtDistance, Lateral = Track.LaneCentres[c.Lane + 1],
+            });
+        }
         if (at >= def.ApproachLength) Completed = true;
     }
 

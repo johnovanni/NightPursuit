@@ -36,6 +36,17 @@ public sealed class Loadout
     /// <summary>Oil, then smoke, then caltrops, then oil again.</summary>
     public void CycleRear() => SelectedRear = (RearWeapon)(((int)SelectedRear + 1) % 3);
 
+    /// <summary>Adds charges of a weapon; returns how many fitted. Armor is not a weapon, so it returns 0.</summary>
+    public int Restock(SupplyItem item, int amount) => item switch
+    {
+        SupplyItem.Oil => Oil.Restock(amount),
+        SupplyItem.Smoke => Smoke.Restock(amount),
+        SupplyItem.Caltrops => Caltrops.Restock(amount),
+        SupplyItem.Missile => Missiles.Restock(amount),
+        SupplyItem.Strike => Strike.Restock(amount),
+        _ => 0,
+    };
+
     /// <summary>Advances every weapon except the guns (the world updates those with the trigger).</summary>
     public void Update(double dt)
     {
