@@ -49,8 +49,11 @@ public sealed class PursuerDriver : IDriver
                     // Too close to ram-proof: drop back slower than the player (never faster) and keep to its own lane,
                     // so a slow or stopped player isn't run into while the pursuer "retreats".
                     speed = Math.Max(0, Math.Min(speed, p.Speed - 2));
-                    s.Target = RetreatLane(self, p.Lateral);
+                    // With no safe lane on its own side (road edge) it holds its line rather than crossing the player's path.
+                    s.Target = SafeLane(self, p.Lateral) ?? Math.Clamp(self.Lateral, -6.5, 6.5);
                 }
+                else if (SafeLane(self, p.Lateral) is null)
+                    s.Target = Track.LaneCentres.MaxBy(lane => Math.Abs(lane - p.Lateral));   // dropped back past 20 m: crossing is safe now
                 if (dz < -80)
                 {
                     s.Phase = PursuerPhase.Approach;
@@ -67,9 +70,9 @@ public sealed class PursuerDriver : IDriver
 
     /// <summary>
     /// The lane on the pursuer's own side of the player that is at least 2.5 m from the player and nearest to the pursuer;
-    /// if no lane qualifies, the lane farthest from the player. Never a lane that crosses the player's path.
+    /// if none qualifies (null) the caller decides. Never a lane that crosses the player's path.
     /// </summary>
-    static double RetreatLane(AgentCar self, double playerLateral)
+    static double? SafeLane(AgentCar self, double playerLateral)
     {
         double offset = self.Lateral - playerLateral;
         int side = offset < 0 ? -1 : offset > 0 ? 1 : self.Side;
@@ -80,6 +83,6 @@ public sealed class PursuerDriver : IDriver
             if (Math.Sign(fromPlayer) != side || Math.Abs(fromPlayer) < MinLaneGapFromPlayer) continue;
             if (best is null || Math.Abs(lane - self.Lateral) < Math.Abs(best.Value - self.Lateral)) best = lane;
         }
-        return best ?? Track.LaneCentres.MaxBy(lane => Math.Abs(lane - playerLateral));
+        return best;
     }
 }

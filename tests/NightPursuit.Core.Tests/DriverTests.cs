@@ -89,6 +89,29 @@ public class DriverTests
         Assert.True(deepest < -20, $"only fell back to {deepest:0.0} m");
     }
 
+    static bool Overlaps(Vehicle a, Vehicle b) =>
+        Math.Abs(a.Lateral - b.Lateral) < (a.Stats.Width + b.Stats.Width) / 2 &&
+        Math.Abs(a.Distance - b.Distance) < (a.Stats.Length + b.Stats.Length) / 2;
+
+    [Fact]
+    public void Retreating_pursuer_at_the_road_edge_holds_its_line_instead_of_crossing_the_player()
+    {
+        var w = Straight();
+        w.Player.Lateral = 5;
+        var car = AgentCar.Create(w.NextId(), AgentKind.Pursuer, 0, 6, 5);
+        car.DriverState = new PursuerDriver.State { Phase = PursuerPhase.Retreat, Target = 6 };
+        w.Agents.Add(car);
+        for (int i = 0; i < 120 * 12; i++)
+        {
+            w.Player.Speed = 5;
+            w.StepOnce(ControlFrame.Empty);
+            Assert.False(Overlaps(w.Player, car), $"overlapped the player at step {i}");
+            // The crossing may start at dz = -20; the 1 m margin allows for it briefly creeping back (retreat speed rises once clear).
+            if (car.Distance - w.Player.Distance > -19)
+                Assert.True(car.Lateral >= w.Player.Lateral, $"crossed to the player's left at step {i}: {car.Lateral:0.00}");
+        }
+    }
+
     [Fact]
     public void Retreating_pursuer_alongside_never_steers_back_into_the_players_lane()
     {
@@ -101,7 +124,7 @@ public class DriverTests
         {
             w.Player.Speed = 5;
             w.StepOnce(ControlFrame.Empty);
-            bool overlap = Math.Abs(car.Lateral - w.Player.Lateral) < 1.9 && Math.Abs(car.Distance - w.Player.Distance) < 4.4;
+            bool overlap = Overlaps(w.Player, car);
             Assert.False(overlap, $"overlapped the player at step {i}");
         }
         Assert.True(Math.Abs(car.Lateral - w.Player.Lateral) >= 2.5, $"ended {car.Lateral - w.Player.Lateral:0.00} m from the player");
