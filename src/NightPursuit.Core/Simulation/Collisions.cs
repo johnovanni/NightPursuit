@@ -15,12 +15,10 @@ public static class Collisions
     public static void Resolve(World w)
     {
         var p = w.Player;
-        bool playerLive = p.State != VehicleState.Wrecked;
-
         foreach (var a in w.Agents)
         {
             if (!a.IsOnRoadDriving) continue;
-            if (playerLive) CarVsCar(w, a);
+            if (p.State != VehicleState.Wrecked) CarVsCar(w, a);     // the player may have been wrecked earlier in this loop
             if (!a.IsOnRoadDriving) continue;
 
             foreach (var h in w.Hazards)
@@ -51,7 +49,7 @@ public static class Collisions
                 w.Destroy(a, KillCause.RanOffRoad);
         }
 
-        if (playerLive) PlayerVsWrecks(w);
+        if (p.State != VehicleState.Wrecked) PlayerVsWrecks(w);
     }
 
     static string KindName(AgentCar a) => a.Kind.ToString().ToUpperInvariant();
@@ -112,7 +110,10 @@ public static class Collisions
         if (a.Armor <= 0) w.Destroy(a, KillCause.Rammed);
     }
 
-    /// <summary>The first touch costs 30 armor and nearly stops the car; after that the wreck just blocks.</summary>
+    /// <summary>
+    /// The first touch costs 30 armor and nearly stops the car; after that the wreck just blocks. Hit from behind, the
+    /// player is held back; hit from the side, it is pushed out sideways along the shallower overlap, so a wreck can never be driven through.
+    /// </summary>
     static void PlayerVsWrecks(World w)
     {
         var p = w.Player;
@@ -127,9 +128,20 @@ public static class Collisions
                 p.Shake = 0.5;
                 w.DamagePlayer(WreckDamage, "HIT A WRECK");
             }
-            if (wreck.Distance > p.Distance)
+
+            double dz = wreck.Distance - p.Distance, dx = p.Lateral - wreck.Lateral;
+            double contactZ = (wreck.Length + p.Stats.Length) / 2, halfW = (wreck.Width + p.Stats.Width) / 2;
+            double overlapZ = contactZ - Math.Abs(dz), overlapX = halfW - Math.Abs(dx);
+            if (overlapX / halfW < overlapZ / contactZ)
             {
-                p.Distance = wreck.Distance - (wreck.Length + p.Stats.Length) / 2;
+                int side = dx > 0 || (dx == 0 && p.LateralVel >= 0) ? 1 : -1;     // which side of the wreck the player is on
+                p.Lateral = wreck.Lateral + side * halfW;
+                if (p.LateralVel * side < 0) p.LateralVel = 0;
+                if (p.PushVel * side < 0) p.PushVel = 0;
+            }
+            else if (dz > 0)
+            {
+                p.Distance = wreck.Distance - contactZ;
                 p.Speed = Math.Min(p.Speed, wreck.Speed);
             }
         }

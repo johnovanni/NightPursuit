@@ -1,5 +1,6 @@
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Vehicles;
@@ -16,12 +17,15 @@ public sealed class World
     public const double Step = 1.0 / 120;
     const double MaxFrameSeconds = 0.25;
     const double StepEpsilon = 1e-9;
+    const double MaxAhead = 1500;
+    const double MaxBehind = 500;
     const int MaxRecentMessages = 4;
     const double MessageLifetime = 2.5;
 
     readonly List<GameEvent> _events = new();
     readonly List<AgentCar> _removals = new();
     readonly IThrottleScheme[] _schemes = { new RampPedalScheme(), new SpeedLeverScheme() };
+    readonly WorldView _view;
     double _accumulator;
     int _lastId;
 
@@ -52,6 +56,7 @@ public sealed class World
         Track = track;
         Feel = feel;
         Rng = rng;
+        _view = new WorldView(this);
         View.Build(Track, Player.Distance);
     }
 
@@ -95,17 +100,14 @@ public sealed class World
         StepWeapons(input);
         Loadout.Oil.Update(Step);
         StepHazards();
-        StepAgents();       // T10 replaces the Driving branch with real drivers
+        StepAgents();
         Collisions.Resolve(this);
 
-        // Cars killed by gunfire leave the list only now, so nothing above sees the list change mid-step.
-        if (_removals.Count > 0)
-        {
-            Agents.RemoveAll(a => _removals.Contains(a));
-            _removals.Clear();
-        }
+        // Cars leave the list only now, so nothing above sees the list change mid-step.
+        Agents.RemoveAll(IsGone);
+        _removals.Clear();
 
-        Player.HitFlash -= Step;
+        Player.HitFlash = Math.Max(0, Player.HitFlash - Step);
         Time += Step;
         RecentMessages.RemoveAll(e => Time - e.Time > MessageLifetime);
     }
@@ -116,13 +118,22 @@ public sealed class World
         {
             switch (a.State)
             {
-                case VehicleState.Driving: CarPhysics.StepAgent(a, new DriveIntent(a.Speed, a.Lateral), Step); break;
+                case VehicleState.Driving: CarPhysics.StepAgent(a, a.Driver.Decide(a, _view, Step), Step); break;
                 case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
                 case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
             }
-            a.HitFlash -= Step;
-            a.ContactCooldown -= Step;
+            a.HitFlash = Math.Max(0, a.HitFlash - Step);
+            a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
         }
+    }
+
+    /// <summary>Killed by gunfire, burnt out after 1.5 s, or too far from the player to matter.</summary>
+    bool IsGone(AgentCar a)
+    {
+        if (_removals.Contains(a)) return true;
+        if (a.State == VehicleState.Wrecked && a.StateTimer <= 0) return true;
+        double ahead = a.Distance - Player.Distance;
+        return ahead > MaxAhead || ahead < -MaxBehind;
     }
 
     /// <summary>Spins a car out: it turns, slides sideways in direction <paramref name="dir"/> and loses a fifth of its speed.</summary>
@@ -219,7 +230,7 @@ public sealed class World
 
     /// <summary>
     /// Kills an enemy car and scores it. Gunfire leaves a sliding <see cref="Wreck"/> and removes the car at the end of
-    /// the step; other causes keep the car as Wrecked for 1.5 s (it is removed in Task 10).
+    /// the step; other causes keep the car as Wrecked for 1.5 s, then it is removed.
     /// </summary>
     public void Destroy(AgentCar car, KillCause cause)
     {

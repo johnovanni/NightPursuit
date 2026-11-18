@@ -97,6 +97,7 @@ public class GunTests
         var w = TestWorlds.World(track: TestWorlds.Straight());
         w.Player.Lateral = 5;
         var car = AgentCar.Create(w.NextId(), AgentKind.Runner, 30, 5, 0);
+        car.Driver = new StillDriver();                          // a real runner would swerve once hit
         w.Agents.Add(car);
         var events = new List<GameEvent>();
         for (int i = 0; i < 240 && w.Agents.Count > 0; i++)

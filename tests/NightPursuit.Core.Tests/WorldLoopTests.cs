@@ -1,5 +1,6 @@
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Simulation;
+using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Tests;
 
@@ -111,5 +112,39 @@ public class WorldLoopTests
         Assert.Equal(4, w.RecentMessages.Count);
         Assert.Equal("m5", ((Message)w.RecentMessages[0]).Text);
         Assert.Equal("m2", ((Message)w.RecentMessages[3]).Text);
+    }
+
+    static World WorldWithAgents(int seed)
+    {
+        var w = TestWorlds.World(seed: seed);
+        w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Runner, 150, -5, 35));
+        w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Blocker, 90, 5, 25));
+        w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Pursuer, -150, 0, 40));
+        return w;
+    }
+
+    /// <summary>Feeds 60 s of the same per-frame inputs, each held for 1/60 s, in frames of the given length.</summary>
+    static ulong RunWithFrames(int seed, double frame)
+    {
+        var w = WorldWithAgents(seed);
+        int framesPerInput = (int)Math.Round((1 / 60.0) / frame);
+        for (int i = 0; i < 3600 * framesPerInput; i++)
+        {
+            int input = i / framesPerInput;
+            w.Advance(new ControlFrame { Gas = true, SteerDir = (input / 120) % 3 - 1 }, frame);
+        }
+        return w.StateHash();
+    }
+
+    [Fact]
+    public void Frame_length_does_not_change_the_result_with_agents_present()
+    {
+        Assert.Equal(RunWithFrames(11, 1 / 120.0), RunWithFrames(11, 1 / 60.0));
+    }
+
+    [Fact]
+    public void Different_seeds_give_different_hashes_with_agents_present()
+    {
+        Assert.NotEqual(RunWithFrames(11, 1 / 60.0), RunWithFrames(12, 1 / 60.0));
     }
 }

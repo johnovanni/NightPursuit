@@ -189,4 +189,43 @@ public class CollisionTests
         Assert.Equal(VehicleStats.Runner.Armor - 1, near.Armor);
         Assert.Equal(VehicleStats.Runner.Armor, far.Armor);
     }
+
+    [Fact]
+    public void Player_beside_a_wreck_is_pushed_out_sideways_and_hurt_once()
+    {
+        var w = Straight();
+        var wreck = new Wreck { Distance = 100, Lateral = 0, Width = 1.9, Length = 4.4 };
+        w.Hazards.Add(wreck);
+        w.Player.Distance = 99; w.Player.Lateral = 2.2;
+        double halfW = (1.9 + w.Player.Stats.Width) / 2, contactZ = (4.4 + w.Player.Stats.Length) / 2;
+        double worstOverlap = 0;
+        for (int i = 0; i < 120 * 2; i++)
+        {
+            w.Player.Speed = 5;                                     // creeping past, nose held pointing into the wreck
+            w.Player.Heading = -0.5;
+            w.StepOnce(new ControlFrame { SteerDir = -1 });
+            if (Math.Abs(wreck.Distance - w.Player.Distance) < contactZ)
+                worstOverlap = Math.Max(worstOverlap, halfW - Math.Abs(w.Player.Lateral - wreck.Lateral));
+        }
+        Assert.True(worstOverlap < 0.05, $"overlapped by {worstOverlap:F3} m");
+        int damaged = w.Events.Count(e => e is PlayerDamaged);       // StepOnce keeps every event of the run
+        Assert.True(damaged <= 1, $"{damaged} damage events");
+        Assert.True(w.Player.Distance > 100, "should have driven past, not been dragged back");
+    }
+
+    [Fact]
+    public void Nothing_collides_with_a_player_wrecked_earlier_in_the_same_step()
+    {
+        var w = Straight();
+        w.Player.Armor = 1;
+        w.Player.Speed = 30;
+        // Two cars overlap the player; the first hit kills the player, so the second must not touch the dead car.
+        var first = AgentCar.Create(w.NextId(), AgentKind.Runner, 0, 1.8, 30);
+        var second = AgentCar.Create(w.NextId(), AgentKind.Runner, 0, -1.8, 30);
+        w.Agents.Add(first); w.Agents.Add(second);
+        Collisions.Resolve(w);
+        Assert.Equal(VehicleState.Wrecked, w.Player.State);
+        Assert.Equal(0, second.ContactCooldown);
+        Assert.Equal(1, w.Events.Count(e => e is PlayerDamaged));
+    }
 }
