@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
 using NightPursuit.Core.Road;
-using NightPursuit.Core.Simulation;
 
 namespace NightPursuit.App.Rendering;
 
@@ -10,12 +9,11 @@ public static class RoadRenderer
 {
     const double DrawDistance = 1500;
 
-    public static void Draw(DrawingContext dc, Projector p, World world)
+    public static void Draw(DrawingContext dc, Projector p)
     {
-        var player = world.Player;
         const double seg = Track.SegmentLength;
-        double first = Math.Ceiling((player.Distance + 1.5) / seg) * seg;   // samples sit on world segment boundaries
-        double firstD = first - player.Distance;
+        double first = Math.Ceiling((p.CamDistance + 1.5) / seg) * seg;   // samples sit on world segment boundaries
+        double firstD = first - p.CamDistance;
         int n = (int)(DrawDistance / seg);
         p.BeginClip(firstD, n + 1);
 
@@ -47,7 +45,7 @@ public static class RoadRenderer
 
                 edges[band].Line(From(0), cur[0]);
                 edges[band].Line(From(3), cur[3]);
-                long index = (long)Math.Round((player.Distance + d) / seg);
+                long index = (long)Math.Round((p.CamDistance + d) / seg);
                 if (index % 4 < 2)
                 {
                     lanes[band].Line(From(1), cur[1]);

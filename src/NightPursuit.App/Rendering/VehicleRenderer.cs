@@ -22,14 +22,14 @@ public static class VehicleRenderer
     {
         var items = Items;
         items.Clear();
-        foreach (var car in w.Agents) items.Add(new DrawItem(car.Distance, car, null));
+        foreach (var car in w.Agents) items.Add(new DrawItem(p.Ahead(car), car, null));
         foreach (var h in w.Hazards)
-            if (h is Wreck wreck) items.Add(new DrawItem(wreck.Distance, null, wreck));
+            if (h is Wreck wreck) items.Add(new DrawItem(p.Ahead(wreck), null, wreck));
         items.Sort(FarToNear);
         foreach (var item in items)
         {
-            if (item.Car is not null) DrawRear(dc, p, item.Car, w);
-            else HazardRenderer.DrawWreck(dc, p, w, item.Wreck!);
+            if (item.Car is not null) DrawRear(dc, p, item.Car);
+            else HazardRenderer.DrawWreck(dc, p, item.Wreck!);
         }
         items.Clear();   // do not keep cars alive between frames
     }
@@ -40,21 +40,21 @@ public static class VehicleRenderer
     static readonly Comparison<DrawItem> FarToNear = static (a, b) => b.Distance.CompareTo(a.Distance);
     static readonly Point[] BodyPoints = new Point[5];
 
-    public static void DrawRear(DrawingContext dc, Projector p, AgentCar car, World w)
+    public static void DrawRear(DrawingContext dc, Projector p, AgentCar car)
     {
         // A car blown up by something other than gunfire stays in the list for a moment; the explosion covers it.
         if (car.State == VehicleState.Wrecked) return;
-        double dz = car.Distance - w.Player.Distance;
+        double dz = p.Ahead(car);
         if (dz < 2 || dz > DrawDistance) return;
         double rear = dz - car.Stats.Length / 2;   // we see the back of the car, not its centre
-        if (!p.ToScreen(rear, car.Lateral, 0, out var g, out double depth)) return;
+        if (!p.ToScreen(rear, p.LateralOf(car), 0, out var g, out double depth)) return;
         double s = p.Ppm(depth);
         double clip = p.ClipAt(rear);
         double roof = car.Stats.Height * s;
         if (clip <= 0 || g.Y - roof > clip) return;   // hidden behind a hill
 
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-        Body(dc, car, g, s);
+        Body(dc, car, p.SpinOf(car), g, s);
         if (car.Armor < car.Stats.Armor && dz < 220)
         {
             double bw = Math.Max(16, car.Stats.Width * s), frac = Math.Clamp(car.Armor / car.Stats.Armor, 0, 1);
@@ -65,11 +65,11 @@ public static class VehicleRenderer
         dc.Pop();
     }
 
-    static void Body(DrawingContext dc, AgentCar car, Point g, double s)
+    static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s)
     {
         bool spinning = car.State == VehicleState.Spinning;
-        double tilt = spinning ? Math.Sin(car.SpinAngle) * 25 : 0;
-        double widthScale = spinning ? 0.65 + 0.35 * Math.Abs(Math.Cos(car.SpinAngle)) : 1;
+        double tilt = spinning ? Math.Sin(spinAngle) * 25 : 0;
+        double widthScale = spinning ? 0.65 + 0.35 * Math.Abs(Math.Cos(spinAngle)) : 1;
         double w = car.Stats.Width * s * widthScale;
         double wheel = 0.28 * s;
         double bodyTop = car.Kind switch { AgentKind.Blocker => 1.55, AgentKind.Pursuer => 0.62, _ => 0.78 } * s;

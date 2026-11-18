@@ -23,7 +23,7 @@ public static class HazardRenderer
         foreach (var h in w.Hazards)
         {
             if (h is not OilSlick o) continue;
-            double dz = o.Distance - w.Player.Distance;
+            double dz = o.Distance - p.CamDistance;
             if (dz < 3 || dz > MaxDistance) continue;
             if (!p.ToScreen(dz, o.Lateral, 0, out var c, out double depth)
                 || !p.ToScreen(dz - OilSlick.Radius, o.Lateral, 0, out var near, out _)
@@ -40,9 +40,9 @@ public static class HazardRenderer
     }
 
     /// <summary>Draws one wreck; the caller orders wrecks with cars so a far car never paints over a nearer wreck.</summary>
-    public static void DrawWreck(DrawingContext dc, Projector p, World w, Wreck h)
+    public static void DrawWreck(DrawingContext dc, Projector p, Wreck h)
     {
-        double dz = h.Distance - w.Player.Distance;
+        double dz = p.Ahead(h);
         if (dz < 2 || dz > MaxDistance) return;
         double rear = dz - h.Length / 2;
         if (!p.ToScreen(rear, h.Lateral, 0, out var g, out double depth)) return;

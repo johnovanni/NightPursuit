@@ -40,6 +40,11 @@ public sealed class World
     public Loadout Loadout { get; set; } = new();
     public SteeringInput Steering { get; } = new();
     public double Time { get; private set; }
+    /// <summary>
+    /// How far the clock has run into the next fixed step, 0..1 (leftover accumulator time over <see cref="Step"/>).
+    /// The App draws each frame at Prev + (Current - Prev) * Alpha; the simulation itself never reads it.
+    /// </summary>
+    public double Alpha => Math.Clamp(_accumulator / Step, 0, 1);
     public int Score { get; set; }
 
     public int SchemeIndex { get; private set; }
@@ -84,6 +89,7 @@ public sealed class World
 
     public void StepOnce(ControlFrame input)
     {
+        CapturePrev();
         if (Player.State == VehicleState.Wrecked)
         {
             Player.Throttle = 0;
@@ -115,6 +121,15 @@ public sealed class World
         Player.HitFlash = Math.Max(0, Player.HitFlash - Step);
         Time += Step;
         RecentMessages.RemoveAll(e => Time - e.Time > MessageLifetime);
+    }
+
+    /// <summary>Remembers where everything that moves was before this step, for render interpolation.</summary>
+    void CapturePrev()
+    {
+        Player.SnapPrev();
+        foreach (var a in Agents) a.SnapPrev();
+        foreach (var h in Hazards)
+            if (h is Wreck w) w.PrevDistance = w.Distance;
     }
 
     void StepAgents()
@@ -194,6 +209,7 @@ public sealed class World
         {
             t.PrevDistance = t.Pose.Distance;
             t.PrevLateral = t.Pose.Lateral;
+            t.PrevHeading = t.Pose.Heading;
             t.Pose = RoadMotion.MoveStraight(Track, t.Pose, t.Speed * Step);
             t.Travel += MachineGuns.MuzzleSpeed * Step;
             if (t.Travel > MachineGuns.Range || Math.Abs(t.Pose.Lateral) > 60) { t.Dead = true; continue; }
@@ -250,7 +266,7 @@ public sealed class World
         {
             Hazards.Add(new Wreck
             {
-                Distance = car.Distance, Lateral = car.Lateral,
+                Distance = car.Distance, Lateral = car.Lateral, PrevDistance = car.PrevDistance,
                 Width = car.Stats.Width, Length = car.Stats.Length, Speed = car.Speed,
             });
             _removals.Add(car);

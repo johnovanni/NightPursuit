@@ -8,6 +8,7 @@ public sealed class Tracer
     public RoadPose Pose { get; set; }
     public double PrevDistance { get; set; }
     public double PrevLateral { get; set; }
+    public double PrevHeading { get; set; }
     /// <summary>Metres of muzzle travel so far (compared with <see cref="MachineGuns.Range"/>).</summary>
     public double Travel { get; set; }
     public double Speed { get; set; }

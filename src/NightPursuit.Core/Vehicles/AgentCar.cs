@@ -30,11 +30,13 @@ public sealed class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats
             AgentKind.Blocker => VehicleStats.Blocker,
             _ => VehicleStats.Pursuer,
         };
-        return new AgentCar(kind, stats)
+        var car = new AgentCar(kind, stats)
         {
             Id = id, Distance = distance, Lateral = lateral, Speed = speed, CruiseSpeed = speed,
             Driver = kind switch { AgentKind.Runner => RunnerDriver, AgentKind.Blocker => BlockerDriver, _ => PursuerDriver },
             Armor = stats.Armor, State = VehicleState.Driving, Side = 1,
         };
+        car.SnapPrev();   // a new car must not be drawn sweeping in from where its Prev fields start
+        return car;
     }
 }

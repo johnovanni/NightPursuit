@@ -128,6 +128,7 @@ public sealed class MissionRun
         p.PushVel = 0;
         p.State = VehicleState.Driving;
         p.StateTimer = 0;
+        p.SnapPrev();   // a teleport: do not draw the car sweeping back to the start
         World.Steering.Reset();
         World.Scheme.Reset(0);
         World.Agents.RemoveAll(a => Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);

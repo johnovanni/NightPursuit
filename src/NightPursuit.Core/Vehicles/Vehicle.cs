@@ -28,5 +28,21 @@ public abstract class Vehicle(VehicleStats stats)
     public double HitFlash { get; set; }
     public double ContactCooldown { get; set; }
 
+    // Where this car was at the start of the latest simulation step. The App draws a frame between these and the
+    // current values (see World.Alpha); they are presentation-only and never feed the simulation or StateHash.
+    public double PrevDistance { get; set; }
+    public double PrevLateral { get; set; }
+    public double PrevHeading { get; set; }
+    public double PrevSpinAngle { get; set; }
+
+    /// <summary>Remembers the current pose as the previous one; call after teleporting or creating a car so it is not drawn sweeping across the screen.</summary>
+    public void SnapPrev()
+    {
+        PrevDistance = Distance;
+        PrevLateral = Lateral;
+        PrevHeading = Heading;
+        PrevSpinAngle = SpinAngle;
+    }
+
     public bool IsOnRoadDriving => State is VehicleState.Driving or VehicleState.Spinning;
 }

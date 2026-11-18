@@ -57,8 +57,8 @@ public sealed class GameView : FrameworkElement
 
         double shake = world.Player.Shake * 14;
         dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
-        SkyRenderer.Draw(dc, _projector, world, Hud.ReadoutBounds(_layout));
-        RoadRenderer.Draw(dc, _projector, world);
+        SkyRenderer.Draw(dc, _projector, world.Track, Hud.ReadoutBounds(_layout));
+        RoadRenderer.Draw(dc, _projector);
         HazardRenderer.DrawSlicks(dc, _projector, world);
         VehicleRenderer.DrawAll(dc, _projector, world);
         EffectRenderer.DrawTracers(dc, _projector, world);
@@ -66,11 +66,11 @@ public sealed class GameView : FrameworkElement
         dc.Pop();
 
         // Screen-fixed from here on.
-        HoodRenderer.Draw(dc, _layout, world);
+        HoodRenderer.Draw(dc, _layout, _projector);
         EffectRenderer.DrawMuzzleFlash(dc, _layout, world, Effects);
         Hud.Draw(dc, _layout, run);
-        Mirror.Draw(dc, _layout, world);
-        Radar.Draw(dc, _layout, world);
+        Mirror.Draw(dc, _layout, world, _projector);
+        Radar.Draw(dc, _layout, world, _projector);
         Overlays.DrawWarnings(dc, _layout, world);
         Overlays.DrawMessages(dc, _layout, world);
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);

@@ -14,11 +14,12 @@ public static class EffectRenderer
     {
         foreach (var t in w.Tracers)
         {
-            double dz = t.Pose.Distance - w.Player.Distance;
+            double dz = p.Ahead(t);
             if (dz < 3) continue;
-            double tailD = dz - StreakLength * Math.Cos(t.Pose.Heading);
-            double tailL = t.Pose.Lateral - StreakLength * Math.Sin(t.Pose.Heading);
-            if (!p.ToScreen(dz, t.Pose.Lateral, 0.6, out var head, out _) || !p.ToScreen(tailD, tailL, 0.6, out var tail, out _)) continue;
+            double lateral = p.Lerp(t.PrevLateral, t.Pose.Lateral), heading = p.Lerp(t.PrevHeading, t.Pose.Heading);
+            double tailD = dz - StreakLength * Math.Cos(heading);
+            double tailL = lateral - StreakLength * Math.Sin(heading);
+            if (!p.ToScreen(dz, lateral, 0.6, out var head, out _) || !p.ToScreen(tailD, tailL, 0.6, out var tail, out _)) continue;
             double clip = p.ClipAt(dz);
             if (clip <= 0) continue;
             var batch = new LineBatch();
@@ -33,7 +34,7 @@ public static class EffectRenderer
     {
         foreach (var x in effects.Explosions)
         {
-            double dz = x.Distance - w.Player.Distance;
+            double dz = x.Distance - p.CamDistance;
             if (dz < 3 || !p.ToScreen(dz, x.Lateral, 1, out var c, out double depth)) continue;
             double clip = p.ClipAt(dz);
             if (clip <= 0) continue;

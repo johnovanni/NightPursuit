@@ -1,6 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
-using NightPursuit.Core.Simulation;
+using NightPursuit.Core.Road;
 
 namespace NightPursuit.App.Rendering;
 
@@ -27,9 +27,9 @@ public static class SkyRenderer
     }
 
     /// <summary>Draws the sky; the moon is skipped where it would sit under <paramref name="keepClear"/> (the top-right readouts).</summary>
-    public static void Draw(DrawingContext dc, Projector p, World world, Rect keepClear)
+    public static void Draw(DrawingContext dc, Projector p, Track track, Rect keepClear)
     {
-        double heading = world.Track.HeadingAt(world.Player.Distance) + world.Player.Heading;
+        double heading = track.HeadingAt(p.CamDistance) + p.CamHeading;
         double ppr = p.PxPerRadian, halfW = p.HalfWidth, horizon = p.Horizon;
 
         foreach (var (angle, up, size) in Stars)

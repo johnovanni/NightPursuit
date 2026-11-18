@@ -206,6 +206,7 @@ public static class DiagnosticsRunner
         p.Heading = Math.Sin(z / 170) * 0.35;   // nose up to 20 degrees either way
         p.Speed = 40;
         p.State = VehicleState.Driving;
+        p.SnapPrev();   // a teleport: no interpolation from the old pose
         w.View.Build(w.Track, z);
 
         w.Agents.Clear();
@@ -219,13 +220,13 @@ public static class DiagnosticsRunner
             double x = (k % 5 - 2) * 4.5;
             var car = AgentCar.Create(w.NextId(), (AgentKind)((k + frame) % 3), d, x, 30);
             car.Armor = car.Stats.Armor / 3;
-            if (k % 4 == 0) { car.State = VehicleState.Spinning; car.SpinAngle = k; }
+            if (k % 4 == 0) { car.State = VehicleState.Spinning; car.SpinAngle = k; car.SnapPrev(); }
             if (k % 5 == 3) car.HitFlash = 0.1;
             w.Agents.Add(car);
             w.Hazards.Add(new OilSlick { Distance = d, Lateral = -x });
-            w.Hazards.Add(new Wreck { Distance = d + 7, Lateral = x / 2, Width = 1.9, Length = 4.4, Burn = k * 0.7 });
+            w.Hazards.Add(new Wreck { Distance = d + 7, PrevDistance = d + 7, Lateral = x / 2, Width = 1.9, Length = 4.4, Burn = k * 0.7 });
             var pose = new RoadPose(d, x / 2, (k % 3 - 1) * 0.2);
-            w.Tracers.Add(new Tracer { Pose = pose, PrevDistance = d - 2.5, PrevLateral = pose.Lateral, Travel = k * 25, OwnerId = k % 2 == 0 ? p.Id : car.Id });
+            w.Tracers.Add(new Tracer { Pose = pose, PrevDistance = d - 2.5, PrevLateral = pose.Lateral, PrevHeading = pose.Heading, Travel = k * 25, OwnerId = k % 2 == 0 ? p.Id : car.Id });
             view.Effects.Spawn(d, x);
         }
         view.Effects.Update(0.4);
@@ -245,6 +246,7 @@ public static class DiagnosticsRunner
         if (frame % 9 == 0) { p.Lateral = -9.2; p.OffRoad = true; }
         else if (frame % 9 == 1) { p.Lateral = 9.2; p.OffRoad = true; }
         else p.OffRoad = false;
+        p.SnapPrev();
     }
 
     // ---- --perf ---------------------------------------------------------------------------------------------
@@ -365,10 +367,11 @@ public static class DiagnosticsRunner
         var spinner = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance + 140, p.Lateral, p.Speed);
         spinner.State = VehicleState.Spinning;
         spinner.SpinAngle = 0.7;
+        spinner.SnapPrev();
         var behind = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance - 25, p.Lateral + 3, p.Speed);
         w.Agents.AddRange(new[] { runner, blocker, spinner, behind });
 
-        w.Hazards.Add(new Wreck { Distance = p.Distance + 50, Lateral = p.Lateral + 1, Width = 1.9, Length = 4.4, Burn = 0.6 });
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 50, PrevDistance = p.Distance + 50, Lateral = p.Lateral + 1, Width = 1.9, Length = 4.4, Burn = 0.6 });
         w.Hazards.Add(new OilSlick { Distance = p.Distance + 40, Lateral = p.Lateral - 2.5 });
 
         effects.Spawn(p.Distance + 30, p.Lateral - 1);
@@ -382,7 +385,7 @@ public static class DiagnosticsRunner
     static Tracer NewTracer(PlayerCar p, double ahead, double side, double travel)
     {
         var pose = new RoadPose(p.Distance + ahead, p.Lateral + side, 0);
-        return new Tracer { Pose = pose, PrevDistance = pose.Distance - 2.5, PrevLateral = pose.Lateral, Travel = travel, OwnerId = p.Id };
+        return new Tracer { Pose = pose, PrevDistance = pose.Distance - 2.5, PrevLateral = pose.Lateral, PrevHeading = pose.Heading, Travel = travel, OwnerId = p.Id };
     }
 
     static MissionRun NewRun()

@@ -9,6 +9,8 @@ public sealed class Wreck : Hazard
     public double Width { get; set; }
     public double Length { get; set; }
     public double Speed { get; set; }
+    /// <summary>Distance at the start of the latest step (the App draws between this and <see cref="Hazard.Distance"/>).</summary>
+    public double PrevDistance { get; set; }
     /// <summary>Seconds burning; drives the flicker effect.</summary>
     public double Burn { get; set; }
     public bool HitPlayer { get; set; }
