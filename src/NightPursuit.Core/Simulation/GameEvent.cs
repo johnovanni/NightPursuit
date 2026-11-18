@@ -5,7 +5,13 @@ namespace NightPursuit.Core.Simulation;
 
 public enum Tone { Info, Good, Bad }
 
-public enum KillCause { Gunfire, RanOffRoad, WreckCollision, Rammed }
+public enum KillCause { Gunfire, RanOffRoad, WreckCollision, Rammed, Missile, Satellite }
+
+public static class KillCauseRules
+{
+    /// <summary>Shot, blasted or struck from the sky: the car leaves a sliding wreck. Other causes keep it as a burnt-out car for 1.5 s.</summary>
+    public static bool LeavesWreck(this KillCause c) => c is KillCause.Gunfire or KillCause.Missile or KillCause.Satellite;
+}
 
 /// <summary>Something that happened in the simulation, for the HUD, score and (later) effects.</summary>
 public abstract record GameEvent(double Time);

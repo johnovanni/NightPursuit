@@ -114,6 +114,28 @@ public class InterpolationTests
     }
 
     [Fact]
+    public void Missile_prev_pose_equals_its_pose_at_the_start_of_the_latest_step()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        w.Handle(new GameAction(ActionKind.FireMissile));
+        var m = Assert.Single(w.Missiles);
+        Assert.Equal(m.Pose.Distance, m.PrevDistance);
+        Assert.Equal(m.Pose.Lateral, m.PrevLateral);
+        Assert.Equal(m.Pose.Heading, m.PrevHeading);
+        for (int i = 0; i < 8; i++)
+        {
+            double d = 0, l = 0, h = 0;
+            var pose = m.Pose;
+            // Frames of 1/75 s do not line up with the 1/120 s step, so a frame runs one or two steps.
+            w.Advance(ControlFrame.Empty, 1.0 / 75, () => { d = pose.Distance; l = pose.Lateral; h = pose.Heading; pose = m.Pose; return false; });
+            Assert.Equal(d, m.PrevDistance, 1e-12);
+            Assert.Equal(l, m.PrevLateral, 1e-12);
+            Assert.Equal(h, m.PrevHeading, 1e-12);
+            Assert.NotEqual(m.Pose.Distance, m.PrevDistance);
+        }
+    }
+
+    [Fact]
     public void Wreck_prev_distance_equals_its_distance_at_the_start_of_the_latest_step()
     {
         var w = TestWorlds.World(track: TestWorlds.Straight());

@@ -38,6 +38,7 @@ public sealed partial class World
     public PlayerCar Player { get; } = new() { Id = 0 };
     public List<AgentCar> Agents { get; } = new();
     public List<Tracer> Tracers { get; } = new();
+    public List<Missile> Missiles { get; } = new();
     public List<Hazard> Hazards { get; } = new();
     /// <summary>Reused by <see cref="Collisions"/> for its agent-vs-agent pass, so a step allocates nothing; empty between steps.</summary>
     internal List<AgentCar> AgentScratch { get; } = new();
@@ -135,6 +136,7 @@ public sealed partial class World
 
         StepWeapons(input);
         Loadout.Update(Step);
+        StepMissiles();
         StepHazards();
         StepAgents();
         Collisions.Resolve(this);
@@ -153,6 +155,12 @@ public sealed partial class World
     {
         Player.SnapPrev();
         foreach (var a in Agents) a.SnapPrev();
+        foreach (var m in Missiles)
+        {
+            m.PrevDistance = m.Pose.Distance;
+            m.PrevLateral = m.Pose.Lateral;
+            m.PrevHeading = m.Pose.Heading;
+        }
         foreach (var h in Hazards)
             if (h is Wreck w) w.PrevDistance = w.Distance;
             else if (h is SmokeCloud s) s.PrevDistance = s.Distance;
@@ -295,7 +303,7 @@ public sealed partial class World
             double nearest = double.MaxValue;
             foreach (var car in Agents)       // Destroy never changes the list, so it can be walked directly
             {
-                if (!car.IsOnRoadDriving || !SweptHit(t, car)) continue;
+                if (!car.IsOnRoadDriving || !SweptHit(t.PrevDistance, t.PrevLateral, t.Pose.Distance, t.Pose.Lateral, car, 0.15)) continue;
                 double along = car.Distance - t.PrevDistance;
                 if (along < nearest) { nearest = along; hit = car; }
             }
@@ -308,16 +316,19 @@ public sealed partial class World
         Tracers.RemoveAll(t => t.Dead);
     }
 
-    /// <summary>True when the tracer's last step crossed the car's length within its width (plus a little).</summary>
-    static bool SweptHit(Tracer t, AgentCar car)
+    /// <summary>True when a projectile's last step, from (d0, l0) to (d1, l1), crossed the car's length within its width plus <paramref name="margin"/>.</summary>
+    public static bool SweptHit(double d0, double l0, double d1, double l1, Vehicle car, double margin) =>
+        SweptHit(d0, l0, d1, l1, car.Distance, car.Lateral, car.Stats.Length / 2, car.Stats.Width / 2, margin);
+
+    /// <summary>The same test for any box centred at (<paramref name="cd"/>, <paramref name="cl"/>), such as an enemy missile.</summary>
+    public static bool SweptHit(double d0, double l0, double d1, double l1, double cd, double cl,
+        double halfLength, double halfWidth, double margin)
     {
-        double d0 = t.PrevDistance, d1 = t.Pose.Distance;
-        double half = car.Stats.Length / 2;
-        if (car.Distance + half < Math.Min(d0, d1) || car.Distance - half > Math.Max(d0, d1)) return false;
+        if (cd + halfLength < Math.Min(d0, d1) || cd - halfLength > Math.Max(d0, d1)) return false;
         double span = d1 - d0;
-        double u = Math.Abs(span) < 1e-9 ? 1 : Math.Clamp((car.Distance - d0) / span, 0, 1);
-        double lateral = t.PrevLateral + (t.Pose.Lateral - t.PrevLateral) * u;
-        return Math.Abs(lateral - car.Lateral) <= car.Stats.Width / 2 + 0.15;
+        double u = Math.Abs(span) < 1e-9 ? 1 : Math.Clamp((cd - d0) / span, 0, 1);
+        double lateral = l0 + (l1 - l0) * u;
+        return Math.Abs(lateral - cl) <= halfWidth + margin;
     }
 
     void StepHazards()
@@ -327,7 +338,7 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// Kills an enemy car and scores it. Gunfire leaves a sliding <see cref="Wreck"/> and removes the car at the end of
+    /// Kills an enemy car and scores it. Gunfire, missiles and satellite strikes leave a sliding <see cref="Wreck"/> and removes the car at the end of
     /// the step; other causes keep the car as Wrecked for 1.5 s, then it is removed.
     /// </summary>
     public void Destroy(AgentCar car, KillCause cause)
@@ -339,7 +350,7 @@ public sealed partial class World
         Score += points;
         Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points));
         Publish(new Message(Time, $"{car.Kind.ToString().ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
-        if (cause == KillCause.Gunfire)
+        if (cause.LeavesWreck())
         {
             Hazards.Add(new Wreck
             {
@@ -369,6 +380,9 @@ public sealed partial class World
                 break;
             case ActionKind.CycleRear:
                 CycleRear();
+                break;
+            case ActionKind.FireMissile:
+                FireMissile();
                 break;
             // Pause, ToggleHelp, Restart: handled by the mission run.
         }
