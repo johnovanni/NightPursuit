@@ -25,7 +25,26 @@ public static class EffectRenderer
             var batch = new LineBatch();
             batch.Line(tail, head);
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-            batch.Draw(dc, Neon.Tracer);
+            batch.Draw(dc, t.Hostile ? Neon.EnemyTracer : Neon.Tracer);
+            dc.Pop();
+        }
+    }
+
+    static readonly Brush BeamFill = Neon.Solid(Color.FromRgb(0x9F, 0xF6, 0xFF), 0.22);
+
+    /// <summary>A satellite strike's column of light: a glow from the spot on the road up to the top of the screen, fading over its life.</summary>
+    public static void DrawBeams(DrawingContext dc, Projector p, EffectList effects)
+    {
+        foreach (var b in effects.Beams)
+        {
+            double dz = b.Distance - p.CamDistance;
+            if (dz < 3 || !p.ToScreen(dz, b.Lateral, 0, out var g, out double depth)) continue;
+            double half = 1.4 * p.Ppm(depth);
+            dc.PushOpacity(Math.Max(0, 1 - b.Age / Beam.Life));
+            dc.DrawRectangle(BeamFill, null, new Rect(g.X - half, -60, half * 2, g.Y + 60));
+            var core = new LineBatch();
+            core.Line(new Point(g.X, g.Y), new Point(g.X, -60));
+            core.Draw(dc, Neon.StrikeBeam);
             dc.Pop();
         }
     }

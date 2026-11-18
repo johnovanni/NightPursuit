@@ -65,7 +65,8 @@ public static class HazardRenderer
             double ry = Math.Max(1, Math.Abs(near.Y - far.Y) / 2);
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
             dc.DrawEllipse(Neon.OilFill, Neon.Oil.Glow, c, rx, ry);
-            dc.DrawEllipse(null, Neon.Oil.Core, c, rx, ry);
+            // A hostile slick is outlined red and dashed: the shape differs as well as the colour.
+            dc.DrawEllipse(null, o.Hostile ? Neon.HostileOutline.Core : Neon.Oil.Core, c, rx, ry);
             dc.Pop();
         }
     }

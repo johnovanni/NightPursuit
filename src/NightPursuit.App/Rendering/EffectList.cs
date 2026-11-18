@@ -30,16 +30,27 @@ public sealed class Explosion(double distance, double lateral, int seed)
     }
 }
 
+/// <summary>A satellite strike's column of light on a kill: where it landed (absolute distance) and how old it is.</summary>
+public sealed class Beam(double distance, double lateral)
+{
+    public const double Life = 0.8;
+    public double Distance { get; } = distance;
+    public double Lateral { get; } = lateral;
+    public double Age { get; set; }
+}
+
 /// <summary>Presentation-only effects. The World publishes positions and events; the App turns them into explosions.</summary>
 public sealed class EffectList
 {
     readonly List<Explosion> _explosions = new();
+    readonly List<Beam> _beams = new();
     World? _world;
     double _absorbedTime = double.NaN;
     HashSet<Tracer> _seenTracers = new(), _spareTracers = new();   // swapped each call so no set is allocated per frame
     int _nextSeed = 1000;   // deterministic seeds: the same run always draws the same bursts
 
     public IReadOnlyList<Explosion> Explosions => _explosions;
+    public IReadOnlyList<Beam> Beams => _beams;
 
     /// <summary>World time of the newest player shot seen (negative infinity before any), for the muzzle flash.</summary>
     public double LastShotTime { get; private set; } = double.NegativeInfinity;
@@ -49,6 +60,8 @@ public sealed class EffectList
     public const double MuzzleFlashSeconds = 0.05;
 
     public void Spawn(double distance, double lateral) => _explosions.Add(new Explosion(distance, lateral, _nextSeed++));
+
+    public void SpawnBeam(double distance, double lateral) => _beams.Add(new Beam(distance, lateral));
 
     /// <summary>Spawns an explosion for each VehicleDestroyed event of the latest advance (only once per advance).</summary>
     public void Absorb(World w)
@@ -79,22 +92,26 @@ public sealed class EffectList
         if (w.Events.Count == 0) return;   // nothing happened this advance
         var destroyed = w.Events.OfType<VehicleDestroyed>().ToList();
         if (destroyed.Count == 0) return;
-        // A gunfire kill leaves a Wreck at the car's last position; the newest wrecks belong to the newest kills.
+        // A kill that leaves a wreck (gunfire, missile, strike) puts it at the car's last position; the newest wrecks belong to the newest kills.
         var wrecks = w.Hazards.OfType<Wreck>().ToList();
-        int wreckIndex = wrecks.Count - destroyed.Count(e => e.Cause == KillCause.Gunfire);
+        int wreckIndex = wrecks.Count - destroyed.Count(e => e.Cause.LeavesWreck());
         foreach (var e in destroyed)
         {
-            if (e.Cause == KillCause.Gunfire)
+            double distance, lateral;
+            if (e.Cause.LeavesWreck())
             {
-                if (wreckIndex >= 0 && wreckIndex < wrecks.Count)
-                    Spawn(wrecks[wreckIndex].Distance, wrecks[wreckIndex].Lateral);
+                if (wreckIndex >= 0 && wreckIndex < wrecks.Count) (distance, lateral) = (wrecks[wreckIndex].Distance, wrecks[wreckIndex].Lateral);
+                else { wreckIndex++; continue; }
                 wreckIndex++;
             }
             else
             {
                 var car = w.Agents.FirstOrDefault(a => a.Id == e.VehicleId);
-                if (car is not null) Spawn(car.Distance, car.Lateral);
+                if (car is null) continue;
+                (distance, lateral) = (car.Distance, car.Lateral);
             }
+            Spawn(distance, lateral);
+            if (e.Cause == KillCause.Satellite) SpawnBeam(distance, lateral);
         }
     }
 
@@ -109,6 +126,7 @@ public sealed class EffectList
     public void Clear()
     {
         _explosions.Clear();
+        _beams.Clear();
         _seenTracers.Clear();
         LastShotTime = double.NegativeInfinity;
     }
@@ -117,5 +135,7 @@ public sealed class EffectList
     {
         foreach (var x in _explosions) x.Age += seconds;
         _explosions.RemoveAll(x => x.Age >= Explosion.Life);
+        foreach (var b in _beams) b.Age += seconds;
+        _beams.RemoveAll(b => b.Age >= Beam.Life);
     }
 }

@@ -46,7 +46,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike" };
 
     static string _logPath = "diagnostics.log";
 
@@ -72,10 +72,17 @@ public static class DiagnosticsRunner
             Error("--snapshot needs an output file name, e.g. --snapshot snapshots/frame.png");
             return 2;
         }
-        string scene = Arg(args, "--scene") ?? "default";
-        if (Array.IndexOf(Scenes, scene) < 0)
+        string[] scenes = (Arg(args, "--scene") ?? "default").Split(',');
+        foreach (string scene in scenes)
+            if (Array.IndexOf(Scenes, scene) < 0)
+            {
+                Error($"Unknown scene '{scene}'. Known scenes: {string.Join(", ", Scenes)}");
+                return 2;
+            }
+        string mission = Arg(args, "--mission") ?? "mission-01";
+        if (mission.Length == 0 || !mission.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
         {
-            Error($"Unknown scene '{scene}'. Known scenes: {string.Join(", ", Scenes)}");
+            Error($"--mission needs a mission name of letters, digits and '-' only, e.g. mission-01, not '{mission}'");
             return 2;
         }
         int width = Width, height = Height;
@@ -101,7 +108,20 @@ public static class DiagnosticsRunner
             return 2;
         }
 
-        var run = NewRun();
+        foreach (string scene in scenes)
+        {
+            // With several scenes, out.png becomes out-<scene>.png; each scene starts from its own fresh run.
+            string file = scenes.Length > 1
+                ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + scene + Path.GetExtension(path))
+                : path;
+            RenderScene(scene, mission, seconds, width, height, file);
+        }
+        return 0;
+    }
+
+    static void RenderScene(string scene, string mission, double seconds, int width, int height, string path)
+    {
+        var run = NewRun(mission);
         var view = new GameView { Run = run, Width = width, Height = height, ShowHelp = false };
         for (double t = 0; t < seconds; t += Dt)
         {
@@ -113,6 +133,8 @@ public static class DiagnosticsRunner
         else if (scene == "offroad") PlaceOffRoad(run);
         else if (scene == "uphill") PlaceUphill(run, width);
         else if (scene == "wreck") PlaceWrecks(run.World, view.Effects);
+        else if (scene == "arsenal") PlaceArsenal(run.World, view.Effects);
+        else if (scene == "strike") PlaceStrike(run.World, view.Effects);
 
         view.Measure(new Size(width, height));
         view.Arrange(new Rect(0, 0, width, height));
@@ -125,7 +147,6 @@ public static class DiagnosticsRunner
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         using var file = File.Create(path);
         encoder.Save(file);
-        return 0;
     }
 
     // ---- --stress -------------------------------------------------------------------------------------------
@@ -451,9 +472,75 @@ public static class DiagnosticsRunner
         return new Tracer { Pose = pose, PrevDistance = pose.Distance - 2.5, PrevLateral = pose.Lateral, PrevHeading = pose.Heading, Travel = travel, OwnerId = p.Id };
     }
 
-    static MissionRun NewRun()
+    /// <summary>
+    /// One of everything in the arsenal: own smoke 30 m behind (the mirror) and another 60 m ahead, hostile caltrops 45 m
+    /// ahead in the player's lane, crates (Missile 35 m, Armor 80 m), a player missile 25 m ahead locked on a Runner 140 m
+    /// ahead, an enemy missile 70 m ahead in the next lane and a hostile tracer 30 m ahead.
+    /// </summary>
+    static void PlaceArsenal(World w, EffectList effects)
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", "mission-01.json");
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        w.Missiles.Clear();
+        w.EnemyMissiles.Clear();
+        effects.Clear();
+        w.Loadout.Restock(SupplyItem.Missile, 1);
+
+        var runner = AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + 140, p.Lateral, p.Speed);
+        w.Agents.Add(runner);
+
+        w.Hazards.Add(new SmokeCloud { Distance = p.Distance - 30, PrevDistance = p.Distance - 30, Lateral = p.Lateral, Age = 2.0 });
+        w.Hazards.Add(new SmokeCloud { Distance = p.Distance + 60, PrevDistance = p.Distance + 60, Lateral = p.Lateral, Age = 2.0 });
+        w.Hazards.Add(new Caltrops { Distance = p.Distance + 45, Lateral = p.Lateral, Hostile = true });
+        w.Hazards.Add(new SupplyCrate(SupplyItem.Missile, 1) { Distance = p.Distance + 35, PrevDistance = p.Distance + 35, Lateral = p.Lateral + 5 });
+        w.Hazards.Add(new SupplyCrate(SupplyItem.Armor, 1) { Distance = p.Distance + 80, PrevDistance = p.Distance + 80, Lateral = p.Lateral - 5 });
+
+        var pose = new RoadPose(p.Distance + 25, p.Lateral, 0);
+        w.Missiles.Add(new Missile
+        {
+            Pose = pose, PrevDistance = pose.Distance, PrevLateral = pose.Lateral, PrevHeading = pose.Heading,
+            Speed = p.Speed + Missile.LaunchBoost, Travel = 40, TargetId = runner.Id,
+        });
+        w.EnemyMissiles.Add(new EnemyMissile
+        {
+            Id = w.NextId(), Distance = p.Distance + 70, PrevDistance = p.Distance + 70, Lateral = p.Lateral + 5, PrevLateral = p.Lateral + 5,
+            TargetLateral = p.Lateral + 5, LaunchTime = w.Time, Dir = 1,
+        });
+        var hostile = new RoadPose(p.Distance + 30, p.Lateral + 1.5, 0);
+        w.Tracers.Add(new Tracer
+        {
+            Pose = hostile, PrevDistance = hostile.Distance - 2.5, PrevLateral = hostile.Lateral, PrevHeading = hostile.Heading,
+            Travel = 40, OwnerId = runner.Id, Hostile = true,
+        });
+    }
+
+    /// <summary>Three Runners 60, 180 and 380 m ahead, the strike half-way through its sweep, and one beam from a prior kill.</summary>
+    static void PlaceStrike(World w, EffectList effects)
+    {
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        w.Missiles.Clear();
+        w.EnemyMissiles.Clear();
+        effects.Clear();
+        double[] ahead = { 60, 180, 380 }, side = { 4, -4, 0 };
+        for (int i = 0; i < ahead.Length; i++)
+            w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + ahead[i], p.Lateral + side[i], p.Speed));
+        w.Loadout.Restock(SupplyItem.Strike, 1);
+        w.Loadout.Strike.TryBegin();
+        w.Loadout.Strike.AdvanceSweep(SatelliteStrike.SweepSeconds / 2);
+        w.Announce("SATELLITE STRIKE", "TARGETING 3 HOSTILES", 1.5);
+        effects.Spawn(p.Distance + 110, p.Lateral + 6);
+        effects.SpawnBeam(p.Distance + 110, p.Lateral + 6);
+        effects.Update(0.2);
+    }
+
+    static MissionRun NewRun(string mission = "mission-01")
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", mission + ".json");
         return new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
     }
 

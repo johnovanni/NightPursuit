@@ -76,6 +76,19 @@ public sealed class Projector
     /// <summary>Metres from the camera to a tracer's head along the road.</summary>
     public double Ahead(Tracer t) => Lerp(t.PrevDistance, t.Pose.Distance) - CamDistance;
 
+    /// <summary>Metres from the camera to a player missile along the road.</summary>
+    public double Ahead(Missile m) => Lerp(m.PrevDistance, m.Pose.Distance) - CamDistance;
+
+    /// <summary>Metres from the camera to an enemy missile along the road.</summary>
+    public double Ahead(EnemyMissile m) => Lerp(m.PrevDistance, m.Distance) - CamDistance;
+
+    /// <summary>Metres from the camera to the centre of a smoke cloud along the road.</summary>
+    public double Ahead(SmokeCloud s) => Lerp(s.PrevDistance, s.Distance) - CamDistance;
+
+    public double LateralOf(Missile m) => Lerp(m.PrevLateral, m.Pose.Lateral);
+    public double HeadingOf(Missile m) => Lerp(m.PrevHeading, m.Pose.Heading);
+    public double LateralOf(EnemyMissile m) => Lerp(m.PrevLateral, m.Lateral);
+
     /// <summary>Pixels per metre at distance <paramref name="depth"/> ahead of the eye.</summary>
     public double Ppm(double depth) => HalfWidth * Focal / depth;
 

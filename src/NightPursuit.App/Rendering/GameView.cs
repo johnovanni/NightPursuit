@@ -60,10 +60,17 @@ public sealed class GameView : FrameworkElement
         SkyRenderer.Draw(dc, _projector, world.Track, Hud.ReadoutBounds(_layout));
         RoadRenderer.Draw(dc, _projector);
         HazardRenderer.DrawSlicks(dc, _projector, world);
+        ArsenalRenderer.DrawCaltrops(dc, _projector, world);
+        ArsenalRenderer.DrawCrates(dc, _projector, world, _layout);
         VehicleRenderer.DrawAll(dc, _projector, world);
-        HazardRenderer.DrawSmoke(dc, _projector, world);   // after the cars and wrecks: it rises in front of them
+        ArsenalRenderer.DrawSmoke(dc, _projector, world);   // after the cars: a car inside it fades behind it
+        HazardRenderer.DrawSmoke(dc, _projector, world);    // wreck smoke rises in front of the wrecks
         EffectRenderer.DrawTracers(dc, _projector, world);
+        ArsenalRenderer.DrawMissiles(dc, _projector, world);
+        ArsenalRenderer.DrawStrike(dc, _projector, world);
+        EffectRenderer.DrawBeams(dc, _projector, Effects);
         EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
+        ArsenalRenderer.DrawLock(dc, _projector, world);
         dc.Pop();
 
         // Screen-fixed from here on.

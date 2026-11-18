@@ -19,6 +19,11 @@ internal static class Neon
     public static readonly Color Indigo = Color.FromRgb(0x5A, 0x4F, 0xD0);
     public static readonly Color White = Color.FromRgb(0xEE, 0xF4, 0xFF);
     public static readonly Color Gray = Color.FromRgb(0x9A, 0xA8, 0xB8);
+    public static readonly Color OrangeRed = Color.FromRgb(0xFF, 0x6A, 0x3D);   // Gunner
+    public static readonly Color Teal = Color.FromRgb(0x2E, 0xE6, 0xC8);        // Dropper
+    public static readonly Color SteelBlue = Color.FromRgb(0x6F, 0x9B, 0xFF);   // Armored
+    public static readonly Color Gold = Color.FromRgb(0xFF, 0xD2, 0x4A);        // boss trim
+    public static readonly Color Steel = Color.FromRgb(0xD0, 0xD8, 0xE0);       // caltrops
 
     public static readonly Brush Black = Solid(Colors.Black);
 
@@ -35,6 +40,17 @@ internal static class Neon
     public static readonly NeonPen WreckBody = Pen(Orange, 0.45, 1.4), FlameOuter = Pen(Orange, 1, 2), FlameInner = Pen(Amber, 1, 1.4);
     public static readonly Brush OilFill = Solid(Purple, 0.16), TailLight = Solid(Red), BarBack = Solid(Colors.Black, 0.7);
 
+    // Arsenal, enemy types and the boss.
+    public static readonly NeonPen GunnerCar = Pen(OrangeRed), DropperCar = Pen(Teal), ArmoredCar = Pen(SteelBlue);
+    public static readonly NeonPen BossCar = Pen(White), BossTrim = Pen(Gold), BossFlash = Pen(Red, 1, 2.4);
+    public static readonly NeonPen EnemyTracer = Pen(Color.FromRgb(0xFF, 0x5A, 0x36), 1, 2);
+    public static readonly NeonPen PlayerMissile = Pen(White, 1, 2.2), EnemyMissile = Pen(Red, 1, 2.2);
+    public static readonly NeonPen Crate = Pen(White, 1, 1.5), Caltrop = Pen(Steel, 1, 1.3);
+    public static readonly NeonPen StrikeBeam = Pen(Color.FromRgb(0x9F, 0xF6, 0xFF), 1, 2);
+    /// <summary>The outline of anything an enemy dropped: red and dashed, so the colour is not the only cue.</summary>
+    public static readonly NeonPen HostileOutline = Pen(Red, 0.8, 1.6, DashStyles.Dash);
+    public static readonly Brush SmokeFill = Solid(Gray, 0.22), CrateFill = Solid(Cyan, 0.12);
+
     // Cockpit and HUD.
     public static readonly NeonPen Hood = Pen(Green, 0.8, 1.6), Gun = Pen(Green, 1, 3);
     public static readonly NeonPen Hud = Pen(Cyan, 0.8, 1.2), RadarLine = Pen(Green, 0.55, 1.0), MirrorRoad = Pen(Cyan, 0.6, 1.0);
@@ -47,12 +63,13 @@ internal static class Neon
     public static readonly Brush BarFill = Solid(Red), OilFull = Solid(Purple), HoodFill = Solid(Green, 0.25);
     public static readonly Brush RadarRunnerFill = Solid(Magenta), TextOrange = Solid(Orange);
 
-    public static NeonPen Pen(Color c, double alpha = 1, double width = 1.6)
+    public static NeonPen Pen(Color c, double alpha = 1, double width = 1.6, DashStyle? dash = null)
     {
         var glow = new Pen(Solid(c, 0.27 * alpha), width + 4)
         { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
         var core = new Pen(Solid(c, alpha), width)
         { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+        if (dash is not null) { glow.DashStyle = dash; core.DashStyle = dash; }
         glow.Freeze();
         core.Freeze();
         return new NeonPen(glow, core);
