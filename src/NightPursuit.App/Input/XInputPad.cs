@@ -35,8 +35,15 @@ public sealed class XInputPad
     bool _available = true, _connected;
     double _retryAt;
     ushort _previous;
+    bool _resync;
 
     public bool Connected => _connected;
+
+    /// <summary>
+    /// Call while the window is inactive: the next poll treats whatever is held then as already pressed,
+    /// so a button held during alt-tab does not fire a press on return.
+    /// </summary>
+    public void SkipHeldButtons() => _resync = true;
 
     /// <summary>Polls the pad; queues press-edge actions into <paramref name="actions"/>.</summary>
     public Reading Poll(Queue<GameAction> actions)
@@ -59,6 +66,7 @@ public sealed class XInputPad
 
         _connected = true;
         var g = st.Pad;
+        if (_resync) { _previous = g.Buttons; _resync = false; }
         ushort pressed = (ushort)(g.Buttons & ~_previous);
         _previous = g.Buttons;
         if ((pressed & B) != 0) actions.Enqueue(new GameAction(ActionKind.DropRear));

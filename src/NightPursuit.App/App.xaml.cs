@@ -1,5 +1,7 @@
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
+using NightPursuit.App.Diagnostics;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
 
@@ -11,22 +13,41 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        // Task 13 hook: route "--snapshot", "--stress" and "--perf" arguments to the diagnostics
-        // runner here (run it, then Shutdown(exitCode) and return) before any window is created.
-
-        MissionRun run;
-        try
+        // Diagnostics run without any window and exit with their own code.
+        if (e.Args.Any(a => a is "--snapshot" or "--stress" or "--perf"))
         {
-            string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", "mission-01.json");
-            run = new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
-        }
-        catch (MissionFormatException ex)
-        {
-            MessageBox.Show(ex.Message, "Night Pursuit: mission file problem", MessageBoxButton.OK, MessageBoxImage.Error);
-            Shutdown(1);
+            Shutdown(DiagnosticsRunner.Run(e.Args));
             return;
         }
 
-        new MainWindow(run).Show();
+        DispatcherUnhandledException += OnUnhandled;
+
+        try
+        {
+            string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", "mission-01.json");
+            var run = new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
+            new MainWindow(run).Show();
+        }
+        catch (MissionFormatException ex)
+        {
+            Fail("Night Pursuit: mission file problem", ex.Message);
+        }
+        catch (Exception ex)
+        {
+            Fail("Night Pursuit: could not start", ex.ToString());
+        }
+    }
+
+    void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
+    {
+        e.Handled = true;
+        Fail("Night Pursuit: something went wrong", e.Exception.ToString());
+    }
+
+    /// <summary>Shows a readable message instead of the default crash dialog, then exits with a failure code.</summary>
+    void Fail(string title, string message)
+    {
+        MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+        Shutdown(1);
     }
 }

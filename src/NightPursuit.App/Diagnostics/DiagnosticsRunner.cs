@@ -1,0 +1,101 @@
+using System.Globalization;
+using System.IO;
+using System.Windows;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using NightPursuit.App.Rendering;
+using NightPursuit.Core.Control;
+using NightPursuit.Core.Missions;
+
+namespace NightPursuit.App.Diagnostics;
+
+/// <summary>
+/// Command-line diagnostics run instead of the game window:
+/// <c>--snapshot out.png [--seconds S] [--scene name]</c>, plus <c>--stress</c> and <c>--perf</c> (added later).
+/// </summary>
+public static class DiagnosticsRunner
+{
+    const double Dt = 1.0 / 120;
+    const int Width = 1280, Height = 720;
+
+    /// <summary>Runs the requested diagnostic and returns the process exit code (0 ok, 1 failed, 2 bad arguments).</summary>
+    public static int Run(string[] args)
+    {
+        try
+        {
+            if (Has(args, "--snapshot")) return Snapshot(args);
+            foreach (var name in new[] { "--stress", "--perf" })
+                if (Has(args, name))
+                {
+                    Console.Error.WriteLine($"{name}: not implemented yet");
+                    return 2;
+                }
+            return 2;
+        }
+        catch (MissionFormatException ex)
+        {
+            Console.Error.WriteLine(ex.Message);
+            return 1;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Diagnostics failed: {ex}");
+            return 1;
+        }
+    }
+
+    static int Snapshot(string[] args)
+    {
+        string? path = Arg(args, "--snapshot");
+        if (path is null || path.StartsWith("--"))
+        {
+            Console.Error.WriteLine("--snapshot needs an output file name, e.g. --snapshot snapshots/frame.png");
+            return 2;
+        }
+        string scene = Arg(args, "--scene") ?? "default";
+        if (scene != "default")
+        {
+            Console.Error.WriteLine($"Unknown scene '{scene}'. Known scenes: default");
+            return 2;
+        }
+        double seconds = 12;
+        string? secondsText = Arg(args, "--seconds");
+        if (secondsText is not null
+            && !(double.TryParse(secondsText, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds) && seconds >= 0))
+        {
+            Console.Error.WriteLine($"--seconds needs a number of seconds, not '{secondsText}'");
+            return 2;
+        }
+
+        var run = NewRun();
+        for (double t = 0; t < seconds; t += Dt) run.Update(Autopilot.Next(run.World), Dt);
+
+        var view = new GameView { Run = run, Width = Width, Height = Height };
+        view.Measure(new Size(Width, Height));
+        view.Arrange(new Rect(0, 0, Width, Height));
+        view.UpdateLayout();
+        var bitmap = new RenderTargetBitmap(Width, Height, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(view);
+
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
+        using var file = File.Create(path);
+        encoder.Save(file);
+        return 0;
+    }
+
+    static MissionRun NewRun()
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", "mission-01.json");
+        return new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
+    }
+
+    static bool Has(string[] args, string name) => Array.IndexOf(args, name) >= 0;
+
+    static string? Arg(string[] args, string name)
+    {
+        int i = Array.IndexOf(args, name);
+        return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+    }
+}

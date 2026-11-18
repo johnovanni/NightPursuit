@@ -59,6 +59,7 @@ public sealed class InputHub
         if (!windowActive)
         {
             _keys.ReleaseAll();
+            _pad.SkipHeldButtons();
             return ControlFrame.Empty;
         }
         var p = _pad.Poll(_actions);

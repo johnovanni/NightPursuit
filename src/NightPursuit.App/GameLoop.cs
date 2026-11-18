@@ -35,8 +35,10 @@ public sealed class GameLoop
         _last = now;
         _haveLast = true;
 
+        // Read first: polling the pad is what queues its press-edge actions, and they must act this frame.
+        var held = _input.Read(_window.IsActive);
         foreach (var a in _input.Drain()) _run.Handle(a);
-        _run.Update(_input.Read(_window.IsActive), seconds);   // Core caps a long stall at 0.25 s
+        _run.Update(held, seconds);   // Core caps a long stall at 0.25 s
         _view.InvalidateVisual();
     }
 }
