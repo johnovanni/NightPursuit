@@ -26,7 +26,7 @@ public sealed class XInputPad
     static extern uint GetState(uint index, out State state);
 
     const ushort DPadUp = 0x0001, DPadDown = 0x0002, Start = 0x0010,
-        A = 0x1000, B = 0x2000, Y = 0x8000;
+        Back = 0x0020, A = 0x1000, B = 0x2000, Y = 0x8000;
 
     /// <summary>Held pad values for one frame.</summary>
     public readonly record struct Reading(bool Connected, bool Fire, double Steer, double Gas, double Brake);
@@ -74,6 +74,7 @@ public sealed class XInputPad
         if ((pressed & DPadUp) != 0) actions.Enqueue(new GameAction(ActionKind.LeverUp));
         if ((pressed & DPadDown) != 0) actions.Enqueue(new GameAction(ActionKind.LeverDown));
         if ((pressed & Start) != 0) actions.Enqueue(new GameAction(ActionKind.Pause));
+        if ((pressed & Back) != 0) actions.Enqueue(new GameAction(ActionKind.Restart));
 
         return new Reading(true, (g.Buttons & A) != 0,
             Deadzone(Math.Clamp(g.ThumbLX / 32767.0, -1, 1), 0.18),

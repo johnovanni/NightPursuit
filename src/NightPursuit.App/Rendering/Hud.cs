@@ -81,7 +81,7 @@ internal static class Hud
         l.Text(dc, $"CONTROL  {w.Scheme.Name}", 16 * k, y, 18, Neon.TextCyan, bold: true);
         y += 26 * k;
         foreach (var line in w.Scheme.HelpLines) { l.Text(dc, line, 16 * k, y, 13.5, Neon.TextGray); y += 18 * k; }
-        l.Text(dc, "F1 help   P pause   R restart", 16 * k, y + 4 * k, 13, Neon.TextGray);
+        l.Text(dc, "F1 help   P pause   R restart (when paused or finished)", 16 * k, y + 4 * k, 13, Neon.TextGray);
     }
 
     static void DrawCarState(DrawingContext dc, HudLayout l, MissionRun run)

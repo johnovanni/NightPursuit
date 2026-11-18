@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using NightPursuit.App.Input;
+using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
 
 namespace NightPursuit.App;
@@ -35,10 +36,15 @@ public partial class MainWindow : Window
         };
         PreviewKeyUp += (_, e) => _input.OnKeyUp(e.Key == Key.System ? e.SystemKey : e.Key);
         // Losing focus while a key is held means the KeyUp never arrives here.
-        Deactivated += (_, _) => _input.ReleaseAll();
+        Deactivated += (_, _) =>
+        {
+            _input.ReleaseAll();
+            // Cruise or the lever would keep driving an unattended car (decision D12).
+            if (run.State == RunState.Playing) run.Handle(new GameAction(ActionKind.Pause));
+        };
         PreviewMouseWheel += (_, e) =>
         {
-            _input.OnWheel(e.Delta);
+            if (IsActive) _input.OnWheel(e.Delta);
             e.Handled = true;
         };
 

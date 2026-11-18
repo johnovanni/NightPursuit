@@ -27,9 +27,9 @@ internal static class Overlays
         "           Steer into a car's side to knock it into a spin",
         "SPEED      C cruise     F2 ramp pedal     F3 speed lever",
         "           1-0 lever presets     mouse wheel moves the lever",
-        "GAME       P / Esc pause     R restart     F1 this help",
+        "GAME       P / Esc pause   R restart (when paused or finished)   F1 this help",
         "GAMEPAD    right trigger gas     left trigger brake     left stick steer",
-        "           A guns     B oil     Y cruise     D-pad up/down lever     Start pause",
+        "           A guns   B oil   Y cruise   D-pad up/down lever   Start pause   Back restart",
         "",
         "Press gas to start.  F1 shows this again.",
     };

@@ -43,7 +43,7 @@ public sealed class GameLoop
         {
             // The help screen is an App matter: the run never sees it.
             if (a.Kind == ActionKind.ToggleHelp) { _view.ShowHelp = !_view.ShowHelp; continue; }
-            if (a.Kind == ActionKind.Restart) { _view.ShowHelp = true; _gasSeen = false; }
+            if (a.Kind == ActionKind.Restart && _run.CanRestart) { _view.ShowHelp = true; _gasSeen = false; }
             _run.Handle(a);
         }
         if (!_gasSeen && (held.Gas || held.PadGas > 0.2))

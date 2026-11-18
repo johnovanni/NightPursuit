@@ -79,3 +79,11 @@ nearer one is hit, so you can't shoot through a car to reach the one behind it.
 - A straight line leaving a 200 m bend is 23.6 m outside the road after 100 m, not 26.8 m.
 - The road view now uses exact arcs, so a constant bend is a true circle; it was off by about
   1 mm before.
+
+**D12. Losing focus pauses the game.** If the window loses focus while you're driving (alt-tab, a
+notification), the game pauses itself, so cruise or the lever can't drive the car into the rail
+while you're away.
+
+**D13. Restart only when paused or finished.** R (or the pad's Back button) restarts only when the
+game is paused or the mission has ended. Pressed while driving, it shows how to restart, so one
+stray key can't throw away a run.
