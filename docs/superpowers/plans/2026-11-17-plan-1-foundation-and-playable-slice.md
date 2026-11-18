@@ -175,8 +175,8 @@ Port `RoadView` from the prototype's `Track.cs` (exact heading integration, with
     var t = Track.FromSegments(Enumerable.Repeat(1 / 200.0, 400).ToArray());
     var pose = new RoadPose(0, 0, 0);
     for (int i = 0; i < 100; i++) pose = RoadMotion.MoveStraight(t, pose, 1);
-    // Chord geometry: after ~100 m a straight line is 200 - sqrt(200² - 100²) ≈ 26.8 m outside (left, negative).
-    Assert.InRange(pose.Lateral, -28.5, -25.5);
+    // Tangent geometry: after 100 m a straight line is sqrt(200² + 100²) − 200 ≈ 23.6 m outside (left, negative).
+    Assert.InRange(pose.Lateral, -24.5, -22.5);
 }
 ```
 - [ ] **Step 2: Run.** Expected: FAIL.
@@ -368,7 +368,7 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
 
 ```csharp
 [Fact] public void Tracer_on_straight_keeps_its_line() { /* fire with Heading 0 at Lateral 0: after 300 m travel, |Lateral ∓ 0.7| < 1e-6 */ }
-[Fact] public void Tracer_on_bend_leaves_road_on_outside() { /* bend r=200 right, Heading 0: after 100 m, Lateral ≈ -26.8 ± 1.5 (matches Task 3 chord) */ }
+[Fact] public void Tracer_on_bend_leaves_road_on_outside() { /* bend r=200 right, Heading 0: after 100 m of travel, Lateral ≈ -23.8 ± 1.0 (a tangent line: sqrt(200²+100²) − 200 ≈ 23.6, matching Task 3's MoveStraight test) */ }
 [Fact] public void Swept_hit_cannot_tunnel() { /* agent 30 m ahead same lane; one tracer, dt = 1/120 at Speed 330: car is hit (Armor 5) */ }
 [Fact] public void Guns_overheat_after_4_s_and_lock_2_s() { /* hold Fire: Locked becomes true at 4.0 ± 0.05 s; false again at 6.0 ± 0.05 s */ }
 [Fact] public void Gun_kill_leaves_wreck_in_lane() { /* Runner (6 armor) at lane +5 killed by gunfire → Hazards has one Wreck with Lateral 5 and VehicleDestroyed(Gunfire, 100) published; Score 100 */ }
