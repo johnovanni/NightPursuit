@@ -187,7 +187,7 @@ public static class HazardRenderer
             if (dz < 2 || dz > SmokeDistance) continue;
             double clip = p.ClipAt(dz);
             if (clip <= 0) continue;
-            double phase = wreck.Lateral * 1.37 + wreck.Distance * 0.113;   // position differs, so neighbouring columns do not pulse together
+            double phase = (wreck.Seed * 2654435761u % 4096) / 4096.0 * PuffLife;   // fixed per wreck, so columns do not pulse in step
             double near = Math.Clamp((dz - 8) / 22, 0.4, 1);   // wrecks within about 30 m get fainter smoke
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
             for (int i = 0; i < Puffs; i++)

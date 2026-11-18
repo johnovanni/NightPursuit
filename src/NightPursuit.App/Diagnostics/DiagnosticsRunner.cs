@@ -241,7 +241,7 @@ public static class DiagnosticsRunner
             if (k % 5 == 3) car.HitFlash = 0.1;
             w.Agents.Add(car);
             w.Hazards.Add(new OilSlick { Distance = d, Lateral = -x });
-            w.Hazards.Add(new Wreck { Distance = d + 7, PrevDistance = d + 7, Lateral = x / 2, Width = 1.9, Length = 4.4, Burn = k * 0.7 });
+            w.Hazards.Add(new Wreck { Distance = d + 7, PrevDistance = d + 7, Lateral = x / 2, Width = 1.9, Length = 4.4, Burn = k * 0.7, Seed = 100 + k });
             var pose = new RoadPose(d, x / 2, (k % 3 - 1) * 0.2);
             w.Tracers.Add(new Tracer { Pose = pose, PrevDistance = d - 2.5, PrevLateral = pose.Lateral, PrevHeading = pose.Heading, Travel = k * 25, OwnerId = k % 2 == 0 ? p.Id : car.Id });
             view.Effects.Spawn(d, x);
@@ -404,8 +404,8 @@ public static class DiagnosticsRunner
         w.Hazards.Clear();
         w.Tracers.Clear();
         effects.Clear();
-        w.Hazards.Add(new Wreck { Distance = p.Distance + 18, PrevDistance = p.Distance + 18, Lateral = p.Lateral + 2.2, Width = 1.9, Length = 4.4, Burn = 3.0 });
-        w.Hazards.Add(new Wreck { Distance = p.Distance + 60, PrevDistance = p.Distance + 60, Lateral = p.Lateral - 4.5, Width = 1.9, Length = 4.4, Burn = 3.7 });
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 18, PrevDistance = p.Distance + 18, Lateral = p.Lateral + 2.2, Width = 1.9, Length = 4.4, Burn = 3.0, Seed = 1 });
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 60, PrevDistance = p.Distance + 60, Lateral = p.Lateral - 4.5, Width = 1.9, Length = 4.4, Burn = 3.7, Seed = 2 });
     }
 
     /// <summary>Puts the player left of the road and steps once so the off-road state is set.</summary>
@@ -434,7 +434,7 @@ public static class DiagnosticsRunner
         var behind = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance - 25, p.Lateral + 3, p.Speed);
         w.Agents.AddRange(new[] { runner, blocker, spinner, behind });
 
-        w.Hazards.Add(new Wreck { Distance = p.Distance + 50, PrevDistance = p.Distance + 50, Lateral = p.Lateral + 1, Width = 1.9, Length = 4.4, Burn = 0.6 });
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 50, PrevDistance = p.Distance + 50, Lateral = p.Lateral + 1, Width = 1.9, Length = 4.4, Burn = 0.6, Seed = 3 });
         w.Hazards.Add(new OilSlick { Distance = p.Distance + 40, Lateral = p.Lateral - 2.5 });
 
         effects.Spawn(p.Distance + 30, p.Lateral - 1);

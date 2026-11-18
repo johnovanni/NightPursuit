@@ -268,7 +268,7 @@ public sealed class World
             Hazards.Add(new Wreck
             {
                 Distance = car.Distance, Lateral = car.Lateral, PrevDistance = car.PrevDistance,
-                Width = car.Stats.Width, Length = car.Stats.Length, Speed = car.Speed,
+                Width = car.Stats.Width, Length = car.Stats.Length, Speed = car.Speed, Seed = car.Id,
             });
             _removals.Add(car);
         }
