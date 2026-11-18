@@ -203,11 +203,13 @@ public class CollisionTests
     public void Tracer_hits_nearest_car_along_its_path()
     {
         var w = Straight();
-        var far = AgentCar.Create(w.NextId(), AgentKind.Runner, 31, 0, 0);
+        // 5 m apart, so the two cars don't touch each other (4.4 m would); the fast tracer sweeps 27 -> 37 m in one
+        // step, across both of them.
+        var far = AgentCar.Create(w.NextId(), AgentKind.Runner, 35, 0, 0);
         var near = AgentCar.Create(w.NextId(), AgentKind.Runner, 30, 0, 0);
         w.Agents.Add(far);                                        // list order: the farther car first
         w.Agents.Add(near);
-        w.Tracers.Add(new Tracer { Pose = new RoadPose(27, 0, 0), Speed = 330, OwnerId = 0 });
+        w.Tracers.Add(new Tracer { Pose = new RoadPose(27, 0, 0), Speed = 1200, OwnerId = 0 });
         w.StepOnce(ControlFrame.Empty);
         Assert.Equal(VehicleStats.Runner.Armor - 1, near.Armor);
         Assert.Equal(VehicleStats.Runner.Armor, far.Armor);
@@ -250,5 +252,120 @@ public class CollisionTests
         Assert.Equal(VehicleState.Wrecked, w.Player.State);
         Assert.Equal(0, second.ContactCooldown);
         Assert.Equal(1, w.Events.Count(e => e is PlayerDamaged));
+    }
+
+    // Agent-vs-agent contact. These call Collisions.Resolve directly, as the ram tests above do: a full step would
+    // overwrite LateralVel in StepAgent.
+
+    static AgentCar StillRunner(World w, double distance, double lateral, double speed)
+    {
+        var car = AgentCar.Create(w.NextId(), AgentKind.Runner, distance, lateral, speed);
+        car.Driver = new StillDriver();
+        w.Agents.Add(car);
+        return car;
+    }
+
+    [Fact]
+    public void Agents_closing_fast_side_by_side_both_spin()
+    {
+        var w = Straight();
+        var left = StillRunner(w, 50, -0.8, 30);
+        var right = StillRunner(w, 50, 0.8, 30);
+        left.LateralVel = 3; right.LateralVel = -3;               // closing at 6 m/s
+        Collisions.Resolve(w);
+        Assert.Equal(VehicleState.Spinning, left.State);
+        Assert.Equal(VehicleState.Spinning, right.State);
+        Assert.Equal(2, w.Events.OfType<VehicleSpun>().Count());
+        Assert.Contains(w.Events, e => e is Message { Text: "RUNNER AND RUNNER COLLIDED" });
+        Assert.True(left.PushVel < 0 && right.PushVel > 0, $"push {left.PushVel:0.00} / {right.PushVel:0.00}");   // each spins away from the other
+        Assert.Equal(100, w.Player.Armor);
+    }
+
+    [Fact]
+    public void Gentle_side_contact_pushes_apart_without_spinning()
+    {
+        var w = Straight();
+        var left = StillRunner(w, 50, -0.8, 30);
+        var right = StillRunner(w, 50, 0.8, 30);
+        left.LateralVel = 0.5; right.LateralVel = -0.5;           // closing at 1 m/s
+        Collisions.Resolve(w);
+        Assert.Equal(VehicleState.Driving, left.State);
+        Assert.Equal(VehicleState.Driving, right.State);
+        Assert.Equal(-(2.5 + 0.8 * 1), left.PushVel, 9);
+        Assert.Equal(2.5 + 0.8 * 1, right.PushVel, 9);
+        Assert.True(right.Lateral - left.Lateral >= 1.9 - 1e-9, $"apart {right.Lateral - left.Lateral}");
+        Assert.DoesNotContain(w.Events, e => e is VehicleSpun);
+    }
+
+    [Fact]
+    public void Rear_end_between_agents_slows_the_follower()
+    {
+        var w = Straight();
+        var leader = StillRunner(w, 50, 0, 20);
+        var follower = StillRunner(w, 46, 0, 35);
+        Collisions.Resolve(w);
+        Assert.Equal(18, follower.Speed, 9);
+        Assert.Equal(45.6, follower.Distance, 9);
+        Assert.Equal(20, leader.Speed, 9);
+        Assert.Equal(50, leader.Distance, 9);
+        Assert.Equal(VehicleStats.Runner.Armor - 0.5, follower.Armor, 9);
+        Assert.Equal(VehicleStats.Runner.Armor - 0.5, leader.Armor, 9);
+        Assert.Equal(0.25, follower.AgentContactCooldown, 9);
+        Assert.Equal(0.25, leader.AgentContactCooldown, 9);
+        Assert.Equal(0, follower.ContactCooldown);                // ContactCooldown still means "touched the player"
+        Assert.Equal(0, leader.ContactCooldown);
+
+        follower.Distance = 46;                                   // overlapping again while the cooldown runs: skipped
+        Collisions.Resolve(w);
+        Assert.Equal(VehicleStats.Runner.Armor - 0.5, follower.Armor, 9);
+        Assert.Equal(46, follower.Distance, 9);
+    }
+
+    [Fact]
+    public void Car_cut_off_by_a_faster_car_is_not_sped_up()
+    {
+        var w = Straight();
+        var leader = StillRunner(w, 50, 0, 35);                   // pulled in just ahead, faster
+        var follower = StillRunner(w, 46, 0, 20);
+        Collisions.Resolve(w);
+        Assert.Equal(20, follower.Speed, 9);
+        Assert.Equal(45.6, follower.Distance, 9);
+    }
+
+    [Fact]
+    public void Agent_contact_that_empties_armor_destroys_without_a_wreck()
+    {
+        var w = Straight();
+        var leader = StillRunner(w, 50, 0, 20);
+        var follower = StillRunner(w, 46, 0, 35);
+        follower.Armor = 0.5;
+        Collisions.Resolve(w);
+        Assert.Equal(VehicleState.Wrecked, follower.State);
+        Assert.Equal(VehicleState.Driving, leader.State);
+        Assert.Contains(w.Events, e => e is VehicleDestroyed { Cause: KillCause.Rammed } d && d.VehicleId == follower.Id);
+        Assert.Empty(w.Hazards);
+    }
+
+    [Fact]
+    public void Broad_phase_with_25_cars_is_deterministic()
+    {
+        static (ulong Hash, int Contacts) Run()
+        {
+            var w = TestWorlds.World(4, TestWorlds.Straight());
+            for (int i = 0; i < 25; i++)
+                w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Runner, 30 + 12 * i, Track.LaneCentres[i % 3], 30 + (i * 7) % 20));
+            int contacts = 0;
+            bool CountContacts()
+            {
+                foreach (var a in w.Agents)
+                    if (a.AgentContactCooldown == 0.25) contacts++;      // set this step
+                return false;
+            }
+            for (int f = 0; f < 60 * 30; f++) w.Advance(Gas, 1.0 / 60, CountContacts);
+            return (w.StateHash(), contacts);
+        }
+        var first = Run();
+        Assert.True(first.Contacts > 0, "no car touched another, so the pass was never exercised");
+        Assert.Equal(first, Run());
     }
 }

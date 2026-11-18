@@ -39,6 +39,8 @@ public sealed partial class World
     public List<AgentCar> Agents { get; } = new();
     public List<Tracer> Tracers { get; } = new();
     public List<Hazard> Hazards { get; } = new();
+    /// <summary>Reused by <see cref="Collisions"/> for its agent-vs-agent pass, so a step allocates nothing; empty between steps.</summary>
+    internal List<AgentCar> AgentScratch { get; } = new();
     public Loadout Loadout { get; set; } = new();
     public SteeringInput Steering { get; } = new();
     public double Time { get; private set; }
@@ -144,27 +146,38 @@ public sealed partial class World
             switch (a.State)
             {
                 case VehicleState.Driving:
-                    var driver = a.Blinded > 0 ? BlindDriver.Instance : a.Driver;   // DriverState is untouched, so the plan resumes
-                    CarPhysics.StepAgent(a, driver.Decide(a, _view, Step), Step);
+                    // Order: the driver decides -> keep clear of the car ahead -> move.
+                    bool blind = a.Blinded > 0;
+                    var driver = blind ? BlindDriver.Instance : a.Driver;   // DriverState is untouched, so the plan resumes
+                    var intent = driver.Decide(a, _view, Step);
+                    // A blinded car can't see the car ahead either, which is how cars collide inside smoke.
+                    if (!blind)
+                        intent = DriverHelpers.KeepClearOfCarAhead(a, _view, intent, a.AheadMemory, DriverHelpers.ReactionDelay(a.Kind), Step);
+                    CarPhysics.StepAgent(a, intent, Step);
                     break;
                 case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
                 case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
             }
             a.HitFlash = Math.Max(0, a.HitFlash - Step);
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
+            a.AgentContactCooldown = Math.Max(0, a.AgentContactCooldown - Step);
         }
     }
 
-    /// <summary>Smoke blinds a car for 2 s after it was last inside a cloud.</summary>
+    /// <summary>Smoke blinds a driving car for 2 s after it was last inside a cloud; a spinning or wrecked car isn't blinded.</summary>
     void UpdateBlindness(AgentCar a)
     {
         bool covered = false;
-        foreach (var h in Hazards)
-            if (h is SmokeCloud c && c.Covers(a)) { covered = true; break; }
+        if (a.State == VehicleState.Driving)
+            foreach (var h in Hazards)
+                if (h is SmokeCloud c && c.Covers(a)) { covered = true; break; }
         if (covered)
         {
             if (a.Blinded <= 0)
+            {
                 Publish(new Message(Time, $"{a.Kind.ToString().ToUpperInvariant()} LOST YOU IN THE SMOKE", Tone.Good));
+                a.WanderTimer = 0;                                 // pick a fresh wander target, not one left from an earlier cloud
+            }
             a.Blinded = BlindSeconds;
         }
         else

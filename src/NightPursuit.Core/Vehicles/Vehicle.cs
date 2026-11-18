@@ -26,7 +26,10 @@ public abstract class Vehicle(VehicleStats stats)
     public double SpinAngle { get; set; }
     public double SpinRate { get; set; }
     public double HitFlash { get; set; }
+    /// <summary>Seconds until this car can be hurt again by touching the player.</summary>
     public double ContactCooldown { get; set; }
+    /// <summary>Seconds until this car can touch another enemy car again; separate from <see cref="ContactCooldown"/>, which drivers read as "touched the player".</summary>
+    public double AgentContactCooldown { get; set; }
 
     // Where this car was at the start of the latest simulation step. The App draws a frame between these and the
     // current values (see World.Alpha); they are presentation-only and never feed the simulation or StateHash.

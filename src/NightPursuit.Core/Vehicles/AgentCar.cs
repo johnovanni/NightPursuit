@@ -23,6 +23,8 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
     public double WanderLateral { get; set; }
     /// <summary>Seconds until a blinded car picks a new wander target.</summary>
     public double WanderTimer { get; set; }
+    /// <summary>What this car is doing about the car ahead of it (see <see cref="DriverHelpers.KeepClearOfCarAhead"/>).</summary>
+    public CarAheadMemory AheadMemory { get; } = new();
 
     static readonly IDriver RunnerDriver = new Drivers.RunnerDriver();
     static readonly IDriver BlockerDriver = new Drivers.BlockerDriver();

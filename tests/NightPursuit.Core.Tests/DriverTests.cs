@@ -268,6 +268,109 @@ public class DriverTests
         Assert.Equal(33, AgentCar.Create(1, AgentKind.Runner, 0, 0, 33).CruiseSpeed);
     }
 
+    // Keeping clear of the car ahead. The player is stopped at 0 on a straight and every car is 200 m or more ahead,
+    // so the Blocker is beyond its 140 m reach and just cruises.
+
+    static (World W, AgentCar Blocker, AgentCar Runner) FastRunnerBehindSlowBlocker()
+    {
+        var w = Straight();
+        var blocker = AgentCar.Create(w.NextId(), AgentKind.Blocker, 260, 0, 25);
+        var runner = AgentCar.Create(w.NextId(), AgentKind.Runner, 200, 0, 50);
+        runner.DriverState = new RunnerDriver.State { Target = 0, LaneTimer = 100 };    // it wants to stay in lane 0
+        w.Agents.Add(blocker);
+        w.Agents.Add(runner);
+        return (w, blocker, runner);
+    }
+
+    /// <summary>Bumper to bumper: from the back car's front to the front car's rear, metres.</summary>
+    static double Gap(Vehicle back, Vehicle front) => front.Distance - back.Distance - (back.Stats.Length + front.Stats.Length) / 2;
+
+    static void AssertNoAgentContact(World w, IEnumerable<AgentCar> cars, int step)
+    {
+        foreach (var car in cars)
+        {
+            Assert.True(car.Armor == car.Stats.Armor, $"car {car.Id} lost armor at step {step}");
+            Assert.True(car.AgentContactCooldown == 0, $"car {car.Id} touched another car at step {step}");
+        }
+        Assert.DoesNotContain(w.Events, e => e is VehicleSpun);   // StepOnce keeps every event of the run
+    }
+
+    [Fact]
+    public void Fast_runner_behind_a_slow_blocker_never_rear_ends_it()
+    {
+        var (w, blocker, runner) = FastRunnerBehindSlowBlocker();
+        for (int i = 0; i < 120 * 20; i++)
+        {
+            w.StepOnce(ControlFrame.Empty);
+            AssertNoAgentContact(w, [blocker, runner], i);
+        }
+        bool ahead = Gap(blocker, runner) >= 0;
+        Assert.True(ahead || Gap(runner, blocker) >= 0, $"overlapping at the end: gap {Gap(runner, blocker):0.00}");
+    }
+
+    [Fact]
+    public void Boxed_in_car_follows_at_the_leaders_speed()
+    {
+        var (w, blocker, runner) = FastRunnerBehindSlowBlocker();
+        var left = AgentCar.Create(w.NextId(), AgentKind.Runner, 260, -5, 25);
+        var right = AgentCar.Create(w.NextId(), AgentKind.Runner, 260, 5, 25);
+        left.Driver = right.Driver = new StillDriver();
+        w.Agents.Add(left);
+        w.Agents.Add(right);
+        for (int i = 0; i < 120 * 10; i++)
+        {
+            w.StepOnce(ControlFrame.Empty);
+            AssertNoAgentContact(w, [blocker, runner, left, right], i);
+        }
+        Assert.InRange(runner.Speed, 25 - 0.5, 25 + 0.5);
+        Assert.InRange(runner.Lateral, -0.3, 0.3);
+        Assert.True(Gap(runner, blocker) > 0, $"gap {Gap(runner, blocker):0.00}");
+    }
+
+    [Fact]
+    public void Runner_changes_to_a_clear_lane_after_its_reaction_delay()
+    {
+        var (w, blocker, runner) = FastRunnerBehindSlowBlocker();
+        double withinAt = -1, leftLaneAt = -1, passedAt = -1;
+        for (int i = 0; i < 120 * 20 && passedAt < 0; i++)
+        {
+            w.StepOnce(ControlFrame.Empty);
+            double closing = runner.Speed - blocker.Speed;
+            double lookAhead = Math.Max(25, 5 + closing * DriverHelpers.ReactionDelay(AgentKind.Runner) + closing * closing / 20);
+            if (withinAt < 0 && Gap(runner, blocker) <= lookAhead) withinAt = w.Time;
+            var m = runner.AheadMemory;
+            if (leftLaneAt < 0 && m.Active && !m.Follow && m.Lateral != 0) leftLaneAt = w.Time;   // its TargetLateral leaves 0
+            if (Gap(blocker, runner) >= 0) passedAt = w.Time;
+        }
+        Assert.True(withinAt >= 0, "the blocker never came within the look-ahead");
+        Assert.True(leftLaneAt >= 0, "never changed lane");
+        Assert.True(leftLaneAt - withinAt >= 0.5 - 1e-9, $"changed lane {leftLaneAt - withinAt:0.000} s after the blocker came into range");
+        Assert.True(passedAt >= 0, "never passed the blocker in 20 s");
+    }
+
+    [Fact]
+    public void Blinded_car_does_not_keep_clear()
+    {
+        var (w, blocker, runner) = FastRunnerBehindSlowBlocker();
+        bool reached = false;
+        for (int i = 0; i < 120 * 20 && !reached; i++)
+        {
+            runner.Blinded = 2;
+            w.StepOnce(ControlFrame.Empty);
+            Assert.False(runner.AheadMemory.Active, $"kept clear while blinded at step {i}");
+            reached = Gap(runner, blocker) <= 0;
+        }
+        Assert.True(reached, "never reached the blocker");
+    }
+
+    [Fact]
+    public void Reaction_delays_are_the_drivers_wreck_delays()
+    {
+        Assert.Equal(0.5, DriverHelpers.ReactionDelay(AgentKind.Runner));
+        Assert.Equal(0.8, DriverHelpers.ReactionDelay(AgentKind.Blocker));
+        Assert.Equal(0.3, DriverHelpers.ReactionDelay(AgentKind.Pursuer));
+    }
+
     [Fact]
     public void Wrecked_agents_are_removed_after_their_timer_and_far_agents_are_culled()
     {

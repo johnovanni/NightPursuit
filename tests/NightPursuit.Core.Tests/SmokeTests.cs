@@ -64,4 +64,41 @@ public class SmokeTests
         }
         Assert.True(targets.Count >= 5, $"distinct targets {targets.Count}");
     }
+
+    [Fact]
+    public void Only_driving_cars_are_blinded()
+    {
+        var w = Straight();
+        var spinning = AgentCar.Create(w.NextId(), AgentKind.Runner, 100, -3, 30);
+        spinning.State = VehicleState.Spinning; spinning.StateTimer = 1.8; spinning.SpinRate = 6;
+        var wrecked = AgentCar.Create(w.NextId(), AgentKind.Runner, 100, 3, 0);
+        w.Agents.Add(spinning);
+        w.Agents.Add(wrecked);
+        w.Destroy(wrecked, KillCause.Rammed);
+        w.Hazards.Add(new SmokeCloud { Distance = 100, PrevDistance = 100, Lateral = 0, Speed = 0 });
+
+        for (int i = 0; i < 60; i++)                               // 0.5 s: still spinning, both still inside the cloud
+        {
+            w.StepOnce(ControlFrame.Empty);
+            Assert.Equal(0, spinning.Blinded);
+            Assert.Equal(0, wrecked.Blinded);
+        }
+        Assert.Equal(VehicleState.Spinning, spinning.State);
+        Assert.DoesNotContain(w.Events, e => e is Message { Text: "RUNNER LOST YOU IN THE SMOKE" });
+    }
+
+    [Fact]
+    public void A_newly_blinded_car_picks_a_fresh_wander_target()
+    {
+        var w = Straight();
+        var car = AgentCar.Create(w.NextId(), AgentKind.Runner, 100, 0, 30);
+        car.DriverState = new RunnerDriver.State { Target = 0, LaneTimer = 100 };
+        car.WanderLateral = -6; car.WanderTimer = 0.5;             // left over from an earlier cloud
+        w.Agents.Add(car);
+        w.Hazards.Add(new SmokeCloud { Distance = 100, PrevDistance = 100, Lateral = 0, Speed = 0 });
+        w.StepOnce(ControlFrame.Empty);
+        Assert.True(car.Blinded > 0);
+        Assert.InRange(car.WanderLateral, -4, 4);                 // picked around where it is now, not the stale -6
+        Assert.Equal(0.8, car.WanderTimer, 9);
+    }
 }

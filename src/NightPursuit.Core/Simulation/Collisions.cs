@@ -13,9 +13,14 @@ public static class Collisions
     const double FirstHitPushBack = 1;
     const double CrabSpeed = 3;
     const double OffRoadLimit = Track.RoadHalfWidth + 1.0;
+    const double AgentReach = 6.5;              // longer than any two cars' half lengths added together
+    const double AgentRearEndDamage = 0.5;
+    const double AgentSpinClosing = 4;
 
     public static void Resolve(World w)
     {
+        AgentsVsAgents(w);
+
         var p = w.Player;
         foreach (var a in w.Agents)
         {
@@ -110,6 +115,76 @@ public static class Collisions
         }
 
         if (a.Armor <= 0) w.Destroy(a, KillCause.Rammed);
+    }
+
+    static readonly Comparison<AgentCar> ByDistanceThenId = (a, b) =>
+        a.Distance != b.Distance ? a.Distance.CompareTo(b.Distance) : a.Id.CompareTo(b.Id);
+
+    /// <summary>
+    /// Every pair of enemy cars on the road. Sorted along the road, each car is checked only against the cars just
+    /// ahead of it (less than 6.5 m), so 25 cars cost a few dozen checks, not 300.
+    /// </summary>
+    static void AgentsVsAgents(World w)
+    {
+        var cars = w.AgentScratch;
+        cars.Clear();
+        foreach (var a in w.Agents)
+            if (a.IsOnRoadDriving) cars.Add(a);
+        cars.Sort(ByDistanceThenId);              // Ids are unique, so the order is the same on every run
+
+        for (int i = 0; i < cars.Count; i++)
+        {
+            for (int j = i + 1; j < cars.Count; j++)
+            {
+                var a = cars[i];
+                var b = cars[j];
+                if (b.Distance - a.Distance >= AgentReach) break;
+                if (!a.IsOnRoadDriving) break;   // destroyed by an earlier pair this pass
+                if (!b.IsOnRoadDriving) continue;
+                AgentVsAgent(w, a, b);
+            }
+        }
+        cars.Clear();
+    }
+
+    /// <summary><paramref name="a"/> is level with or behind <paramref name="b"/>.</summary>
+    static void AgentVsAgent(World w, AgentCar a, AgentCar b)
+    {
+        if (a.AgentContactCooldown > 0 || b.AgentContactCooldown > 0) return;
+        double dz = b.Distance - a.Distance, dx = b.Lateral - a.Lateral;
+        double contactZ = (a.Stats.Length + b.Stats.Length) / 2, halfW = (a.Stats.Width + b.Stats.Width) / 2;
+        if (dz >= contactZ || Math.Abs(dx) >= halfW) return;
+
+        a.AgentContactCooldown = b.AgentContactCooldown = ContactCooldown;
+        double overlapX = halfW - Math.Abs(dx), overlapZ = contactZ - dz;
+
+        if (overlapZ / contactZ < overlapX / halfW)
+        {
+            // a rear-ended b: held at b's rear edge, a little slower than b (never sped up by a faster car that cut in).
+            a.Distance = b.Distance - contactZ;
+            a.Speed = Math.Max(0, Math.Min(a.Speed, b.Speed - 2));
+            a.Armor -= AgentRearEndDamage;
+            b.Armor -= AgentRearEndDamage;
+        }
+        else
+        {
+            int side = dx >= 0 ? 1 : -1;                          // +1: b is on a's right
+            double closing = Math.Max(0, (a.LateralVel - b.LateralVel) * side);
+            double push = 2.5 + 0.8 * closing;
+            a.Lateral -= side * overlapX * 0.5;
+            b.Lateral += side * overlapX * 0.5;
+            a.PushVel = -side * push;
+            b.PushVel = side * push;
+            if (closing > AgentSpinClosing)
+            {
+                string reason = $"{KindName(a)} AND {KindName(b)} COLLIDED";
+                if (a.State == VehicleState.Driving) w.Spin(a, -side, reason);
+                if (b.State == VehicleState.Driving) w.Spin(b, side, reason);
+            }
+        }
+
+        if (a.Armor <= 0) w.Destroy(a, KillCause.Rammed);
+        if (b.Armor <= 0) w.Destroy(b, KillCause.Rammed);
     }
 
     /// <summary>
