@@ -5,10 +5,10 @@ namespace NightPursuit.Core.Simulation;
 
 public enum Tone { Info, Good, Bad }
 
-/// <summary>How an enemy missile ended: it hit you, you dodged it (or it missed a wrecked car), or your guns shot it down.</summary>
+/// <summary>How an enemy missile ended: it hit you, you dodged it (or it missed because you were wrecked or respawned), or your guns shot it down.</summary>
 public enum MissileResult { Hit, Dodged, ShotDown }
 
-public enum KillCause {Gunfire, RanOffRoad, WreckCollision, Rammed, Missile, Satellite }
+public enum KillCause { Gunfire, RanOffRoad, WreckCollision, Rammed, Missile, Satellite }
 
 public static class KillCauseRules
 {

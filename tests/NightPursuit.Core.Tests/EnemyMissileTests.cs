@@ -320,6 +320,91 @@ public class EnemyMissileTests
     }
 
     [Fact]
+    public void A_missile_in_flight_at_the_respawn_ends_as_missed()
+    {
+        // Every launch gets exactly one outcome, even when the respawn clears it before it arrives.
+        var run = new MissionRun(BossOnly, new FeelSettings(), 3);
+        var w = run.World;
+        var p = w.Player;
+        p.Distance = 500;
+        p.Speed = 40;
+        run.Director.Update(w);
+        var boss = run.Director.Boss!;
+        var events = new List<GameEvent>();
+        void Frame()
+        {
+            boss.Distance = p.Distance + 150;     // about 5.8 s of flight: still in the air when the 3 s respawn ends
+            boss.Speed = p.Speed;
+            boss.Engaged = true;
+            run.Update(ControlFrame.Empty, 1 / 60.0);
+            events.AddRange(w.Events);
+        }
+
+        for (int i = 0; i < 120 && w.EnemyMissiles.Count == 0; i++) Frame();
+        Assert.Single(w.EnemyMissiles);
+        p.Armor = 0;
+        Frame();
+        Assert.Equal(RunState.Respawning, run.State);
+        for (int i = 0; i < 400 && run.State == RunState.Respawning; i++) Frame();
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Empty(w.EnemyMissiles);
+
+        var launch = Assert.Single(events.OfType<EnemyMissileLaunched>());
+        var end = Assert.Single(events.OfType<EnemyMissileEnded>());
+        Assert.Equal(launch.MissileId, end.MissileId);
+        Assert.Equal(MissileResult.Dodged, end.Result);
+        Assert.Contains(events, e => e is Message { Text: "MISSILE MISSED", Tone: Tone.Info } m && m.Time == end.Time);
+        Assert.DoesNotContain(events, e => e is PlayerDamaged { Reason: "MISSILE HIT" });
+    }
+
+    /// <summary>
+    /// The boss just over 60 m behind (the closest it may launch from; the world rechecks the gap after the boss has
+    /// moved, so exactly 60.000 could go either way by rounding), the player at 30 m/s.
+    /// </summary>
+    const double CloseBehind = -60.05;
+
+    [Fact]
+    public void Close_launch_from_behind_is_announced_at_least_2_s_before_it_arrives()
+    {
+        var w = Straight();
+        var boss = AddBoss(w, CloseBehind);
+        var m = WaitForLaunch(w, boss, CloseBehind, 30);
+        Assert.Equal(-1, m.Dir);
+        w.Agents.Remove(boss);
+        var end = WaitForEnd(w, 30);
+        var launch = Assert.Single(Launches(w));
+        Assert.True(end.Time - launch.Time >= 2.0, $"warning was {end.Time - launch.Time:0.000} s");
+    }
+
+    [Fact]
+    public void Close_launch_from_behind_still_gives_2_s_when_you_hit_a_wreck_in_the_launch_step()
+    {
+        // Hitting a wreck holds you back (and 1 m further on the first touch) after the boss has launched, in the same
+        // step. The missile must follow that push too, so it still closes at exactly 25 m/s from launch.
+        var w = Straight();
+        var p = w.Player;
+        var boss = AddBoss(w, CloseBehind);
+        double contact = (VehicleStats.Boss.Length + p.Stats.Length) / 2;
+        w.Hazards.Add(new Wreck
+        {
+            Distance = p.Distance + contact, PrevDistance = p.Distance + contact, Lateral = p.Lateral,
+            Width = VehicleStats.Boss.Width, Length = VehicleStats.Boss.Length,
+        });
+        double before = p.Distance;
+        Step(w, 30, pinned: boss, gap: CloseBehind);
+        var m = Assert.Single(w.EnemyMissiles);                          // launched in that very step
+        Assert.True(Said(w, "HIT A WRECK", Tone.Bad));
+        Assert.True(p.Distance < before, "the wreck did not push the player back");
+        double gapAtLaunch = Math.Abs(m.Distance - m.PlayerDistanceAtLaunch!.Value);
+        w.Agents.Remove(boss);
+
+        var end = WaitForEnd(w, 30);
+        var launch = Assert.Single(Launches(w));
+        Assert.True(end.Time - launch.Time >= 2.0, $"warning was {end.Time - launch.Time:0.000} s");
+        Assert.Equal((gapAtLaunch - EnemyMissile.ContactGap) / EnemyMissile.ClosingSpeed, end.Time - launch.Time, Dt);
+    }
+
+    [Fact]
     public void Only_one_flies_at_a_time_and_at_most_every_6_s()
     {
         // From 158 m a missile flies about 6.1 s, so the rack is ready again while one is still in flight.
@@ -443,34 +528,41 @@ public class EnemyMissileTests
         }
     }
 
+    /// <summary>120 s of the proving ground at 1/60 s: autopilot steering, gas and guns held, the scheduled actions.</summary>
+    static (ulong, RunState, double, int, int) PlayWithAutopilot(RunLog log)
+    {
+        var run = new MissionRun(MissionLoader.LoadFile(ProvingGroundPath), new FeelSettings(), 9);
+        int lastAction = -1;
+        for (int frame = 0; frame < 120 * 60; frame++)
+        {
+            int step = StepCount(run);
+            for (int s = lastAction + 1; s <= step; s++)
+                if (ActionAt(s) is ActionKind a)
+                {
+                    int before = run.World.Events.Count;
+                    run.Handle(new GameAction(a));
+                    log.Read(run.World, before);   // the next Update clears what the action published
+                }
+            lastAction = step;
+            run.Update(new ControlFrame { Gas = true, Fire = true, PadConnected = true, PadSteer = AutopilotSteer(run.World) }, 1 / 60.0);
+            log.Read(run.World);
+        }
+        return Result(run);
+    }
+
     [Fact]
     public void Proving_ground_is_deterministic_with_every_weapon_used()
     {
-        (ulong, RunState, double, int, int) Play(RunLog log)
-        {
-            var run = new MissionRun(MissionLoader.LoadFile(ProvingGroundPath), new FeelSettings(), 9);
-            int lastAction = -1;
-            for (int frame = 0; frame < 120 * 60; frame++)
-            {
-                int step = StepCount(run);
-                for (int s = lastAction + 1; s <= step; s++)
-                    if (ActionAt(s) is ActionKind a)
-                    {
-                        int before = run.World.Events.Count;
-                        run.Handle(new GameAction(a));
-                        log.Read(run.World, before);   // the next Update clears what the action published
-                    }
-                lastAction = step;
-                run.Update(new ControlFrame { Gas = true, Fire = true, PadConnected = true, PadSteer = AutopilotSteer(run.World) }, 1 / 60.0);
-                log.Read(run.World);
-            }
-            return Result(run);
-        }
+        Assert.Equal(PlayWithAutopilot(new RunLog()), PlayWithAutopilot(new RunLog()));
+    }
 
+    [Fact]
+    public void Proving_ground_boss_reaches_its_missile_phase()
+    {
+        // Coverage for the determinism tests: the scripted run really uses every weapon and meets enemy missiles. The
+        // margin is thin (phase 3 at about 116 s of 120); if this fails after a gameplay change, move the schedule.
         var log = new RunLog();
-        var first = Play(log);
-        var second = Play(new RunLog());
-        Assert.Equal(first, second);
+        PlayWithAutopilot(log);
         Assert.Equal(Enum.GetValues<WeaponKind>().OrderBy(k => k), log.Used.OrderBy(k => k));
         Assert.True(log.EnemyMissiles >= 1, $"no enemy missile: the boss reached phase {log.Boss.Phase} at {log.Boss.Time:0.0} s");
     }
@@ -493,12 +585,11 @@ public class EnemyMissileTests
     /// Plays the proving ground with frames of <paramref name="frames"/>, handing each scheduled input change and action to
     /// the run before the first Update that starts at or after its step, and records the step at which each really went in.
     /// </summary>
-    static ((ulong, RunState, double, int, int) Result, List<(int Step, string What)> Applied, RunLog Log) PlaySplit(
+    static ((ulong, RunState, double, int, int) Result, List<(int Step, string What)> Applied) PlaySplit(
         IEnumerable<double> frames, IReadOnlyList<double> steer)
     {
         var run = new MissionRun(MissionLoader.LoadFile(ProvingGroundPath), new FeelSettings(), 9);
         var applied = new List<(int, string)>();
-        var log = new RunLog();
         int lastSeen = -1, lastBlock = -1;
         foreach (var dt in frames)
         {
@@ -506,9 +597,7 @@ public class EnemyMissileTests
             for (int s = lastSeen + 1; s <= step; s++)
                 if (ActionAt(s) is ActionKind a)
                 {
-                    int before = run.World.Events.Count;
                     run.Handle(new GameAction(a));
-                    log.Read(run.World, before);
                     applied.Add((step, a.ToString()));
                 }
             lastSeen = step;
@@ -519,9 +608,8 @@ public class EnemyMissileTests
                 lastBlock = block;
             }
             run.Update(ScriptedInput(step, steer), dt);
-            log.Read(run.World);
         }
-        return (Result(run), applied, log);
+        return (Result(run), applied);
     }
 
     /// <summary>
@@ -559,7 +647,5 @@ public class EnemyMissileTests
         Assert.Equal(at120.Applied, uneven.Applied);
         Assert.Equal(at120.Result, at60.Result);
         Assert.Equal(at120.Result, uneven.Result);
-        Assert.Equal(Enum.GetValues<WeaponKind>().OrderBy(k => k), at120.Log.Used.OrderBy(k => k));
-        Assert.True(at120.Log.EnemyMissiles >= 1, $"no enemy missile: the boss reached phase {at120.Log.Boss.Phase} at {at120.Log.Boss.Time:0.0} s");
     }
 }

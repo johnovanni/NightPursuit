@@ -49,23 +49,26 @@ public sealed partial class World
             Id = ++_lastEnemyMissileId, Distance = d, Lateral = a.Lateral,
             PrevDistance = d, PrevLateral = a.Lateral,          // created after the Prev refresh: drawn where it starts (D18)
             TargetLateral = Player.Lateral, LaunchTime = Time, Dir = dir,
+            JustLaunched = true, PlayerDistanceAtLaunch = Player.Distance,
         });
         Publish(new EnemyMissileLaunched(Time, _lastEnemyMissileId));
         Publish(new Message(Time, "MISSILE INCOMING", Tone.Bad));
     }
 
     /// <summary>
-    /// Moves the first <paramref name="count"/> enemy missiles (those in flight when the step began; one launched during
-    /// this step starts next step). Runs after everything that moves the player this step, collisions included, so
-    /// each missile follows the player's own movement and closes at exactly 25 m/s, whatever the player does.
+    /// Moves the enemy missiles, except one launched during this step (it starts next step). Runs after everything that
+    /// moves the player this step, collisions included, so each missile follows the player's own movement and closes at
+    /// exactly 25 m/s from launch, whatever the player does.
     /// </summary>
-    void StepEnemyMissiles(int count)
+    void StepEnemyMissiles()
     {
         var p = Player;
-        double moved = p.Distance - p.PrevDistance;
-        for (int i = 0; i < count; i++)
+        foreach (var m in EnemyMissiles)
         {
-            var m = EnemyMissiles[i];
+            if (m.JustLaunched) continue;
+            // The first move follows the player from where it was at launch, so a push after the launch in that step counts.
+            double moved = p.Distance - (m.PlayerDistanceAtLaunch ?? p.PrevDistance);
+            m.PlayerDistanceAtLaunch = null;
             m.Distance += moved - m.Dir * EnemyMissile.ClosingSpeed * Step;
             if (!m.Locked) m.TargetLateral = p.Lateral;
             m.Lateral = MathX.MoveToward(m.Lateral, m.TargetLateral, EnemyMissile.LateralRate * Step);
@@ -79,11 +82,7 @@ public sealed partial class World
     void EnemyMissileArrives(EnemyMissile m)
     {
         m.Dead = true;
-        if (Player.State == VehicleState.Wrecked)
-        {
-            Publish(new EnemyMissileEnded(Time, m.Id, MissileResult.Dodged));
-            Publish(new Message(Time, "MISSILE MISSED", Tone.Info));
-        }
+        if (Player.State == VehicleState.Wrecked) EnemyMissileMissed(m);
         else if (Math.Abs(m.Lateral - Player.Lateral) < EnemyMissile.HitHalfWidth)
         {
             Publish(new EnemyMissileEnded(Time, m.Id, MissileResult.Hit));
@@ -94,6 +93,22 @@ public sealed partial class World
             Publish(new EnemyMissileEnded(Time, m.Id, MissileResult.Dodged));
             Publish(new Message(Time, "MISSILE DODGED", Tone.Good));
         }
+    }
+
+    void EnemyMissileMissed(EnemyMissile m)
+    {
+        Publish(new EnemyMissileEnded(Time, m.Id, MissileResult.Dodged));
+        Publish(new Message(Time, "MISSILE MISSED", Tone.Info));
+    }
+
+    /// <summary>
+    /// Ends every enemy missile still in flight as missed and removes it, for a respawn: each launch always gets an
+    /// outcome, and nothing launched before the wreck is in the air when the new car starts.
+    /// </summary>
+    internal void ClearEnemyMissilesAsMissed()
+    {
+        foreach (var m in EnemyMissiles) EnemyMissileMissed(m);
+        EnemyMissiles.Clear();
     }
 
     /// <summary>

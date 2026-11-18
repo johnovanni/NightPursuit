@@ -143,10 +143,9 @@ public sealed partial class World
         StepMissiles();
         StepStrike();
         StepHazards();
-        int enemyMissilesInFlight = EnemyMissiles.Count;   // one launched in StepAgents starts moving next step
         StepAgents();
         Collisions.Resolve(this);
-        StepEnemyMissiles(enemyMissilesInFlight);           // after every move of the player this step, collisions too
+        StepEnemyMissiles();            // after every move of the player this step, collisions too
 
         // Cars leave the list only now, so nothing above sees the list change mid-step.
         Agents.RemoveAll(IsGone);
@@ -172,6 +171,7 @@ public sealed partial class World
         {
             m.PrevDistance = m.Distance;
             m.PrevLateral = m.Lateral;
+            m.JustLaunched = false;     // launched last step: it moves from this one on
         }
         foreach (var h in Hazards)
             if (h is Wreck w) w.PrevDistance = w.Distance;

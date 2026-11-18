@@ -31,6 +31,15 @@ public sealed class EnemyMissile
     public double LaunchTime { get; init; }
     /// <summary>+1 when launched ahead of the player (it flies back toward you), -1 when launched behind.</summary>
     public int Dir { get; init; }
+    /// <summary>
+    /// True during the step it was launched in (it starts moving next step); cleared when the next step captures Prev.
+    /// </summary>
+    public bool JustLaunched { get; set; }
+    /// <summary>
+    /// The player's Distance when it was launched, until its first move: that move follows the player from here, so a
+    /// push later in the launch step (a collision) is followed too. Null once it has moved, or for one placed by hand.
+    /// </summary>
+    public double? PlayerDistanceAtLaunch { get; set; }
     /// <summary>True from 1 s before impact: it no longer follows your lane.</summary>
     public bool Locked { get; set; }
     public bool Dead { get; set; }
