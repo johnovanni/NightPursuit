@@ -136,6 +136,47 @@ public class InterpolationTests
     }
 
     [Fact]
+    public void Enemy_missile_prev_fields_equal_their_values_at_the_start_of_the_latest_step()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        w.Player.Distance = 500;
+        w.Player.Speed = 30;
+        var def = new BossDefinition("Test", 100, [new(AgentKind.Pursuer, 0.5, FiresMissiles: true), new(AgentKind.Pursuer, 0)]);
+        var boss = BossCar.Create(w.NextId(), def, 600, 0, 30);
+        boss.Engaged = true;
+        w.Agents.Add(boss);
+        for (int i = 0; i < 240 && w.EnemyMissiles.Count == 0; i++)
+        {
+            boss.Distance = w.Player.Distance + 100;
+            w.StepOnce(ControlFrame.Empty);
+        }
+
+        // On the launch step it is drawn where it starts.
+        var m = Assert.Single(w.EnemyMissiles);
+        Assert.Equal(m.Distance, m.PrevDistance);
+        Assert.Equal(m.Lateral, m.PrevLateral);
+        w.Agents.Remove(boss);
+        w.Player.Lateral = 3;                  // so the missile also moves sideways
+
+        (double D, double L) startOfNext = (m.Distance, m.Lateral), startOfLast = startOfNext;
+        for (int frame = 0; frame < 8; frame++)
+        {
+            // Frames of 1/75 s do not line up with the 1/120 s step, so a frame runs one or two steps.
+            int steps = w.Advance(ControlFrame.Empty, Frame, () =>
+            {
+                startOfLast = startOfNext;
+                startOfNext = (m.Distance, m.Lateral);
+                return false;
+            });
+            Assert.True(steps > 0);
+            Assert.Equal(startOfLast.D, m.PrevDistance, 1e-12);
+            Assert.Equal(startOfLast.L, m.PrevLateral, 1e-12);
+            Assert.NotEqual(m.Distance, m.PrevDistance);
+            Assert.NotEqual(m.Lateral, m.PrevLateral);
+        }
+    }
+
+    [Fact]
     public void Wreck_prev_distance_equals_its_distance_at_the_start_of_the_latest_step()
     {
         var w = TestWorlds.World(track: TestWorlds.Straight());

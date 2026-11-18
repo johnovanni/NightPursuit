@@ -41,6 +41,8 @@ public sealed partial class World
     public List<AgentCar> Agents { get; } = new();
     public List<Tracer> Tracers { get; } = new();
     public List<Missile> Missiles { get; } = new();
+    /// <summary>The boss's missiles in flight (at most one at a time).</summary>
+    public List<EnemyMissile> EnemyMissiles { get; } = new();
     public List<Hazard> Hazards { get; } = new();
     /// <summary>Reused by <see cref="Collisions"/> for its agent-vs-agent pass, so a step allocates nothing; empty between steps.</summary>
     internal List<AgentCar> AgentScratch { get; } = new();
@@ -141,8 +143,10 @@ public sealed partial class World
         StepMissiles();
         StepStrike();
         StepHazards();
+        int enemyMissilesInFlight = EnemyMissiles.Count;   // one launched in StepAgents starts moving next step
         StepAgents();
         Collisions.Resolve(this);
+        StepEnemyMissiles(enemyMissilesInFlight);           // after every move of the player this step, collisions too
 
         // Cars leave the list only now, so nothing above sees the list change mid-step.
         Agents.RemoveAll(IsGone);
@@ -163,6 +167,11 @@ public sealed partial class World
             m.PrevDistance = m.Pose.Distance;
             m.PrevLateral = m.Pose.Lateral;
             m.PrevHeading = m.Pose.Heading;
+        }
+        foreach (var m in EnemyMissiles)
+        {
+            m.PrevDistance = m.Distance;
+            m.PrevLateral = m.Lateral;
         }
         foreach (var h in Hazards)
             if (h is Wreck w) w.PrevDistance = w.Distance;
@@ -316,6 +325,7 @@ public sealed partial class World
             t.Travel += t.MuzzleSpeed * Step;
             if (t.Travel > t.Range || Math.Abs(t.Pose.Lateral) > 60) { t.Dead = true; continue; }
             if (t.Hostile) { StepHostileTracer(t); continue; }
+            if (ShootDownEnemyMissile(t)) continue;     // an incoming missile is tested before the cars
             // Several cars can overlap the swept segment; the bullet hits the one nearest along its path.
             AgentCar? hit = null;
             double nearest = double.MaxValue;
@@ -342,6 +352,7 @@ public sealed partial class World
             if (hit.Armor <= 0) Destroy(hit, KillCause.Gunfire);
         }
         Tracers.RemoveAll(t => t.Dead);
+        EnemyMissiles.RemoveAll(m => m.Dead);
     }
 
     /// <summary>True when a projectile's last step, from (d0, l0) to (d1, l1), crossed the car's length within its width plus <paramref name="margin"/>.</summary>
@@ -433,12 +444,18 @@ public sealed partial class World
         }
     }
 
-    /// <summary>FNV-1a 64-bit over the player and every agent's Distance, Lateral, Speed and Armor (to 1e-6).</summary>
+    /// <summary>
+    /// FNV-1a 64-bit over the player and every agent's Distance, Lateral, Speed and Armor, every missile's and enemy
+    /// missile's Distance and Lateral (to 1e-6), and the number of hazards.
+    /// </summary>
     public ulong StateHash()
     {
         ulong h = 14695981039346656037UL;
         Mix(ref h, Player);
         foreach (var a in Agents) Mix(ref h, a);
+        foreach (var m in Missiles) { Add(ref h, m.Pose.Distance); Add(ref h, m.Pose.Lateral); }
+        foreach (var m in EnemyMissiles) { Add(ref h, m.Distance); Add(ref h, m.Lateral); }
+        Add(ref h, Hazards.Count);
         return h;
 
         static void Mix(ref ulong h, Vehicle v)

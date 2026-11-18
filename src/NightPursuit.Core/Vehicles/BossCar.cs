@@ -84,7 +84,11 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
         var b = new BossCar(def)
         {
             Id = id, Distance = distance, Lateral = lateral, Speed = speed, CruiseSpeed = Cruise,
-            Arms = new AgentArms { RearGuns = new MachineGuns(), Oil = new OilDropper(5), Caltrops = new CaltropDropper(3) },
+            Arms = new AgentArms
+            {
+                RearGuns = new MachineGuns(), Oil = new OilDropper(5), Caltrops = new CaltropDropper(3),
+                Missiles = new EnemyMissileRack(),
+            },
             Driver = BossDriver.Instance, Engaged = false, State = VehicleState.Driving, Side = 1,
         };
         b.SnapPrev();   // drawn where it appears, not sweeping in

@@ -1,5 +1,6 @@
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Drivers;
 
@@ -48,8 +49,20 @@ public sealed class BossDriver : IDriver
         if (b.SlowLeft > 0) intent = intent with { TargetSpeed = intent.TargetSpeed * BossDamage.CaltropSlowFactor };
         if (dD < -LeashBehind) intent = intent with { TargetSpeed = Math.Min(TopSpeed, p.Speed + LeashCatchUp) };
         else if (dD > LeashAhead) intent = intent with { TargetSpeed = p.Speed - LeashWait };
-        return intent with { TargetSpeed = Math.Max(0, intent.TargetSpeed) };   // never reverses toward a stopped player
+        return intent with
+        {
+            TargetSpeed = Math.Max(0, intent.TargetSpeed),       // never reverses toward a stopped player
+            FireMissile = WantsMissile(b, view, dD),
+        };
     }
+
+    /// <summary>
+    /// In a phase that fires missiles, it asks for one whenever it can see you, its rack is ready and you are 60-160 m
+    /// away, ahead or behind; the world checks the gap again (and that none is in flight) before launching.
+    /// </summary>
+    static bool WantsMissile(BossCar b, WorldView view, double dD) =>
+        b.Engaged && b.Phase.FiresMissiles && view.CanSeePlayer(b) && b.Arms.Missiles is { Ready: true }
+        && EnemyMissile.InLaunchWindow(dD);
 
     /// <summary>
     /// A Blocker or Armored phase never overtakes on its own, so once more than 10 m behind, the boss passes you at

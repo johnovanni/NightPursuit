@@ -5,7 +5,10 @@ namespace NightPursuit.Core.Simulation;
 
 public enum Tone { Info, Good, Bad }
 
-public enum KillCause { Gunfire, RanOffRoad, WreckCollision, Rammed, Missile, Satellite }
+/// <summary>How an enemy missile ended: it hit you, you dodged it (or it missed a wrecked car), or your guns shot it down.</summary>
+public enum MissileResult { Hit, Dodged, ShotDown }
+
+public enum KillCause {Gunfire, RanOffRoad, WreckCollision, Rammed, Missile, Satellite }
 
 public static class KillCauseRules
 {
@@ -37,3 +40,7 @@ public sealed record BossDamaged(double Time, double Amount, string Reason) : Ga
 public sealed record BossAppeared(double Time, string Name) : GameEvent(Time);
 /// <summary>The boss began phase <paramref name="Phase"/> (1-based) of <paramref name="PhaseCount"/>, driving as <paramref name="Behaviour"/>.</summary>
 public sealed record BossPhaseChanged(double Time, int Phase, int PhaseCount, AgentKind Behaviour) : GameEvent(Time);
+/// <summary>The boss launched enemy missile <paramref name="MissileId"/>.</summary>
+public sealed record EnemyMissileLaunched(double Time, int MissileId) : GameEvent(Time);
+/// <summary>Enemy missile <paramref name="MissileId"/> is gone: it hit you, was dodged, or was shot down.</summary>
+public sealed record EnemyMissileEnded(double Time, int MissileId, MissileResult Result) : GameEvent(Time);
