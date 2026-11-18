@@ -111,6 +111,26 @@ public class WarningTests
     }
 
     [Fact]
+    public void Gunner_blinded_by_smoke_mid_aim_raises_no_warning()
+    {
+        var w = Straight();
+        var gunner = Car(w, AgentKind.Gunner, 45);
+        Aim(gunner);
+        Assert.True(Has(w, WarningKind.GunnerAiming));
+
+        w.Hazards.Add(new SmokeCloud { Distance = gunner.Distance, PrevDistance = gunner.Distance, Lateral = gunner.Lateral, Speed = w.Player.Speed });
+        w.StepOnce(new ControlFrame { Gas = true });
+        Assert.True(gunner.Blinded > 0);
+        Assert.IsType<GunnerDriver.State>(gunner.DriverState);   // its plan is kept for when it can see again
+        Assert.False(GunnerDriver.IsAiming(gunner));
+        Assert.False(Has(w, WarningKind.GunnerAiming));
+        Assert.DoesNotContain(w.Events, e => e is WarningRaised { Kind: WarningKind.GunnerAiming });
+
+        gunner.DriverState = new GunnerDriver.State { Phase = GunnerPhase.Burst };   // nor while its burst would be on
+        Assert.False(Has(w, WarningKind.GunnerAiming));
+    }
+
+    [Fact]
     public void Hostile_oil_or_caltrops_ahead_warn_by_name_and_own_ones_do_not()
     {
         var w = Straight();

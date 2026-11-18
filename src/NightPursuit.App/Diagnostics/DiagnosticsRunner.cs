@@ -176,7 +176,7 @@ public static class DiagnosticsRunner
         string path = Arg(args, "--stress") ?? "stress.txt";
         var report = new System.Text.StringBuilder();
         var failureMessages = new List<string>();
-        int totalFrames = 0, totalFailures = 0;
+        int totalFrames = 0, totalFailures = 0, totalBossBar = 0;
 
         foreach (string mission in StressMissions)
         {
@@ -188,7 +188,7 @@ public static class DiagnosticsRunner
                 view.Measure(new Size(width, height));
                 view.Arrange(new Rect(0, 0, width, height));
                 var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-                int frames = 0, failures = 0;
+                int frames = 0, failures = 0, bossBar = 0;
                 var sizeClock = System.Diagnostics.Stopwatch.StartNew();
 
                 for (double z = 0; z < run.World.Track.Length; z += 10, frames++)
@@ -203,6 +203,7 @@ public static class DiagnosticsRunner
                         bitmap.Clear();
                         bitmap.Render(view);
                         if (view.RenderCount == before) throw new InvalidOperationException("the view was not redrawn");
+                        if (BossBar.Showing(run) is not null) bossBar++;
                     }
                     catch (Exception ex)
                     {
@@ -210,8 +211,9 @@ public static class DiagnosticsRunner
                         if (failureMessages.Count < 10) failureMessages.Add($"{mission} {width}x{height} z={z}: {ex.GetType().Name}: {ex.Message}");
                     }
                 }
-                report.AppendLine($"{mission} {width}x{height}: {frames} frames, {failures} failures, {sizeClock.Elapsed.TotalSeconds:0.0} s");
+                report.AppendLine($"{mission} {width}x{height}: {frames} frames, {failures} failures, boss bar on {bossBar}, {sizeClock.Elapsed.TotalSeconds:0.0} s");
                 totalFrames += frames;
+                totalBossBar += bossBar;
                 totalFailures += failures;
             }
 
@@ -238,7 +240,7 @@ public static class DiagnosticsRunner
             }
         }
 
-        report.Insert(0, $"stress: {totalFrames} frames, {totalFailures} failures{Environment.NewLine}");
+        report.Insert(0, $"stress: {totalFrames} frames, {totalFailures} failures, boss bar on {totalBossBar}{Environment.NewLine}");
         if (failureMessages.Count > 0)
         {
             report.AppendLine("first failures:");
@@ -301,7 +303,8 @@ public static class DiagnosticsRunner
         cars.Add(punctured);
         cars.Add(gunner);
 
-        // Every third frame, the boss 60 m ahead: each phase in turn, with and without its shield, spun out or not, engaged or easing in.
+        // Every third frame, the boss 60 m ahead (with its bar): each phase in turn, with and without its shield, spun out or
+        // not, engaged or easing in. On the other frames the director is back in the approach, so the no-boss layout is drawn too.
         if (frame % 3 == 0)
         {
             int n = frame / 3;
@@ -315,6 +318,7 @@ public static class DiagnosticsRunner
             cars.Add(boss);
             run.Director.AdoptBossForDiagnostics(boss);
         }
+        else run.Director.ReleaseBossForDiagnostics();   // no boss: the approach HUD, without the boss bar
         w.Agents.AddRange(cars);
 
         // The arsenal: 2 smoke clouds, 3 caltrops (alternately hostile), 3 crates, 2 player missiles and 1 enemy missile.

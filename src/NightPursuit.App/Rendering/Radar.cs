@@ -15,11 +15,14 @@ namespace NightPursuit.App.Rendering;
 /// </summary>
 internal static class Radar
 {
+    /// <summary>The radar's box in the bottom-right corner.</summary>
+    public static Rect Bounds(HudLayout l) => new(l.Width - 214 * l.K, l.Height - 300 * l.K, 198 * l.K, 284 * l.K);
+
     public static void Draw(DrawingContext dc, HudLayout l, World w, Projector cam)
     {
         var view = cam.View;
         double k = l.K;
-        var r = new Rect(l.Width - 214 * k, l.Height - 300 * k, 198 * k, 284 * k);
+        var r = Bounds(l);
         dc.DrawRectangle(Neon.RadarFill, Neon.RadarLine.Core, r);
         dc.PushClip(new RectangleGeometry(r));
 

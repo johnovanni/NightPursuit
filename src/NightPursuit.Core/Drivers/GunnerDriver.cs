@@ -24,9 +24,12 @@ public sealed class GunnerDriver : IDriver
         public AvoidMemory Avoid { get; } = new();
     }
 
-    /// <summary>True while the car is warning (Aim) or firing (Burst); the HUD uses it to warn the player.</summary>
+    /// <summary>
+    /// True while the car is warning (Aim) or firing (Burst) and can see you; the HUD uses it to warn the player. A car
+    /// blinded by smoke keeps its plan but is driven by the blind driver, which never fires, so it is not aiming.
+    /// </summary>
     public static bool IsAiming(AgentCar c) =>
-        c.DriverState is State { Phase: GunnerPhase.Aim or GunnerPhase.Burst };
+        c.Blinded <= 0 && c.DriverState is State { Phase: GunnerPhase.Aim or GunnerPhase.Burst };
 
     public DriveIntent Decide(AgentCar self, WorldView view, double dt)
     {

@@ -68,6 +68,16 @@ public sealed class MissionDirector(MissionDefinition def)
         Stage = MissionStage.Boss;
     }
 
+    /// <summary>
+    /// DIAGNOSTICS ONLY: undoes <see cref="AdoptBossForDiagnostics"/>, back to the approach with no boss, so the HUD draws its
+    /// approach layout again (no boss bar). The game never calls this.
+    /// </summary>
+    public void ReleaseBossForDiagnostics()
+    {
+        Boss = null;
+        Stage = MissionStage.Approach;
+    }
+
     /// <summary>The boss appears once, 300 m ahead in the centre lane at your speed - 10 m/s, not yet engaged.</summary>
     void SpawnBoss(World w, BossDefinition bossDef)
     {

@@ -201,13 +201,9 @@ public sealed partial class World
             destroyed++;
         }
         Publish(new StrikeLanded(Time, destroyed));
-        if (shielded && destroyed == 0)
-        {
-            Publish(new Message(Time, "SATELLITE STRIKE: 0 DESTROYED - SHIELDED", Tone.Info));
-            Announce("STRIKE: 0 DESTROYED", "BOSS SHIELDED", 1.5);
-            return;
-        }
-        Publish(new Message(Time, $"SATELLITE STRIKE: {destroyed} DESTROYED", Tone.Good));
-        Announce($"STRIKE: {destroyed} DESTROYED", "", 1.5);
+        // Whenever the boss's shield took the blow, say so, whatever else the strike destroyed.
+        Publish(new Message(Time, $"SATELLITE STRIKE: {destroyed} DESTROYED{(shielded ? " - BOSS SHIELDED" : "")}",
+                            shielded && destroyed == 0 ? Tone.Info : Tone.Good));
+        Announce($"STRIKE: {destroyed} DESTROYED", shielded ? "BOSS SHIELDED" : "", 1.5);
     }
 }

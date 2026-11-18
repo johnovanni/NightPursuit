@@ -38,6 +38,9 @@ internal static class Overlays
         "Press gas to start.  F1 shows this again.",
     };
 
+    /// <summary>The widest body line of the help (Consolas is monospaced, so the longest one); the bold title is shorter.</summary>
+    static readonly string LongestHelpLine = HelpLines.Skip(1).MaxBy(s => s.Length)!;
+
     /// <summary>Draws exactly what <see cref="Warnings.Collect"/> says (the rules live in Core, where tests prove each one): words, and an edge arrow where it has one.</summary>
     public static void DrawWarnings(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
@@ -168,11 +171,30 @@ internal static class Overlays
         }
     }
 
+    /// <summary>
+    /// The controls help. Its box sits between the weapon panel and (where they share rows) the radar, 10 px clear of each,
+    /// as near the centre as it can, and up to 800 px wide. When that gap is too narrow for the longest line plus its
+    /// padding (tiny windows), it is centred over everything instead, so no line is ever cut off.
+    /// </summary>
     public static void DrawHelp(DrawingContext dc, HudLayout l)
     {
-        double k = l.K, lineH = 22 * k;
-        double width = Math.Min(l.Width - 20, 800 * k), height = HelpLines.Length * lineH + 30 * k;
-        var r = new Rect(l.HalfWidth - width / 2, l.Height * 0.28, width, height);
+        double k = l.K, lineH = 22 * k, pad = 22 * k, margin = 10 * k;
+        double top = l.Height * 0.28, height = HelpLines.Length * lineH + 30 * k;
+        double left = WeaponPanel.Bounds(l).Right + margin, right = l.Width - margin;
+        var radar = Radar.Bounds(l);
+        if (top + height > radar.Top) right = Math.Min(right, radar.Left - margin);
+        double needed = l.TextWidth(LongestHelpLine, 14.5) + 2 * pad;
+        Rect r;
+        if (right - left >= needed)
+        {
+            double width = Math.Min(right - left, 800 * k);
+            r = new Rect(Math.Clamp(l.HalfWidth - width / 2, left, right - width), top, width, height);
+        }
+        else
+        {
+            double width = Math.Min(l.Width - 20, 800 * k);
+            r = new Rect(l.HalfWidth - width / 2, top, width, height);
+        }
         dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, r);
         double y = r.Y + 16 * k;
         for (int i = 0; i < HelpLines.Length; i++)

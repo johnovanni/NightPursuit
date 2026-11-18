@@ -155,9 +155,46 @@ public class BossDamageTests
         Run(w, 181);
 
         Assert.Equal(100, b.Armor);
-        Assert.Contains(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 0 DESTROYED - SHIELDED", Tone: Tone.Info });
+        Assert.Contains(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 0 DESTROYED - BOSS SHIELDED", Tone: Tone.Info });
         Assert.DoesNotContain(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 0 DESTROYED" });
         Assert.Equal("BOSS SHIELDED", w.Announcement?.Detail);
+    }
+
+    [Fact]
+    public void Strike_absorbed_by_the_shield_says_so_even_when_it_destroys_other_cars()
+    {
+        var w = Straight();
+        var b = Still(w, new BossDefinition("Test", 100, [new(AgentKind.Blocker, 0.1), new(AgentKind.Pursuer, 0)]), 100);
+        b.Shield = 5;
+        for (int i = 0; i < 2; i++)
+        {
+            var runner = AgentCar.Create(w.NextId(), AgentKind.Runner, 200 + 50 * i, 5, 0);
+            runner.Driver = new StillDriver();
+            w.Agents.Add(runner);
+        }
+        w.Loadout.Strike.Restock(1);
+        w.Handle(new GameAction(ActionKind.FireStrike));
+        Run(w, 181);
+
+        Assert.Equal(100, b.Armor);
+        Assert.Equal(2, Assert.Single(w.Events.OfType<StrikeLanded>()).Destroyed);
+        Assert.Contains(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 2 DESTROYED - BOSS SHIELDED", Tone: Tone.Good });
+        Assert.DoesNotContain(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 2 DESTROYED" });
+        Assert.Equal("STRIKE: 2 DESTROYED", w.Announcement?.Title);
+        Assert.Equal("BOSS SHIELDED", w.Announcement?.Detail);
+    }
+
+    [Fact]
+    public void Strike_without_a_shield_gives_no_shield_hint()
+    {
+        var w = Straight();
+        Still(w, new BossDefinition("Test", 100, [new(AgentKind.Blocker, 0.1), new(AgentKind.Pursuer, 0)]), 100);
+        w.Loadout.Strike.Restock(1);
+        w.Handle(new GameAction(ActionKind.FireStrike));
+        Run(w, 181);
+
+        Assert.Contains(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 0 DESTROYED" });
+        Assert.Equal("", w.Announcement?.Detail);
     }
 
     [Fact]

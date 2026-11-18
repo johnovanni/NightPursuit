@@ -43,6 +43,11 @@ internal sealed class HudLayout
         dc.DrawText(ft, new Point(x + dx, y));
     }
 
+    /// <summary>How wide <see cref="Text"/> would draw <paramref name="s"/>, in pixels.</summary>
+    public double TextWidth(string s, double size, bool bold = false) =>
+        new FormattedText(s, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                          bold ? Bold : Regular, Math.Max(8, size * K), Brushes.White, Dpi).WidthIncludingTrailingWhitespace;
+
     /// <summary>Bold text centred on the screen at row <paramref name="y"/> (pixels).</summary>
     public void Centered(DrawingContext dc, string s, double y, double size, Brush brush) =>
         Text(dc, s, HalfWidth, y, size, brush, TextAlignment.Center, true);

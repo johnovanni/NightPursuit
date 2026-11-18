@@ -233,10 +233,10 @@ public static class VehicleRenderer
                 }
                 break;
             case AgentKind.Gunner:
-                // The gun port: dim while it rides along, glowing while it aims, white during the burst.
+                // The gun port: dim while it rides along (or is blinded by smoke), glowing while it aims, white during the burst.
                 double port = Math.Max(4, 0.42 * s);
-                var portBrush = car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst } ? Neon.PortBurst
-                              : GunnerDriver.IsAiming(car) ? Neon.PortGlow : Neon.PortDim;
+                var portBrush = !GunnerDriver.IsAiming(car) ? Neon.PortDim
+                              : car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst } ? Neon.PortBurst : Neon.PortGlow;
                 var pc = P(0, 1.06);
                 var portRect = new Rect(pc.X - port / 2, pc.Y - port / 2, port, port);
                 if (!ReferenceEquals(portBrush, Neon.PortDim)) dc.DrawRectangle(portBrush, Neon.GunnerCar.Glow, portRect);

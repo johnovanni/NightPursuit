@@ -228,7 +228,8 @@ still would be crossed by a pursuer in a tenth of a second.
 - every 0.8 s it heads for a random spot up to 4 m to either side, never more than 6 m from the middle of the road;
 - it can't aim, fire or drop anything.
 
-"RUNNER LOST YOU IN THE SMOKE" (or whichever kind) shows when it happens. The plan said "anywhere within 6 m"; a
+"RUNNER LOST YOU IN THE SMOKE" (or whichever kind) shows when it happens. A Gunner blinded while it was aiming
+stops showing "GUNNER AIMING" at once, and its gun port goes dark, because it can't fire. The plan said "anywhere within 6 m"; a
 pre-flight check settled on "up to 4 m from where it is", so a blinded car drifts rather than jumping across the road.
 *Cost to change:* a few numbers.
 
@@ -341,8 +342,10 @@ banner: "BOSS: BLACK HERON" and "DESTROY IT TO FINISH THE MISSION".
 - It eases along 10 m/s slower than you (from 300 m to 140 m takes about 16 s) until you're within 140 m or you first
   hit it with anything. Only then does it start to fight.
 - Enemy cars still on the road stay; no new waves come.
-- It's never removed for being too far away. If it falls more than 120 m behind, it catches up at your speed plus
-  25 m/s; if it gets more than 600 m ahead, it waits for you. So it can't be lost.
+- It's never removed for being too far away. If it falls more than 120 m behind, it catches up at up to your speed
+  plus 25 m/s (never faster than its top speed of about 197 mph); if it gets more than 600 m ahead, it waits for you.
+  So it can't be lost. The one exception is while smoke blinds it: then it wanders like any blinded car (D42) and
+  only starts catching up again once it can see you.
 - After a respawn it is put 300 m ahead again and eases in the same way, with its health and phase unchanged.
 
 *Cost to change:* a few numbers.
@@ -445,8 +448,10 @@ wreck, slick or caltrops where it reappears is cleared away, so it can't be hit 
 *Cost to change:* one line.
 
 **D62. Boss banners come first.** The boss's arrival and phase banners take priority on screen: a strike result
-never covers them (it still shows as a message). A strike that lands while the boss's shield is up says
-"SATELLITE STRIKE: 0 DESTROYED - SHIELDED", so you know why it did nothing.
+never covers them (it still shows as a message). Whenever the boss is in range and its shield takes the
+strike, the message ends with "- BOSS SHIELDED", whatever else the strike destroyed, for example "SATELLITE STRIKE: 2
+DESTROYED - BOSS SHIELDED", and the strike banner says "BOSS SHIELDED" under the count (unless a boss banner is
+showing, which comes first). So you always know why the boss wasn't hurt.
 *Cost to change:* a few lines.
 
 **D63. Every pursuer near you gets an edge arrow.** With pursuers on both sides, arrows show on both edges, so D14
@@ -462,20 +467,27 @@ is drawn on a car you couldn't fire at.
   cars of every kind, the boss, smoke, crates, missiles and a strike sweep. The limit is 8 ms. Plan 1's simpler scene
   took 0.55 to 0.84 ms.
 - The stress test drew 12,002 frames, every 10 m of both mission 1 and the proving ground at three window sizes, plus
-  a minimised window, with no failures.
+  a minimised window, with no failures. The boss and its health bar were on screen in one frame in three (4,002
+  frames); the other frames showed the screen as it looks before the boss arrives.
 - These figures leave out the graphics card's own work, as in D17. Turning the frames into pixels without a graphics
   card got about 3 times slower than in Plan 1, probably because of the big see-through smoke clouds, so please watch
   for stutter when smoke fills the view.
+
+**D66. The F1 help box keeps clear of the weapon panel and the radar.** A test picture showed the help box
+overlapping the right edge of the weapon panel by about 18 pixels at 1280×720. It now sits in the space between the
+weapon panel and the radar, 10 pixels clear of each, as near the middle of the screen as it can. At 1280×720 that is
+788 pixels wide (it was 800), and the longest line still has about 88 pixels to spare. Only in a tiny window, where
+there is no room between them, does it go back to the middle of the screen on top of them.
+*Cost to change:* a few lines.
 
 ## Open items after Plan 2
 
 From Plan 1's "not urgent" list, these are now done: enemy cars collide with each other (D28), the oil recharge
 shows in the weapon panel, and "BLOCKER AHEAD" has a side arrow. Still open from that list: F1 help doesn't pause the
-game, and you respawn where you crashed rather than a short way back (Plan 4).
+game, you respawn where you crashed rather than a short way back (Plan 4), and mission 1 is fairly sparse (12 enemy
+cars over 6 km), which is worth judging when you play it.
 
 New, all small:
-- The F1 help box overlaps the right edge of the weapon panel by about 18 pixels at 1280×720 (seen in a picture
-  today). It only looks untidy: the help box is drawn on top, and every line of help fits inside it.
 - A boss swerving off a wreck can be drawn passing through it for a moment. It makes no difference to play.
 - Shift is one of the "next rear weapon" keys (D23). Pressing Shift five times quickly makes Windows offer Sticky
   Keys, which takes the focus away, so the game pauses (D12). Z does the same job, so Shift could be dropped.
