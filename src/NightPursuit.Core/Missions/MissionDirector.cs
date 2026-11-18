@@ -61,6 +61,13 @@ public sealed class MissionDirector(MissionDefinition def)
         }
     }
 
+    /// <summary>DIAGNOSTICS ONLY: puts the director in the boss stage with this boss, so the HUD draws the boss bar. The game never calls this.</summary>
+    public void AdoptBossForDiagnostics(BossCar boss)
+    {
+        Boss = boss;
+        Stage = MissionStage.Boss;
+    }
+
     /// <summary>The boss appears once, 300 m ahead in the centre lane at your speed - 10 m/s, not yet engaged.</summary>
     void SpawnBoss(World w, BossDefinition bossDef)
     {

@@ -9,7 +9,7 @@ namespace NightPursuit.App.Rendering;
 
 /// <summary>
 /// The always-visible readouts: driving (speed, pedals, steering) along the bottom, and car state
-/// (armor, spare cars, guns, oil, score, distance to go) at the top right. Each value is a bar or icon plus a word or number.
+/// (score, armor, spare cars, the boss or distance to go, and the no-grip and puncture timers) at the top right. Each value is a bar or icon plus a word or number.
 /// </summary>
 internal static class Hud
 {
@@ -81,12 +81,12 @@ internal static class Hud
         l.Text(dc, $"CONTROL  {w.Scheme.Name}", 16 * k, y, 18, Neon.TextCyan, bold: true);
         y += 26 * k;
         foreach (var line in w.Scheme.HelpLines) { l.Text(dc, line, 16 * k, y, 13.5, Neon.TextGray); y += 18 * k; }
-        l.Text(dc, "F1 help   P pause   R restart (when paused or finished)", 16 * k, y + 4 * k, 13, Neon.TextGray);
+        l.Text(dc, "F1 help  P pause  R restart when paused", 16 * k, y + 4 * k, 13, Neon.TextGray);
     }
 
-    /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, oil), so scenery can keep clear of it.</summary>
+    /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, boss or distance, no-grip and puncture timers), so scenery can keep clear of it.</summary>
     public static Rect ReadoutBounds(HudLayout l) =>
-        new(l.Width - 290 * l.K, 0, 290 * l.K, 150 * l.K);
+        new(l.Width - 290 * l.K, 0, 290 * l.K, 156 * l.K);
 
     static void DrawCarState(DrawingContext dc, HudLayout l, MissionRun run)
     {
@@ -112,12 +112,12 @@ internal static class Hud
 
         double yy = 84 * k;
         string distance = run.Director.Stage == MissionStage.Boss
-            ? $"BOSS: {(run.Director.Boss?.Definition.Name ?? "").ToUpperInvariant()}"
+            ? $"BOSS: {run.Director.Boss?.Definition.Name.ToUpperInvariant() ?? "..."}"
             : $"DISTANCE TO GO {run.Director.DistanceRemaining(w) / 1000:0.0} km";
         l.Text(dc, distance, rx, yy, 15, Neon.TextCyan, TextAlignment.Right, true);
         yy += 22 * k;
 
-        // Enemy oil and caltrops: words plus a shrinking bar.
+        // What enemy oil and caltrops did to you: words, plus a shrinking bar for the puncture.
         if (p.GripLoss > 0)
         {
             l.Text(dc, "NO GRIP", rx, yy, 15, Neon.TextOrange, TextAlignment.Right, true);

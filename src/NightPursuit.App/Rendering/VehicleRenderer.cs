@@ -128,8 +128,6 @@ public static class VehicleRenderer
         foreach (int side in Projector.Sides)
             dc.DrawRectangle(Neon.Black, pen.Core, new Rect(g.X + side * (w / 2 - ww / 2) - ww / 2, g.Y - wheel, ww, wheel));
 
-        if (car.Punctured) TyreSpark(dc, car, g, w, ww);
-
         // The boss's two tall rear fins stand behind the body outline.
         StreamGeometry? fins = null;
         if (kind == AgentKind.Boss)
@@ -150,7 +148,7 @@ public static class VehicleRenderer
         using (var c = body.Open())
         {
             c.BeginFigure(P(-shape[0].X, shape[0].Y), true, true);
-            var pts = new Point[shape.Length * 2 - 1];
+            var pts = BodyBuffer(shape.Length * 2 - 1);
             int n = 0;
             for (int i = 0; i < shape.Length; i++) pts[n++] = P(shape[i].X, shape[i].Y);
             for (int i = shape.Length - 1; i >= 1; i--) pts[n++] = P(-shape[i].X, shape[i].Y);
@@ -272,10 +270,12 @@ public static class VehicleRenderer
             if (boss is { ArmorOpen: true })   // the open armour: a jagged line across the back
             {
                 var jag = new LineBatch();
-                var prev = P(-0.9, 0.8);
+                // The x range follows the roof outline, so the teeth never poke outside it.
+                var prev = P(-0.92 * BossHalfWidth(0.8), 0.8);
                 for (int i = 1; i <= 8; i++)
                 {
-                    var next = P(-0.9 + 1.8 * i / 8, i % 2 == 1 ? 0.98 : 0.74);
+                    double y = i % 2 == 1 ? 0.98 : 0.74;
+                    var next = P((-1 + 2.0 * i / 8) * 0.92 * BossHalfWidth(y), y);
                     jag.Line(prev, next);
                     prev = next;
                 }
@@ -289,10 +289,33 @@ public static class VehicleRenderer
                 dc.DrawRectangle(Neon.TailLight, null, new Rect(g.X + side * (w / 2 - lw * 0.7) - lw / 2, g.Y - 0.62 * s, lw, lh));
         }
 
+        if (car.Punctured) TyreSpark(dc, car, g, w, wheel);   // after the body fill, or the outline would hide it
+
         dc.Pop();
     }
 
-    /// <summary>The Armored wedge's half-width (fraction of the half-width of the car) at a height in metres.</summary>
+    /// <summary>One reusable point buffer per outline length: drawing happens on the UI thread only, and PolyLineTo copies the points.</summary>
+    static readonly Dictionary<int, Point[]> BodyBuffers = new();
+
+    static Point[] BodyBuffer(int length)
+    {
+        if (!BodyBuffers.TryGetValue(length, out var buffer)) BodyBuffers[length] = buffer = new Point[length];
+        return buffer;
+    }
+
+    /// <summary>The boss body's half-width (fraction of the car's half-width) at a height in metres, read off <see cref="BossShape"/>.</summary>
+    static double BossHalfWidth(double y)
+    {
+        for (int i = 1; i < BossShape.Length; i++)
+            if (y <= BossShape[i].Y)
+            {
+                var (a, b) = (BossShape[i - 1], BossShape[i]);
+                return a.X + (b.X - a.X) * Math.Clamp((y - a.Y) / (b.Y - a.Y), 0, 1);
+            }
+        return BossShape[^1].X;
+    }
+
+    /// <summary>The Armored wedge's of the half-width of the car) at a height in metres.</summary>
     static double WedgeHalfWidth(double y) => 1 - 0.5 * (y - 0.62) / (1.6 - 0.62);
 
     /// <summary>The "BOSS" tag above a boss, centred on x; <paramref name="y"/> is its bottom edge, set above the missile LOCK label.</summary>
@@ -303,16 +326,16 @@ public static class VehicleRenderer
         dc.DrawText(ft, new Point(x - ft.Width / 2, y - ft.Height));
     }
 
-    /// <summary>A few sparks thrown off by the bare rim under one wheel; the pattern comes from the puncture time, so it is the same every frame.</summary>
-    static void TyreSpark(DrawingContext dc, AgentCar car, Point g, double w, double ww)
+    /// <summary>A few sparks thrown down and out from the bare rim under one wheel; the pattern comes from the puncture time, so it is the same every frame.</summary>
+    static void TyreSpark(DrawingContext dc, AgentCar car, Point g, double w, double wheel)
     {
         var sparks = new LineBatch();
-        double x = g.X + car.Side * (w / 2 - ww / 2);
+        double x = g.X + car.Side * (w / 2), y = g.Y - 0.25 * wheel;
         for (int k = 0; k < 4; k++)
         {
             double f = (k * 0.37 + car.PunctureSeconds * 9) % 1;
-            double a = -Math.PI * (0.15 + 0.7 * f), len = Math.Max(3, ww * (2 + 3 * ((k * 0.61 + car.PunctureSeconds * 5) % 1)));
-            sparks.Line(new Point(x, g.Y), new Point(x + Math.Cos(a) * len * car.Side, g.Y + Math.Sin(a) * len));
+            double a = Math.PI * (0.05 + 0.3 * f), len = Math.Max(4, wheel * (1.2 + 1.8 * ((k * 0.61 + car.PunctureSeconds * 5) % 1)));
+            sparks.Line(new Point(x, y), new Point(x + Math.Cos(a) * len * car.Side, y + Math.Sin(a) * len));
         }
         sparks.Draw(dc, Neon.Tracer);
     }

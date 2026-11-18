@@ -145,6 +145,22 @@ public class BossDamageTests
     }
 
     [Fact]
+    public void Strike_absorbed_by_the_shield_says_so()
+    {
+        var w = Straight();
+        var b = Still(w, new BossDefinition("Test", 100, [new(AgentKind.Blocker, 0.1), new(AgentKind.Pursuer, 0)]), 100);
+        b.Shield = 5;
+        w.Loadout.Strike.Restock(1);
+        w.Handle(new GameAction(ActionKind.FireStrike));
+        Run(w, 181);
+
+        Assert.Equal(100, b.Armor);
+        Assert.Contains(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 0 DESTROYED - SHIELDED", Tone: Tone.Info });
+        Assert.DoesNotContain(w.Events, e => e is Message { Text: "SATELLITE STRIKE: 0 DESTROYED" });
+        Assert.Equal("BOSS SHIELDED", w.Announcement?.Detail);
+    }
+
+    [Fact]
     public void Strike_that_destroys_a_last_phase_boss_counts_it()
     {
         var w = Straight();

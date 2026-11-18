@@ -80,8 +80,10 @@ public sealed class GameView : FrameworkElement
         WeaponPanel.Draw(dc, _layout, world);
         Mirror.Draw(dc, _layout, world, _projector);
         Radar.Draw(dc, _layout, world, _projector);
-        Overlays.DrawWarnings(dc, _layout, world);
-        Overlays.DrawMessages(dc, _layout, world);
+        BossBar.Draw(dc, _layout, run);
+        bool bossBar = BossBar.Showing(run) is not null;
+        Overlays.DrawWarnings(dc, _layout, world, bossBar);
+        Overlays.DrawMessages(dc, _layout, world, bossBar);
         Overlays.DrawAnnouncement(dc, _layout, world);
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);

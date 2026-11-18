@@ -186,11 +186,13 @@ public sealed partial class World
     {
         if (!Loadout.Strike.AdvanceSweep(Step)) return;
         int destroyed = 0;
+        bool shielded = false;
         foreach (var car in Agents)
         {
             if (!InStrikeRange(car)) continue;
             if (car is BossCar boss)
             {
+                if (boss.Shield > 0 && boss.State != VehicleState.Wrecked) shielded = true;   // the blow is ignored: say so
                 DamageBoss(boss, BossDamage.StrikeFraction * boss.MaxHealth, KillCause.Satellite, "SATELLITE STRIKE");
                 if (boss.State == VehicleState.Wrecked) destroyed++;
                 continue;
@@ -199,6 +201,12 @@ public sealed partial class World
             destroyed++;
         }
         Publish(new StrikeLanded(Time, destroyed));
+        if (shielded && destroyed == 0)
+        {
+            Publish(new Message(Time, "SATELLITE STRIKE: 0 DESTROYED - SHIELDED", Tone.Info));
+            Announce("STRIKE: 0 DESTROYED", "BOSS SHIELDED", 1.5);
+            return;
+        }
         Publish(new Message(Time, $"SATELLITE STRIKE: {destroyed} DESTROYED", Tone.Good));
         Announce($"STRIKE: {destroyed} DESTROYED", "", 1.5);
     }

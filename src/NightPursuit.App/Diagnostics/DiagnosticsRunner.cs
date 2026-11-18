@@ -47,7 +47,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "weapons-hud" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud" };
 
     static string _logPath = "diagnostics.log";
 
@@ -138,7 +138,9 @@ public static class DiagnosticsRunner
         else if (scene == "strike") { PlaceOnOpenRoad(run.World); PlaceStrike(run.World, view.Effects); }
         else if (scene == "enemies") { PlaceOnOpenRoad(run.World); PlaceEnemies(run.World, view.Effects); }
         else if (scene == "weapons-hud") { PlaceOnOpenRoad(run.World); PlaceWeaponsHud(run.World, view.Effects); }
-        else if (scene == "boss") { PlaceOnOpenRoad(run.World); PlaceBoss(run.World, view.Effects, mission); }
+        else if (scene == "boss") { PlaceOnOpenRoad(run.World); PlaceBoss(run, view.Effects, mission); }
+        else if (scene == "boss-mirror") { PlaceOnOpenRoad(run.World); PlaceBossMirror(run, view.Effects, mission); }
+        else if (scene == "missile-warning") { PlaceOnOpenRoad(run.World); PlaceMissileWarning(run, view.Effects, mission); }
 
         view.Measure(new Size(width, height));
         view.Arrange(new Rect(0, 0, width, height));
@@ -625,12 +627,14 @@ public static class DiagnosticsRunner
         }
     }
 
-    /// <summary>The mission's boss 45 m ahead at 65% health in phase 1, spun out (open armour) with 0.5 s of shield left.</summary>
-    static void PlaceBoss(World w, EffectList effects, string mission)
+    static BossDefinition LoadBoss(string mission) =>
+        MissionLoader.LoadFile(Path.Combine(AppContext.BaseDirectory, "content", "missions", mission + ".json")).Boss
+        ?? throw new InvalidOperationException($"{mission} has no boss");
+
+    /// <summary>Clears the road and puts <paramref name="boss"/> in the world and the director's boss stage, so the boss bar and the boss warnings show.</summary>
+    static void AddBoss(MissionRun run, BossCar boss, EffectList effects)
     {
-        var def = MissionLoader.LoadFile(Path.Combine(AppContext.BaseDirectory, "content", "missions", mission + ".json")).Boss
-                  ?? throw new InvalidOperationException($"{mission} has no boss");
-        var p = w.Player;
+        var w = run.World;
         w.Agents.Clear();
         w.Hazards.Clear();
         w.Tracers.Clear();
@@ -638,17 +642,79 @@ public static class DiagnosticsRunner
         w.EnemyMissiles.Clear();
         effects.Clear();
         SpendMissiles(w);
-
-        var boss = BossCar.Create(w.NextId(), def, p.Distance + 45, p.Lateral, p.Speed);
         boss.Engaged = true;
+        boss.SnapPrev();
+        w.Agents.Add(boss);
+        run.Director.AdoptBossForDiagnostics(boss);
+    }
+
+    /// <summary>The mission's boss 45 m ahead at 65% health in phase 1, spun out (open armour) with 0.5 s of shield left.</summary>
+    static void PlaceBoss(MissionRun run, EffectList effects, string mission)
+    {
+        var p = run.World.Player;
+        var boss = BossCar.Create(run.World.NextId(), LoadBoss(mission), p.Distance + 45, p.Lateral, p.Speed);
         boss.Armor = 0.65 * boss.MaxHealth;
         boss.PhaseIndex = 0;
         boss.State = VehicleState.Spinning;
         boss.StateTimer = 1;
         boss.SpinAngle = 0.5;
         boss.Shield = 0.5;
-        boss.SnapPrev();
-        w.Agents.Add(boss);
+        AddBoss(run, boss, effects);
+    }
+
+    /// <summary>
+    /// The boss 30 m behind on your right in its Pursuer phase (it shows in the mirror at 1.3 times), your own smoke cloud behind you,
+    /// and a punctured Runner 22 m ahead throwing tyre sparks.
+    /// </summary>
+    static void PlaceBossMirror(MissionRun run, EffectList effects, string mission)
+    {
+        var w = run.World;
+        var p = w.Player;
+        var boss = BossCar.Create(w.NextId(), LoadBoss(mission), p.Distance - 30, p.Lateral + 3.5, p.Speed);
+        boss.Armor = 0.4 * boss.MaxHealth;
+        boss.PhaseIndex = 1;
+        AddBoss(run, boss, effects);
+        var punctured = AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + 22, p.Lateral - 3.5, p.Speed);
+        punctured.Punctured = true;
+        punctured.PunctureSeconds = 0.17;
+        w.Agents.Add(punctured);
+        w.Hazards.Add(new SmokeCloud { Distance = p.Distance - 14, PrevDistance = p.Distance - 14, Lateral = p.Lateral - 1, Age = 1.0 });
+    }
+
+    /// <summary>
+    /// Everything the top of the screen can show at once (the layout check): the boss bar, four warnings (a missile 1.6 s out in the next lane,
+    /// a blocker, a hostile oil slick 90 m ahead and a Gunner 30 m behind closing at 6 m/s), four messages and a phase banner.
+    /// The boss is 100 m ahead in a phase that fires missiles.
+    /// </summary>
+    static void PlaceMissileWarning(MissionRun run, EffectList effects, string mission)
+    {
+        var w = run.World;
+        w.Announce("PHASE 2 OF 3: PURSUER", "LET IT PASS, THEN SHOOT  -  FIRES MISSILES", 3, urgent: true);
+        w.Advance(ControlFrame.Empty, 0.3);   // the banner has faded in by the time the picture is taken
+        var p = w.Player;
+        var real = LoadBoss(mission);
+        var def = new BossDefinition(real.Name, real.Health, new List<BossPhaseDefinition>
+            { new(AgentKind.Blocker, 0.6), new(AgentKind.Pursuer, 0.25, FiresMissiles: true), new(AgentKind.Runner, 0) });
+        var boss = BossCar.Create(w.NextId(), def, p.Distance + 100, p.Lateral + 3.5, p.Speed);
+        boss.Armor = 0.55 * boss.MaxHealth;
+        boss.PhaseIndex = 1;
+        AddBoss(run, boss, effects);
+
+        double gap = 1.6 * EnemyMissile.ClosingSpeed + EnemyMissile.ContactGap;   // 1.6 s from impact
+        w.EnemyMissiles.Add(new EnemyMissile
+        {
+            Id = w.NextId(), Distance = p.Distance + gap, PrevDistance = p.Distance + gap, Lateral = p.Lateral + 3.5, PrevLateral = p.Lateral + 3.5,
+            TargetLateral = p.Lateral + 3.5, LaunchTime = w.Time, Dir = 1,
+        });
+        w.Hazards.Add(new OilSlick { Distance = p.Distance + 90, Lateral = p.Lateral, Hostile = true });
+        var blocker = AgentCar.Create(w.NextId(), AgentKind.Blocker, p.Distance + 60, p.Lateral, p.Speed);
+        var gunner = AgentCar.Create(w.NextId(), AgentKind.Gunner, p.Distance - 30, p.Lateral - 3.5, p.Speed + 6);
+        w.Agents.AddRange(new[] { blocker, gunner });
+
+        w.Publish(new Message(w.Time, "MISSILE HIT THE BOSS", Tone.Good));
+        w.Publish(new Message(w.Time, "BOSS PHASE 2 OF 3: PURSUER", Tone.Info));
+        w.Publish(new Message(w.Time, "CRATE: MISSILE +1", Tone.Good));
+        w.Publish(new Message(w.Time, "GUNNER SPOTTED BEHIND", Tone.Bad));
     }
 
     /// <summary>Three Runners 60, 180 and 380 m ahead, the strike half-way through its sweep, and one beam from a prior kill.</summary>

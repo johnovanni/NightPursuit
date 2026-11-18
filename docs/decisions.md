@@ -186,3 +186,11 @@ and on flat road they look as before.
 - R during a respawn says "RESTART AFTER THE RESPAWN".
 - A pursuer just ahead reads "PURSUER LEFT/RIGHT", not a negative distance.
 - One frame can never run more than 0.25 s of game time.
+
+**D22. Where the top of the screen puts things when the boss bar is up.**
+- The boss bar sits under the mirror; the warnings start just under it, and the messages start below the
+  last of the four possible warning lines, so nothing overlaps.
+- The announcement banner sits at half the screen height on a dark box, below the messages and the aim mark.
+  It fades in over 0.2 s and out over 0.4 s.
+- The left edge arrow sits below the weapon panel.
+- The top-left help line now reads "R restart when paused" so the boss bar doesn't cut it off.

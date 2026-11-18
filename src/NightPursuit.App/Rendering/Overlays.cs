@@ -15,6 +15,8 @@ namespace NightPursuit.App.Rendering;
 internal static class Overlays
 {
     const double MessageLife = 2.5, MessageFade = 0.6;
+    const double WarningTop = 108, WarningRow = 22, MessageRow = 22;
+    const double BannerFadeIn = 0.2, BannerFadeOut = 0.4;
 
     static readonly int[] LeftOnly = { -1 }, RightOnly = { 1 };
 
@@ -37,20 +39,27 @@ internal static class Overlays
     };
 
     /// <summary>Draws exactly what <see cref="Warnings.Collect"/> says (the rules live in Core, where tests prove each one): words, and an edge arrow where it has one.</summary>
-    public static void DrawWarnings(DrawingContext dc, HudLayout l, World w)
+    public static void DrawWarnings(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
         double k = l.K;
         double pulse = (w.Time * 3) % 1 < 0.5 ? 1 : 0.5;
         dc.PushOpacity(pulse);
-        double y = 108 * k;
+        double y = WarningsTop(bossBar) * k;
         foreach (var warning in Warnings.Collect(w))
         {
             if (warning.ShowArrow) DrawEdgeArrow(dc, l, warning.Side);
             l.Centered(dc, warning.Text, y, 18, WarningBrush(warning.Kind));
-            y += 22 * k;
+            y += WarningRow * k;
         }
         dc.Pop();
     }
+
+    /// <summary>Top of the first warning line in HUD units: 108, or just under the boss bar while it shows.</summary>
+    static double WarningsTop(bool bossBar) => bossBar ? WarningTop + BossBar.Height : WarningTop;
+
+    /// <summary>Where the messages start (pixels): below the last of the <see cref="Warnings.MaxShown"/> possible warning lines, so the two never overlap.</summary>
+    static double MessagesTop(HudLayout l, bool bossBar) =>
+        Math.Max(l.Height * 0.26, (WarningsTop(bossBar) + Warnings.MaxShown * WarningRow + 4) * l.K);
 
     static Brush WarningBrush(WarningKind kind) => kind switch
     {
@@ -59,24 +68,32 @@ internal static class Overlays
         _ => Neon.TextRed,
     };
 
-    /// <summary>The big banner for a boss, a boss phase or a strike: a title and a line of detail, fading out in its last half second.</summary>
+    /// <summary>
+    /// The big banner for a boss, a boss phase or a strike, on a dark backing box: a title (34) and a line of detail (18), fading in over 0.2 s
+    /// and out over the last 0.4 s. It sits at half the height (decision D22): below the messages and the aim mark, which are both above it.
+    /// </summary>
     public static void DrawAnnouncement(DrawingContext dc, HudLayout l, World w)
     {
         if (w.Announcement is not { } a) return;
         double k = l.K;
-        dc.PushOpacity(Math.Clamp((a.Until - w.Time) / MessageFade, 0, 1));
-        l.Centered(dc, a.Title, l.Height * 0.44, 30, Neon.TextAmber);
-        if (a.Detail.Length > 0) l.Centered(dc, a.Detail, l.Height * 0.44 + 40 * k, 18, Neon.TextCyan);
+        double fade = Math.Clamp(Math.Min((w.Time - a.Start) / BannerFadeIn, (a.Until - w.Time) / BannerFadeOut), 0, 1);
+        bool detail = a.Detail.Length > 0;
+        double top = l.Height * 0.50, boxWidth = Math.Min(l.Width - 20, 640 * k), boxHeight = (detail ? 82 : 56) * k;
+        dc.PushOpacity(fade);
+        dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, new Rect(l.HalfWidth - boxWidth / 2, top, boxWidth, boxHeight));
+        l.Centered(dc, a.Title, top + 6 * k, 34, Neon.TextAmber);
+        if (detail) l.Centered(dc, a.Detail, top + 52 * k, 18, Neon.TextCyan);
         dc.Pop();
     }
 
     /// <summary>A chevron on the screen edge pointing out toward the side a warning comes from (both sides when it is dead behind): pursuers, missiles, blockers, the boss and hostiles.</summary>
     static void DrawEdgeArrow(DrawingContext dc, HudLayout l, int side)
     {
-        double k = l.K, y = l.Height * 0.55;
+        // The left chevron sits below the weapon panel, which owns the left edge down to its bottom; the right one clears the radar's top edge.
+        double k = l.K, rightY = Math.Min(l.Height * 0.55, l.Height - 332 * k), leftY = Math.Max(rightY, WeaponPanel.Bounds(l).Bottom + 34 * k);
         foreach (int dir in side == 0 ? Projector.Sides : side < 0 ? LeftOnly : RightOnly)
         {
-            double ax = dir < 0 ? 18 * k : l.Width - 18 * k;
+            double ax = dir < 0 ? 18 * k : l.Width - 18 * k, y = dir < 0 ? leftY : rightY;
             var arrow = new LineBatch();
             arrow.Line(new Point(ax - dir * 22 * k, y - 26 * k), new Point(ax, y));
             arrow.Line(new Point(ax, y), new Point(ax - dir * 22 * k, y + 26 * k));
@@ -84,18 +101,18 @@ internal static class Overlays
         }
     }
 
-    public static void DrawMessages(DrawingContext dc, HudLayout l, World w)
+    public static void DrawMessages(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
-        double y = Math.Max(l.Height * 0.26, 200 * l.K);   // below the four warning lines
+        double y = MessagesTop(l, bossBar);
         foreach (var e in w.RecentMessages)
         {
             if (e is not Message m) continue;
             var brush = m.Tone switch { Tone.Good => Neon.TextGreen, Tone.Bad => Neon.TextRed, _ => Neon.TextCyan };
             double left = MessageLife - (w.Time - m.Time);
             dc.PushOpacity(Math.Clamp(left / MessageFade, 0, 1));
-            l.Centered(dc, m.Text, y, 20, brush);
+            l.Centered(dc, m.Text, y, 18, brush);
             dc.Pop();
-            y += 26 * l.K;
+            y += MessageRow * l.K;
         }
     }
 

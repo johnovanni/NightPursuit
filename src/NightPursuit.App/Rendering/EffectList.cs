@@ -164,7 +164,7 @@ public sealed class EffectList
             var burst = _pending[i];
             burst.Delay -= seconds;
             if (burst.Delay > 0) continue;
-            var x = new Explosion(burst.Distance, burst.Lateral, _nextSeed++) { Age = -burst.Delay };   // a long frame still ages it by the overshoot
+            var x = new Explosion(burst.Distance, burst.Lateral, _nextSeed++) { Age = Math.Min(-burst.Delay, Explosion.Life - 0.001) };   // a long frame still ages it by the overshoot, but never past its life
             _explosions.Add(x);
             _pending.RemoveAt(i);
         }
