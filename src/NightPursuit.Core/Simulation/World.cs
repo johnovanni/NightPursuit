@@ -74,18 +74,29 @@ public sealed class World
 
     public void StepOnce(ControlFrame input)
     {
-        var pedals = Scheme.Update(input, Player.Speed, Feel, Step);
-        if (input.PadConnected && (input.PadGas > 0.03 || input.PadBrake > 0.03))
-            pedals = new PedalOutput(input.PadGas, input.PadBrake);   // analog triggers work in every scheme
+        if (Player.State == VehicleState.Wrecked)
+        {
+            Player.Throttle = 0;
+            Player.Brake = 0;
+            Player.Shake = Math.Max(0, Player.Shake - Step);
+            CarPhysics.StepWrecked(Player, Step);
+        }
+        else
+        {
+            var pedals = Scheme.Update(input, Player.Speed, Feel, Step);
+            if (input.PadConnected && (input.PadGas > 0.03 || input.PadBrake > 0.03))
+                pedals = new PedalOutput(input.PadGas, input.PadBrake);   // analog triggers work in every scheme
 
-        Steering.Update(input, Feel, Step);
-        CarPhysics.StepPlayer(Player, pedals, Steering.Value, Track, Feel, Step);
+            Steering.Update(input, Feel, Step);
+            CarPhysics.StepPlayer(Player, pedals, Steering.Value, Track, Feel, Step);
+            if (Player.Armor <= 0) WreckPlayer("SCRAPED TO PIECES");     // guard-rail scraping drains armor in StepPlayer
+        }
 
-        // T8: weapons and tracers, then wrecks
         StepWeapons(input);
+        Loadout.Oil.Update(Step);
         StepHazards();
-        // T9: agents (drivers, spawning) and collisions
-        // T10: hazards
+        StepAgents();       // T10 replaces the Driving branch with real drivers
+        Collisions.Resolve(this);
 
         // Cars killed by gunfire leave the list only now, so nothing above sees the list change mid-step.
         if (_removals.Count > 0)
@@ -94,8 +105,56 @@ public sealed class World
             _removals.Clear();
         }
 
+        Player.HitFlash -= Step;
         Time += Step;
         RecentMessages.RemoveAll(e => Time - e.Time > MessageLifetime);
+    }
+
+    void StepAgents()
+    {
+        foreach (var a in Agents)
+        {
+            switch (a.State)
+            {
+                case VehicleState.Driving: CarPhysics.StepAgent(a, new DriveIntent(a.Speed, a.Lateral), Step); break;
+                case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
+                case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
+            }
+            a.HitFlash -= Step;
+            a.ContactCooldown -= Step;
+        }
+    }
+
+    /// <summary>Spins a car out: it turns, slides sideways in direction <paramref name="dir"/> and loses a fifth of its speed.</summary>
+    public void Spin(Vehicle v, int dir, string reason)
+    {
+        v.State = VehicleState.Spinning;
+        v.StateTimer = 1.8;
+        v.SpinRate = dir * (6 + Rng.NextDouble() * 3);
+        v.PushVel = dir * (4 + Rng.NextDouble() * 3);
+        v.Speed *= 0.8;
+        Publish(new VehicleSpun(Time, v.Id, reason));
+        Publish(new Message(Time, reason, Tone.Good));
+    }
+
+    internal void DamagePlayer(double amount, string reason)
+    {
+        if (Player.State == VehicleState.Wrecked) return;
+        Player.Armor -= amount;
+        Player.HitFlash = 0.35;
+        Publish(new PlayerDamaged(Time, amount, reason));
+        Publish(new Message(Time, reason, Tone.Bad));
+        if (Player.Armor <= 0) WreckPlayer(reason);
+    }
+
+    internal void WreckPlayer(string reason)
+    {
+        if (Player.State == VehicleState.Wrecked) return;
+        Player.Armor = 0;
+        Player.State = VehicleState.Wrecked;
+        Player.StateTimer = 3;
+        Publish(new PlayerWrecked(Time, reason));
+        Publish(new Message(Time, $"WRECKED: {reason}", Tone.Bad));
     }
 
     void StepWeapons(ControlFrame input)
@@ -122,15 +181,20 @@ public sealed class World
             t.Pose = RoadMotion.MoveStraight(Track, t.Pose, t.Speed * Step);
             t.Travel += MachineGuns.MuzzleSpeed * Step;
             if (t.Travel > MachineGuns.Range || Math.Abs(t.Pose.Lateral) > 60) { t.Dead = true; continue; }
-            foreach (var car in Agents.ToArray())
+            // Several cars can overlap the swept segment; the bullet hits the one nearest along its path.
+            AgentCar? hit = null;
+            double nearest = double.MaxValue;
+            foreach (var car in Agents)       // Destroy never changes the list, so it can be walked directly
             {
                 if (!car.IsOnRoadDriving || !SweptHit(t, car)) continue;
-                t.Dead = true;
-                car.Armor -= 1;
-                car.HitFlash = 0.08;
-                if (car.Armor <= 0) Destroy(car, KillCause.Gunfire);
-                break;
+                double along = car.Distance - t.PrevDistance;
+                if (along < nearest) { nearest = along; hit = car; }
             }
+            if (hit is null) continue;
+            t.Dead = true;
+            hit.Armor -= 1;
+            hit.HitFlash = 0.08;
+            if (hit.Armor <= 0) Destroy(hit, KillCause.Gunfire);
         }
         Tracers.RemoveAll(t => t.Dead);
     }
@@ -191,8 +255,23 @@ public sealed class World
             case ActionKind.LeverDown:
                 Scheme.Handle(a, Player.Speed, Feel);
                 break;
-            // DropRear: Task 9. Pause, ToggleHelp, Restart: handled by the mission run.
+            case ActionKind.DropRear:
+                DropOil();
+                break;
+            // Pause, ToggleHelp, Restart: handled by the mission run.
         }
+    }
+
+    void DropOil()
+    {
+        if (Player.State == VehicleState.Wrecked) return;
+        if (Loadout.Oil.TryDrop())
+        {
+            Hazards.Add(new OilSlick { Distance = Player.Distance - 5, Lateral = Player.Lateral });
+            Publish(new Message(Time, "OIL SLICK DROPPED", Tone.Info));
+        }
+        else if (Loadout.Oil.Charges <= 0)
+            Publish(new Message(Time, "NO OIL LEFT (recharging)", Tone.Bad));
     }
 
     /// <summary>The next unused vehicle id (the player is 0).</summary>

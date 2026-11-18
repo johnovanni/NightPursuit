@@ -152,11 +152,13 @@ public class GunTests
         var wreck = Assert.IsType<Wreck>(Assert.Single(w.Hazards));
         Assert.Empty(w.Agents);
 
+        // The car now drives on while it is shot, so measure the slide from where the wreck appeared.
         // The kill step already slid the wreck once; count it as step 1 of the slide.
+        double start = wreck.Distance;
         int slide = 1;
         while (wreck.Speed > 0) { w.StepOnce(ControlFrame.Empty); slide++; }
         Assert.InRange(slide * World.Step, 1.58, 1.62);
-        Assert.InRange(wreck.Distance - 20, 31.5, 32.5);
+        Assert.InRange(wreck.Distance - start, 31.2, 32.2);
         Assert.Equal(0, wreck.Lateral);
     }
 }

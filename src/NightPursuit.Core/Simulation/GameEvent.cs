@@ -4,7 +4,7 @@ namespace NightPursuit.Core.Simulation;
 
 public enum Tone { Info, Good, Bad }
 
-public enum KillCause { Gunfire, RanOffRoad, WreckCollision }
+public enum KillCause { Gunfire, RanOffRoad, WreckCollision, Rammed }
 
 /// <summary>Something that happened in the simulation, for the HUD, score and (later) effects.</summary>
 public abstract record GameEvent(double Time);
