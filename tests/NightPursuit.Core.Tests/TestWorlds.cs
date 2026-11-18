@@ -1,4 +1,7 @@
+using NightPursuit.Core.Common;
+using NightPursuit.Core.Control;
 using NightPursuit.Core.Road;
+using NightPursuit.Core.Simulation;
 
 namespace NightPursuit.Core.Tests;
 
@@ -15,4 +18,8 @@ static class TestWorlds
         Array.Fill(c, 1 / radius);
         return Track.FromSegments(c);
     }
+
+    /// <summary>A world on the given track (default: the generated track for the seed).</summary>
+    public static World World(int seed = 1, Track? track = null) =>
+        new(track ?? new Track(new TrackProfile(seed)), new FeelSettings(), new SeededRng(seed));
 }

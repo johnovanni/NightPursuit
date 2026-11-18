@@ -77,7 +77,7 @@ public static class CarPhysics
         }
     }
 
-    /// <summary>A wrecked car rolls to a stop at 25 m/s² while its shove fades.</summary>
+    /// <summary>A wrecked car rolls to a stop at 25 m/s^2 while its shove fades.</summary>
     public static void StepWrecked(Vehicle car, double dt)
     {
         car.StateTimer -= dt;
