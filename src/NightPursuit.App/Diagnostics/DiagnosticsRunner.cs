@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using NightPursuit.App.Rendering;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
@@ -46,7 +47,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss" };
 
     static string _logPath = "diagnostics.log";
 
@@ -135,6 +136,8 @@ public static class DiagnosticsRunner
         else if (scene == "wreck") PlaceWrecks(run.World, view.Effects);
         else if (scene == "arsenal") { PlaceOnOpenRoad(run.World); PlaceArsenal(run.World, view.Effects); }
         else if (scene == "strike") { PlaceOnOpenRoad(run.World); PlaceStrike(run.World, view.Effects); }
+        else if (scene == "enemies") { PlaceOnOpenRoad(run.World); PlaceEnemies(run.World, view.Effects); }
+        else if (scene == "boss") { PlaceOnOpenRoad(run.World); PlaceBoss(run.World, view.Effects, mission); }
 
         view.Measure(new Size(width, height));
         view.Arrange(new Rect(0, 0, width, height));
@@ -505,8 +508,8 @@ public static class DiagnosticsRunner
 
     /// <summary>
     /// One of everything in the arsenal: own smoke 30 m behind (the mirror) and another 60 m ahead, hostile caltrops 45 m
-    /// ahead in the player's lane, crates (Missile 35 m, Armor 22 m on the other side, so the 60 m smoke does not hide its label), a player missile 25 m ahead locked on a Runner 140 m
-    /// ahead, an enemy missile 70 m ahead in the next lane and a hostile tracer 30 m ahead.
+    /// ahead in the player's lane, crates (Missile 35 m, Armor 22 m on the other side, so the 60 m smoke does not hide its label), a player missile 12 m ahead locked on a Runner 140 m
+    /// ahead, an enemy missile 70 m ahead in the next lane and a hostile tracer 14 m ahead (beside the dart, clear of any smoke, so both can be checked by eye).
     /// </summary>
     static void PlaceArsenal(World w, EffectList effects)
     {
@@ -528,7 +531,7 @@ public static class DiagnosticsRunner
         w.Hazards.Add(new SupplyCrate(SupplyItem.Missile, 1) { Distance = p.Distance + 35, PrevDistance = p.Distance + 35, Lateral = p.Lateral + 5 });
         w.Hazards.Add(new SupplyCrate(SupplyItem.Armor, 1) { Distance = p.Distance + 22, PrevDistance = p.Distance + 22, Lateral = p.Lateral - 5 });
 
-        var pose = new RoadPose(p.Distance + 25, p.Lateral, 0);
+        var pose = new RoadPose(p.Distance + 12, p.Lateral, 0);
         w.Missiles.Add(new Missile
         {
             Pose = pose, PrevDistance = pose.Distance, PrevLateral = pose.Lateral, PrevHeading = pose.Heading,
@@ -539,12 +542,75 @@ public static class DiagnosticsRunner
             Id = w.NextId(), Distance = p.Distance + 70, PrevDistance = p.Distance + 70, Lateral = p.Lateral + 5, PrevLateral = p.Lateral + 5,
             TargetLateral = p.Lateral + 5, LaunchTime = w.Time, Dir = 1,
         });
-        var hostile = new RoadPose(p.Distance + 30, p.Lateral + 1.5, 0);
+        var hostile = new RoadPose(p.Distance + 14, p.Lateral + 1.8, 0);
         w.Tracers.Add(new Tracer
         {
             Pose = hostile, PrevDistance = hostile.Distance - 2.5, PrevLateral = hostile.Lateral, PrevHeading = hostile.Heading,
             Travel = 40, OwnerId = runner.Id, Hostile = true,
         });
+    }
+
+    /// <summary>
+    /// One of each new enemy kind: a Gunner aiming 30 m ahead in the player's lane, a Dropper arming 90 m ahead, an Armored 55 m
+    /// ahead in the next lane, a punctured Runner 120 m ahead, and an Armored 30 m behind (for the mirror and the radar).
+    /// </summary>
+    static void PlaceEnemies(World w, EffectList effects)
+    {
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        w.Missiles.Clear();
+        w.EnemyMissiles.Clear();
+        effects.Clear();
+        SpendMissiles(w);
+
+        var gunner = AgentCar.Create(w.NextId(), AgentKind.Gunner, p.Distance + 30, p.Lateral, p.Speed);
+        gunner.DriverState = new GunnerDriver.State { Phase = GunnerPhase.Aim, Timer = 0.3, Target = gunner.Lateral };
+        var dropper = AgentCar.Create(w.NextId(), AgentKind.Dropper, p.Distance + 90, p.Lateral - 3.5, p.Speed);
+        dropper.DriverState = new DropperDriver.State { Arming = 0.3, Target = dropper.Lateral };
+        var armored = AgentCar.Create(w.NextId(), AgentKind.Armored, p.Distance + 55, p.Lateral + 4, p.Speed);
+        var punctured = AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + 120, p.Lateral + 3.5, p.Speed);
+        punctured.Punctured = true;
+        punctured.PunctureSeconds = 0.17;   // near the top of its wobble
+        var behind = AgentCar.Create(w.NextId(), AgentKind.Armored, p.Distance - 30, p.Lateral + 3, p.Speed);
+        w.Agents.AddRange(new[] { gunner, dropper, armored, punctured, behind });
+    }
+
+    /// <summary>Uses up the missiles, so no LOCK bracket covers the car being looked at.</summary>
+    static void SpendMissiles(World w)
+    {
+        for (int i = 0; i < MissileLauncher.MaxCharges; i++)
+        {
+            w.Loadout.Missiles.TryUse();
+            w.Loadout.Missiles.Update(MissileLauncher.UseCooldown + 1);
+        }
+    }
+
+    /// <summary>The mission's boss 45 m ahead at 65% health in phase 1, spun out (open armour) with 0.5 s of shield left.</summary>
+    static void PlaceBoss(World w, EffectList effects, string mission)
+    {
+        var def = MissionLoader.LoadFile(Path.Combine(AppContext.BaseDirectory, "content", "missions", mission + ".json")).Boss
+                  ?? throw new InvalidOperationException($"{mission} has no boss");
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        w.Missiles.Clear();
+        w.EnemyMissiles.Clear();
+        effects.Clear();
+        SpendMissiles(w);
+
+        var boss = BossCar.Create(w.NextId(), def, p.Distance + 45, p.Lateral, p.Speed);
+        boss.Engaged = true;
+        boss.Armor = 0.65 * boss.MaxHealth;
+        boss.PhaseIndex = 0;
+        boss.State = VehicleState.Spinning;
+        boss.StateTimer = 1;
+        boss.SpinAngle = 0.5;
+        boss.Shield = 0.5;
+        boss.SnapPrev();
+        w.Agents.Add(boss);
     }
 
     /// <summary>Three Runners 60, 180 and 380 m ahead, the strike half-way through its sweep, and one beam from a prior kill.</summary>

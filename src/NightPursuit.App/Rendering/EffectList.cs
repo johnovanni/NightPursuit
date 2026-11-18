@@ -1,6 +1,7 @@
 using System.Windows;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Simulation;
+using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.App.Rendering;
@@ -44,10 +45,21 @@ public sealed class EffectList
 {
     readonly List<Explosion> _explosions = new();
     readonly List<Beam> _beams = new();
+    readonly List<DelayedBurst> _pending = new();   // the later bursts of a boss kill, waiting for their turn
     World? _world;
     double _absorbedTime = double.NaN;
     HashSet<Tracer> _seenTracers = new(), _spareTracers = new();   // swapped each call so no set is allocated per frame
     int _nextSeed = 1000;   // deterministic seeds: the same run always draws the same bursts
+
+    /// <summary>A boss kill is three bursts, this far apart in seconds, over 0.6 s, at slightly different spots.</summary>
+    static readonly (double Delay, double Along, double Across)[] BossBursts = { (0, 0, 0), (0.3, -1.4, 1.1), (0.6, 1.2, -0.9) };
+
+    sealed class DelayedBurst(double delay, double distance, double lateral)
+    {
+        public double Delay { get; set; } = delay;
+        public double Distance { get; } = distance;
+        public double Lateral { get; } = lateral;
+    }
 
     public IReadOnlyList<Explosion> Explosions => _explosions;
     public IReadOnlyList<Beam> Beams => _beams;
@@ -60,6 +72,16 @@ public sealed class EffectList
     public const double MuzzleFlashSeconds = 0.05;
 
     public void Spawn(double distance, double lateral) => _explosions.Add(new Explosion(distance, lateral, _nextSeed++));
+
+    /// <summary>A boss kill: three staggered explosions over 0.6 s (the first now).</summary>
+    public void SpawnBossKill(double distance, double lateral)
+    {
+        foreach (var (delay, along, across) in BossBursts)
+        {
+            if (delay <= 0) Spawn(distance + along, lateral + across);
+            else _pending.Add(new DelayedBurst(delay, distance + along, lateral + across));
+        }
+    }
 
     public void SpawnBeam(double distance, double lateral) => _beams.Add(new Beam(distance, lateral));
 
@@ -110,7 +132,8 @@ public sealed class EffectList
                 if (car is null) continue;
                 (distance, lateral) = (car.Distance, car.Lateral);
             }
-            Spawn(distance, lateral);
+            if (e.Kind == AgentKind.Boss) SpawnBossKill(distance, lateral);
+            else Spawn(distance, lateral);
             if (e.Cause == KillCause.Satellite) SpawnBeam(distance, lateral);
         }
     }
@@ -127,6 +150,7 @@ public sealed class EffectList
     {
         _explosions.Clear();
         _beams.Clear();
+        _pending.Clear();
         _seenTracers.Clear();
         LastShotTime = double.NegativeInfinity;
     }
@@ -135,6 +159,15 @@ public sealed class EffectList
     {
         foreach (var x in _explosions) x.Age += seconds;
         _explosions.RemoveAll(x => x.Age >= Explosion.Life);
+        for (int i = _pending.Count - 1; i >= 0; i--)
+        {
+            var burst = _pending[i];
+            burst.Delay -= seconds;
+            if (burst.Delay > 0) continue;
+            var x = new Explosion(burst.Distance, burst.Lateral, _nextSeed++) { Age = -burst.Delay };   // a long frame still ages it by the overshoot
+            _explosions.Add(x);
+            _pending.RemoveAt(i);
+        }
         foreach (var b in _beams) b.Age += seconds;
         _beams.RemoveAll(b => b.Age >= Beam.Life);
     }

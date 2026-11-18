@@ -35,6 +35,7 @@ public static class EffectRenderer
     /// <summary>A satellite strike's column of light: a glow from the spot on the road up to the top of the screen, fading over its life.</summary>
     public static void DrawBeams(DrawingContext dc, Projector p, EffectList effects, Rect exclude = default)
     {
+        if (effects.Beams.Count == 0) return;
         bool hasExclude = !exclude.IsEmpty && exclude.Width > 0;
         if (hasExclude)   // keep the column off the rear-view mirror
             dc.PushClip(new CombinedGeometry(GeometryCombineMode.Exclude,

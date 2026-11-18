@@ -4,12 +4,14 @@ using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.App.Rendering;
 
 /// <summary>
 /// Top-down radar, bottom right. Each kind has its own shape as well as its colour: runner diamond (magenta),
-/// blocker square (amber), pursuer triangle (red, pulsing); wrecks are X, oil slicks circles, you are the green arrow.
+/// blocker square (amber), pursuer triangle (red, pulsing), gunner ring with a dot (orange-red), dropper
+/// down-triangle (teal), armored hexagon (steel blue), boss pulsing double ring with a gold inner ring (white); wrecks are X, oil slicks circles, you are the green arrow.
 /// </summary>
 internal static class Radar
 {
@@ -45,6 +47,23 @@ internal static class Radar
             var at = Map(h is Wreck wk ? cam.Ahead(wk) : h.Distance - cam.CamDistance, h.Lateral);
             if (h is OilSlick) dc.DrawEllipse(null, Neon.Oil.Core, at, u * 0.8, u * 0.8);
             else if (h is Wreck) Cross(dc, at, u);
+            else if (h is SmokeCloud smoke)   // a grey rounded rectangle at its real footprint
+            {
+                var c = Map(cam.Ahead(smoke), smoke.Lateral);
+                dc.DrawRoundedRectangle(Neon.SmokeFill, SmokeRim, new Rect(c.X - SmokeCloud.HalfWidth * lat, c.Y - SmokeCloud.HalfLength * lon,
+                                        2 * SmokeCloud.HalfWidth * lat, 2 * SmokeCloud.HalfLength * lon), 3 * k, 3 * k);
+            }
+            else if (h is Caltrops)   // three steel dots
+            {
+                foreach (double f in new[] { -1.0, 0, 1.0 })
+                    dc.DrawEllipse(Neon.TextSteel, null, new Point(at.X + f * u * 0.9, at.Y), u * 0.3, u * 0.3);
+            }
+            else if (h is SupplyCrate crate)   // a white square with its item letter
+            {
+                double q = u * 1.4;
+                dc.DrawRectangle(Neon.TextWhite, null, new Rect(at.X - q, at.Y - q, q * 2, q * 2));
+                l.Text(dc, ItemLetter(crate.Item), at.X, at.Y - 6.5 * k, 11, Neon.Black, TextAlignment.Center, true);
+            }
         }
 
         bool pulse = (int)(w.Time * 4) % 2 == 0;
@@ -61,11 +80,36 @@ internal static class Radar
                 case AgentKind.Blocker:
                     dc.DrawRectangle(Neon.TextAmber, null, new Rect(at.X - u, at.Y - u, u * 2, u * 2));
                     break;
+                case AgentKind.Gunner:   // a ring with a centre dot
+                    dc.DrawEllipse(null, Neon.RadarGunner.Core, at, u * 1.1, u * 1.1);
+                    dc.DrawEllipse(Neon.TextOrangeRed, null, at, u * 0.4, u * 0.4);
+                    break;
+                case AgentKind.Dropper:   // a down-triangle
+                    Poly(dc, Neon.TextTeal, Neon.RadarDropper, new Point(at.X - u * 1.1, at.Y - u), new Point(at.X + u * 1.1, at.Y - u), new Point(at.X, at.Y + u * 1.2));
+                    break;
+                case AgentKind.Armored:   // a hexagon
+                    Poly(dc, Neon.TextSteelBlue, Neon.RadarArmored, Hexagon(at, u * 1.15));
+                    break;
+                case AgentKind.Boss:   // a pulsing white double ring around a gold inner ring
+                    double ring = pulse ? 1.9 : 1.6;
+                    dc.DrawEllipse(null, Neon.RadarBossOuter.Core, at, u * ring, u * ring);
+                    dc.DrawEllipse(null, Neon.RadarBossOuter.Core, at, u * (ring - 0.5), u * (ring - 0.5));
+                    dc.DrawEllipse(null, Neon.OpenArmor.Core, at, u * 0.8, u * 0.8);
+                    break;
                 default:
                     double s = pulse ? u * 1.3 : u;
                     Poly(dc, Neon.TextRed, Neon.RadarPursuer, new Point(at.X, at.Y - s), new Point(at.X + s, at.Y + s), new Point(at.X - s, at.Y + s));
                     break;
             }
+        }
+
+        foreach (var m in w.Missiles)   // yours: a white dot
+            dc.DrawEllipse(Neon.TextWhite, null, Map(cam.Ahead(m), cam.LateralOf(m)), u * 0.45, u * 0.45);
+        foreach (var m in w.EnemyMissiles)   // theirs: a red dot with a ring
+        {
+            var at = Map(cam.Ahead(m), cam.LateralOf(m));
+            dc.DrawEllipse(Neon.TextRed, null, at, u * 0.45, u * 0.45);
+            dc.DrawEllipse(null, Neon.EnemyMissile.Core, at, u * 1.0, u * 1.0);
         }
 
         var me = new StreamGeometry();
@@ -80,6 +124,32 @@ internal static class Radar
         dc.Pop();
         dc.Pop();
         l.Text(dc, "RADAR", r.X + 6 * k, r.Y + 4 * k, 13, Neon.TextGray);
+    }
+
+    static readonly Pen SmokeRim = MakeRim();
+
+    static Pen MakeRim()
+    {
+        var pen = new Pen(Neon.Solid(Neon.Gray, 0.6), 1.0);
+        pen.Freeze();
+        return pen;
+    }
+
+    static string ItemLetter(SupplyItem item) => item switch
+    {
+        SupplyItem.Oil => "O", SupplyItem.Smoke => "S", SupplyItem.Caltrops => "C",
+        SupplyItem.Missile => "M", SupplyItem.Strike => "★", _ => "A",
+    };
+
+    static Point[] Hexagon(Point c, double r)
+    {
+        var pts = new Point[6];
+        for (int i = 0; i < 6; i++)
+        {
+            double a = Math.PI / 6 + i * Math.PI / 3;
+            pts[i] = new Point(c.X + r * Math.Cos(a), c.Y + r * Math.Sin(a));
+        }
+        return pts;
     }
 
     static void Cross(DrawingContext dc, Point at, double u)

@@ -49,6 +49,10 @@ internal static class Neon
     public static readonly NeonPen StrikeBeam = Pen(Color.FromRgb(0x9F, 0xF6, 0xFF), 1, 2);
     /// <summary>The outline of anything an enemy dropped: red and dashed, so the colour is not the only cue.</summary>
     public static readonly NeonPen HostileOutline = Pen(Red, 0.8, 1.6, DashStyles.Dash);
+    public static readonly NeonPen RadarGunner = Pen(OrangeRed, 1, 1.8), RadarDropper = Pen(Teal, 1, 1.5), RadarArmored = Pen(SteelBlue, 1, 1.5), RadarBossOuter = Pen(White, 1, 1.8);
+    public static readonly NeonPen ShieldBright = Pen(Cyan, 1, 3.4), ShieldDim = Pen(Cyan, 0.45, 2.4), OpenArmor = Pen(Gold, 1, 1.8), ChuteGlow = Pen(Teal, 1, 3.4);
+    public static readonly Brush PortGlow = Solid(OrangeRed), PortBurst = Solid(White), PortDim = Solid(OrangeRed, 0.35);
+    public static readonly Brush ChuteFill = Solid(Teal, 0.9), TextGold = Solid(Gold), TextTeal = Solid(Teal), TextOrangeRed = Solid(OrangeRed), TextSteel = Solid(Steel), TextSteelBlue = Solid(SteelBlue);
     public static readonly Brush SmokeFill = Solid(Gray, 0.22), CrateFill = Solid(Cyan, 0.12);
 
     // Cockpit and HUD.
