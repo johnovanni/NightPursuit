@@ -24,7 +24,13 @@ public partial class App : Application
 
         try
         {
-            string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", "mission-01.json");
+            string name = MissionName(e.Args);
+            string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", name + ".json");
+            if (!File.Exists(path))
+            {
+                Fail("Night Pursuit: mission not found", $"There is no mission called '{name}'.{Environment.NewLine}Looked for: {path}");
+                return;
+            }
             var run = new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
             new MainWindow(run).Show();
         }
@@ -36,6 +42,17 @@ public partial class App : Application
         {
             Fail("Night Pursuit: could not start", ex.ToString());
         }
+    }
+
+    /// <summary><c>--mission name</c> picks a file in content/missions (letters, digits and '-' only); the default is mission-01.</summary>
+    static string MissionName(string[] args)
+    {
+        int i = Array.IndexOf(args, "--mission");
+        if (i < 0) return "mission-01";
+        string name = i + 1 < args.Length ? args[i + 1] : "";
+        if (name.Length == 0 || !name.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
+            throw new MissionFormatException($"--mission needs a mission name of letters, digits and '-' only, e.g. mission-01 or proving-ground, not '{name}'");
+        return name;
     }
 
     bool _failing;

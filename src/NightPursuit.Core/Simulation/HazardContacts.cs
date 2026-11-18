@@ -8,7 +8,7 @@ namespace NightPursuit.Core.Simulation;
 static class HazardContacts
 {
     const double OilGripLoss = 1.0;
-    const double PunctureDuration = 5;
+    const double PunctureDuration = PlayerCar.PunctureSeconds;
     const double CaltropDamage = 10;
 
     static void CollectCrates(World w, PlayerCar p)

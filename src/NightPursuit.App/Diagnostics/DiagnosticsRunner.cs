@@ -47,7 +47,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "weapons-hud" };
 
     static string _logPath = "diagnostics.log";
 
@@ -137,6 +137,7 @@ public static class DiagnosticsRunner
         else if (scene == "arsenal") { PlaceOnOpenRoad(run.World); PlaceArsenal(run.World, view.Effects); }
         else if (scene == "strike") { PlaceOnOpenRoad(run.World); PlaceStrike(run.World, view.Effects); }
         else if (scene == "enemies") { PlaceOnOpenRoad(run.World); PlaceEnemies(run.World, view.Effects); }
+        else if (scene == "weapons-hud") { PlaceOnOpenRoad(run.World); PlaceWeaponsHud(run.World, view.Effects); }
         else if (scene == "boss") { PlaceOnOpenRoad(run.World); PlaceBoss(run.World, view.Effects, mission); }
 
         view.Measure(new Size(width, height));
@@ -575,6 +576,43 @@ public static class DiagnosticsRunner
         punctured.PunctureSeconds = 0.17;   // near the top of its wobble
         var behind = AgentCar.Create(w.NextId(), AgentKind.Armored, p.Distance - 30, p.Lateral + 3, p.Speed);
         w.Agents.AddRange(new[] { gunner, dropper, armored, punctured, behind });
+    }
+
+    /// <summary>
+    /// Every weapon-panel readout at once: Caltrops selected, smoke empty, oil recharging at 2 of 5 and cooling down (WAIT),
+    /// 2 missiles with a lock on a Runner 120 m ahead, a strike targeting, guns warm, and the player punctured and without grip.
+    /// </summary>
+    static void PlaceWeaponsHud(World w, EffectList effects)
+    {
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        w.Missiles.Clear();
+        w.EnemyMissiles.Clear();
+        effects.Clear();
+        var lo = w.Loadout;
+
+        w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + 120, p.Lateral, p.Speed));
+        lo.Restock(SupplyItem.Missile, MissileLauncher.MaxCharges);
+        lo.Missiles.Update(MissileLauncher.UseCooldown + 1);
+        lo.Restock(SupplyItem.Strike, 1);
+        lo.Strike.TryBegin();
+        lo.Strike.AdvanceSweep(SatelliteStrike.SweepSeconds * 0.4);
+        lo.CycleRear();
+        lo.CycleRear();   // Oil -> Smoke -> Caltrops
+        lo.Caltrops.Restock(1);
+
+        // Smoke empty; oil used down to 2 of 5, the last use still cooling (WAIT) and 3 s into its 8 s recharge.
+        for (int i = 0; i < SmokeLauncher.MaxCharges + 4; i++) { lo.Smoke.TryUse(); lo.Smoke.Update(10); }
+        for (int i = 0; i < OilDropper.MaxCharges - 2; i++) { lo.Oil.TryDrop(); lo.Oil.Update(OilDropper.DropCooldown + 0.01); }
+        lo.Oil.Update(3);
+        lo.Oil.TryDrop();
+        lo.Oil.Restock(1);
+        lo.Oil.Update(0.2);
+        p.PunctureLeft = 3.2;
+        p.GripLoss = 0.6;
+        effects.Clear();
     }
 
     /// <summary>Uses up the missiles, so no LOCK bracket covers the car being looked at.</summary>

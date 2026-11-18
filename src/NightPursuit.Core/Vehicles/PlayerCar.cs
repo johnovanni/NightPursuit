@@ -15,6 +15,8 @@ public sealed class PlayerCar() : Vehicle(VehicleStats.Player)
     public double GripLoss { get; set; }
     /// <summary>Seconds of wobble and a 100 mph limit after hitting an enemy's caltrops (counts down).</summary>
     public double PunctureLeft { get; set; }
+    /// <summary>How long a puncture lasts, seconds (the HUD scales its bar by it).</summary>
+    public const double PunctureSeconds = 5;
     /// <summary>While punctured the car is held to this speed, m/s (100 mph).</summary>
     public const double PunctureSpeedCap = 100 / Common.Units.MphPerMs;
     /// <summary>Total slowdown on the flat while punctured and above the cap, m/s².</summary>

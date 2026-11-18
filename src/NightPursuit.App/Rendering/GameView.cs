@@ -77,6 +77,7 @@ public sealed class GameView : FrameworkElement
         HoodRenderer.Draw(dc, _layout, _projector);
         EffectRenderer.DrawMuzzleFlash(dc, _layout, world, Effects);
         Hud.Draw(dc, _layout, run);
+        WeaponPanel.Draw(dc, _layout, world);
         Mirror.Draw(dc, _layout, world, _projector);
         Radar.Draw(dc, _layout, world, _projector);
         Overlays.DrawWarnings(dc, _layout, world);

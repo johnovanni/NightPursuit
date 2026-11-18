@@ -3,7 +3,7 @@ using System.Windows.Media;
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Simulation;
-using NightPursuit.Core.Weapons;
+using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.App.Rendering;
 
@@ -86,7 +86,7 @@ internal static class Hud
 
     /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, oil), so scenery can keep clear of it.</summary>
     public static Rect ReadoutBounds(HudLayout l) =>
-        new(l.Width - 290 * l.K, 0, 290 * l.K, 108 * l.K);
+        new(l.Width - 290 * l.K, 0, 290 * l.K, 150 * l.K);
 
     static void DrawCarState(DrawingContext dc, HudLayout l, MissionRun run)
     {
@@ -110,25 +110,26 @@ internal static class Hud
         for (int i = 0; i < spareIcons; i++)
             DrawCarIcon(dc, l, new Point(barX + i * 26 * k, 64 * k));
 
-        // Oil charges as pips: filled = ready.
-        l.Text(dc, "OIL", labelX, 86 * k, 13, Neon.TextGray, TextAlignment.Right);
-        int charges = w.Loadout.Oil.Charges;
-        for (int i = 0; i < OilDropper.MaxCharges; i++)
+        double yy = 84 * k;
+        string distance = run.Director.Stage == MissionStage.Boss
+            ? $"BOSS: {(run.Director.Boss?.Definition.Name ?? "").ToUpperInvariant()}"
+            : $"DISTANCE TO GO {run.Director.DistanceRemaining(w) / 1000:0.0} km";
+        l.Text(dc, distance, rx, yy, 15, Neon.TextCyan, TextAlignment.Right, true);
+        yy += 22 * k;
+
+        // Enemy oil and caltrops: words plus a shrinking bar.
+        if (p.GripLoss > 0)
         {
-            var c = new Point(barX + 8 * k + i * 24 * k, 93 * k);
-            dc.DrawEllipse(i < charges ? Neon.OilFull : null, Neon.Oil.Core, c, 7 * k, 7 * k);
+            l.Text(dc, "NO GRIP", rx, yy, 15, Neon.TextOrange, TextAlignment.Right, true);
+            yy += 20 * k;
         }
-
-        // Gun heat: amber while firing, red and spelled out when locked.
-        var guns = w.Loadout.Guns;
-        var heat = new Rect(barX, 112 * k, barW, 10 * k);
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, heat);
-        dc.DrawRectangle(guns.Locked ? Neon.TextRed : Neon.TextAmber, null, new Rect(heat.X, heat.Y, heat.Width * Math.Clamp(guns.Heat, 0, 1), heat.Height));
-        if (guns.Locked) l.Text(dc, "GUNS LOCKED", labelX, 108 * k, 13, Neon.TextRed, TextAlignment.Right, true);
-        else l.Text(dc, "GUN HEAT", labelX, 108 * k, 13, Neon.TextGray, TextAlignment.Right);
-
-        double km = run.Director.DistanceRemaining(w) / 1000;
-        l.Text(dc, $"DISTANCE TO GO {km:0.0} km", rx, 132 * k, 15, Neon.TextCyan, TextAlignment.Right, true);
+        if (p.PunctureLeft > 0)
+        {
+            l.Text(dc, $"PUNCTURED {p.PunctureLeft:0.0} s", rx, yy, 15, Neon.TextOrange, TextAlignment.Right, true);
+            var bar = new Rect(barX, yy + 20 * k, barW, 6 * k);
+            dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, bar);
+            dc.DrawRectangle(Neon.TextOrange, null, new Rect(bar.X, bar.Y, bar.Width * Math.Clamp(p.PunctureLeft / PlayerCar.PunctureSeconds, 0, 1), bar.Height));
+        }
     }
 
     /// <summary>A small car seen from behind: body, cabin line and two wheels.</summary>
