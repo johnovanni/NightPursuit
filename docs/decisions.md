@@ -49,10 +49,11 @@ stays put and blocks the lane (WRK-1). That gives about 1.5 s to react, and the 
 warning shows it.
 *Cost to change:* one line.
 
-**D5. A wreck damages you once.** Hitting a wreck does 30 damage and drops you to 5 m/s, once per
-wreck. You hit it once for 30 damage, it pushes you back 1 m and blocks you, and steering crabs
-you sideways round it. Without this, a car crawling against a wreck would take 30 damage every
-step and die at once, or sit pinned with no way out.
+**D5. A wreck damages you once, then you steer round it.** Hitting a wreck does 30 damage and
+drops you to 5 m/s, once per wreck. It pushes you back 1 m and blocks you. Steering then slides
+you sideways round it at 3 m/s, even when you're almost stopped. Without this, a car pushing
+against a wreck would take 30 damage every step. The final review also found a car stuck behind
+a stopped wreck for good, which this fixes.
 
 **D6. Owner's manual checks wait for you.** Tasks 12 and 16 end with checks only you can do
 (drive it, alt-tab while steering, rename the mission file, play mission 1 to the end). I do
@@ -90,3 +91,64 @@ stray key can't throw away a run.
 
 **D14. A pursuer alongside you is always shown.** While a pursuer rides beside you before ramming, a
 "PURSUER LEFT/RIGHT" warning and an edge arrow show it, not just the radar.
+
+**D15. Mission timing doesn't depend on frame rate.** Enemy waves, finishing and respawning are
+now checked every simulation step, not once per screen frame. So the same driving gives the same
+game on a 60 Hz or 144 Hz screen, as the design requires (NFR-2).
+
+**D16. Smaller fixes from the final review.**
+- A retreating pursuer no longer keeps ramming you when you're slow.
+- The pad's brake trigger cancels cruise.
+- The pad's Back button restarts, under the same rules as R.
+- Pressing oil too soon says "OIL NOT READY".
+- The spare-car icons match the respawn banner.
+- The moon no longer hides behind the top-right readouts.
+- A mission file with a too-tight bend or an enemy wave placed out of range is rejected with a
+  clear message.
+
+**D17. Speed figures.**
+- Drawing one frame takes 0.84 ms on average: about a twentieth of a 60 fps frame.
+- The stress test drew 6,001 frames at three window sizes with no failures.
+- These figures leave out the graphics card's own work, so the live frame rate still needs your
+  check.
+
+## Open items (found by the final review, left for later)
+
+The build process allows one round of fixes after the final review. These turned up in its
+re-check:
+
+1. **A retreating pursuer can steer back into your lane.** After it sideswipes you, it heads for
+   the lane nearest itself, which can be yours, and it falls back only slowly. Fix: send it to a
+   lane on its own side, at least 2.5 m from you. This is the one worth doing first.
+2. **Losing focus during the 3 s respawn doesn't pause.** Afterwards the run carries on with
+   nobody at the keyboard. Fix: pause whenever the window is inactive and the game is running.
+3. **R during a respawn gives the wrong hint.** It says "press P to pause", but P does nothing
+   during a respawn.
+4. **A pursuer 3–4 m ahead reads "BEHIND −4 m".**
+5. **Rare long frames can run more than 0.25 s of simulation.** This happens right after a respawn
+   or wreck, and is capped below 0.5 s. Fix: cap the leftover time.
+
+Also noted, not urgent:
+- Enemy cars pass through each other. The design's collision rules cover every pair, but Plan 1
+  only did you against each enemy. Plan 2?
+- You respawn where you crashed, not "a short way back" (MSN-3).
+- F1 help doesn't pause the game.
+- The oil recharge isn't shown on the HUD.
+- "BLOCKER AHEAD" has no side arrow.
+- Mission 1 is fairly sparse: 12 enemy cars over 6 km. Worth judging when you play it.
+
+## Checks only you can do
+
+1. Drive the new game: `dotnet run -c Release --project src/NightPursuit.App` from
+   `C:\repos\NightPursuit`.
+   - Check that steering feels steady at speed with no jitter (D1).
+   - Check that it runs smoothly at 1280×720 and full screen (NFR-1).
+2. Hold A and alt-tab away: the game should pause and nothing keeps steering.
+3. Rename `content\missions\mission-01.json` in the build output folder and start the game: you
+   should see a readable error. Put the file back afterwards.
+4. Play mission 1 to the end:
+   - use the guns on a bend;
+   - check that a wreck from gunfire blocks a lane and that you can steer round it;
+   - oil a pursuer;
+   - ram a runner off the road.
+5. Debug build only: press F12 for the tuning panel.
