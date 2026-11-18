@@ -147,6 +147,44 @@ public sealed partial class World
         Missiles.RemoveAll(m => m.Dead);
     }
 
+    public const double StrikeAhead = 400, StrikeBehind = 150;
+
+    /// <summary>True for a hostile car on the road, driving, from 150 m behind to 400 m ahead of the player.</summary>
+    public bool InStrikeRange(AgentCar a)
+    {
+        if (!a.IsOnRoadDriving || a.Faction != Faction.Hostile) return false;
+        double d = a.Distance - Player.Distance;
+        return d >= -StrikeBehind && d <= StrikeAhead;
+    }
+
+    /// <summary>Starts the satellite sweep; says why when it cannot. The charge is kept when nothing is in range.</summary>
+    public void BeginStrike()
+    {
+        if (Player.State == VehicleState.Wrecked) return;
+        var strike = Loadout.Strike;
+        if (strike.Targeting) { Publish(new Message(Time, "STRIKE ALREADY TARGETING", Tone.Info)); return; }
+        if (strike.Charges <= 0) { Publish(new Message(Time, "NO SATELLITE STRIKE", Tone.Bad)); return; }
+        if (!Agents.Any(InStrikeRange)) { Publish(new Message(Time, "NO TARGETS IN STRIKE RANGE", Tone.Info)); return; }
+        strike.TryBegin();
+        Publish(new WeaponUsed(Time, WeaponKind.Strike, 0));
+        Publish(new Message(Time, "SATELLITE STRIKE: TARGETING", Tone.Info));
+    }
+
+    /// <summary>Runs the sweep; when it ends, every hostile car in range is destroyed (even if the player is wrecked).</summary>
+    void StepStrike()
+    {
+        if (!Loadout.Strike.AdvanceSweep(Step)) return;
+        int destroyed = 0;
+        foreach (var car in Agents)
+        {
+            if (!InStrikeRange(car)) continue;
+            Destroy(car, KillCause.Satellite);
+            destroyed++;
+        }
+        Publish(new StrikeLanded(Time, destroyed));
+        Publish(new Message(Time, $"SATELLITE STRIKE: {destroyed} DESTROYED", Tone.Good));
+    }
+
     static double NearestLane(double lateral)
     {
         double best = Track.LaneCentres[0];

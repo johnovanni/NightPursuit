@@ -137,6 +137,7 @@ public sealed partial class World
         StepWeapons(input);
         Loadout.Update(Step);
         StepMissiles();
+        StepStrike();
         StepHazards();
         StepAgents();
         Collisions.Resolve(this);
@@ -383,6 +384,9 @@ public sealed partial class World
                 break;
             case ActionKind.FireMissile:
                 FireMissile();
+                break;
+            case ActionKind.FireStrike:
+                BeginStrike();
                 break;
             // Pause, ToggleHelp, Restart: handled by the mission run.
         }
