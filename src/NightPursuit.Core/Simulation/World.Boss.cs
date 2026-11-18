@@ -1,4 +1,5 @@
 using NightPursuit.Core.Drivers;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Simulation;
@@ -50,6 +51,40 @@ public sealed partial class World
         b.PushVel = 0;
         b.Speed *= 0.85;
         Publish(new Message(Time, "BOSS SPUN OUT - ARMOR OPEN", Tone.Good));
+    }
+
+    /// <summary>One bullet: 1 point, doubled while it spins with its armor open, a quarter in an Armored phase.</summary>
+    static double BossGunfireDamage(BossCar b) =>
+        (b.ArmorOpen ? BossDamage.OpenArmorGunFactor : 1)
+        * (b.Phase.Behaviour == AgentKind.Armored ? BossDamage.ArmoredPhaseGunFactor : 1);
+
+    /// <summary>The first touch of a wreck (not <see cref="BossCar.LastWreck"/>): 10% of its health, a swerve and a slowdown; the wreck never destroys it by itself.</summary>
+    internal void BossHitWreck(BossCar b, Wreck wreck)
+    {
+        b.LastWreck = wreck;
+        b.PushVel = RoomierSide(b, wreck) * BossDamage.MaxPush;
+        b.Speed *= BossDamage.WreckSpeedFactor;
+        Publish(new Message(Time, "BOSS HIT A WRECK", Tone.Good));
+        DamageBoss(b, BossDamage.WreckFraction * b.MaxHealth, KillCause.WreckCollision, "HIT A WRECK");
+    }
+
+    /// <summary>
+    /// +1 or -1: the side of the wreck with more road beside it; a wreck on the centre line sends it to the side it is
+    /// already on (right when exactly level).
+    /// </summary>
+    static int RoomierSide(BossCar b, Wreck wreck)
+    {
+        if (wreck.Lateral != 0) return wreck.Lateral < 0 ? 1 : -1;
+        return b.Lateral >= wreck.Lateral ? 1 : -1;
+    }
+
+    /// <summary>Caltrops never puncture the boss: each set slows it once for 4 s from first contact, and engages it.</summary>
+    internal void SlowBoss(BossCar b, Caltrops c)
+    {
+        b.LastCaltrops = c;
+        b.SlowLeft = BossDamage.CaltropSlowSeconds;
+        b.Engaged = true;
+        Publish(new Message(Time, "BOSS SLOWED BY CALTROPS", Tone.Good));
     }
 
     /// <summary>Keeps all of the boss on the road: no ram, oil or wreck can push it off (Review Focus 1).</summary>

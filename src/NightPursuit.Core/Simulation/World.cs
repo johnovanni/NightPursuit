@@ -327,8 +327,13 @@ public sealed partial class World
             }
             if (hit is null) continue;
             t.Dead = true;
-            hit.Armor -= hit.Kind == AgentKind.Armored ? ArmoredBulletDamage : 1;
             hit.HitFlash = 0.08;
+            if (hit is BossCar boss)
+            {
+                DamageBoss(boss, BossGunfireDamage(boss), KillCause.Gunfire, "GUNFIRE");
+                continue;
+            }
+            hit.Armor -= hit.Kind == AgentKind.Armored ? ArmoredBulletDamage : 1;
             if (hit.Kind == AgentKind.Armored && !hit.HintShown)
             {
                 hit.HintShown = true;

@@ -4,7 +4,11 @@ using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Simulation;
 
-/// <summary>Every contact rule: car against car, car against wreck, car against oil, and running off the road (never a boss).</summary>
+/// <summary>
+/// Every contact rule: car against car, car against wreck, car against oil, and running off the road (never a boss).
+/// A boss goes through its damage table instead: oil spins it with <see cref="World.SpinBoss"/>, a wreck hurts it once,
+/// and ramming and car contact never hurt, spin or destroy it.
+/// </summary>
 public static class Collisions
 {
     const double ContactCooldown = 0.25;
@@ -31,11 +35,14 @@ public static class Collisions
 
             foreach (var h in w.Hazards)
             {
-                if (h is Wreck wreck && Overlaps(a, wreck.Distance, wreck.Lateral, wreck.Length, wreck.Width))
+                if (h is not Wreck wreck || !Overlaps(a, wreck.Distance, wreck.Lateral, wreck.Length, wreck.Width)) continue;
+                if (a is BossCar boss)
                 {
-                    w.Destroy(a, KillCause.WreckCollision);
-                    break;
+                    if (wreck == boss.LastWreck) continue;   // already paid for: it no longer hurts
+                    w.BossHitWreck(boss, wreck);
                 }
+                else w.Destroy(a, KillCause.WreckCollision);
+                break;
             }
             if (!a.IsOnRoadDriving) continue;
 
@@ -47,7 +54,8 @@ public static class Collisions
                         && Math.Abs(a.Distance - slick.Distance) < OilSlick.Radius + a.Stats.Length / 2
                         && Math.Abs(a.Lateral - slick.Lateral) < OilSlick.Radius + a.Stats.Width / 2)
                     {
-                        w.Spin(a, w.Rng.Next(2) == 0 ? -1 : 1, $"{KindName(a)} HIT THE OIL");
+                        if (a is BossCar boss) w.SpinBoss(boss);
+                        else w.Spin(a, w.Rng.Next(2) == 0 ? -1 : 1, $"{KindName(a)} HIT THE OIL");
                         break;
                     }
                 }
@@ -88,8 +96,11 @@ public static class Collisions
                 double pv = p.Speed;
                 p.Speed = Math.Max(0, Math.Min(p.Speed, a.Speed) - 1.5);
                 a.Speed = Math.Max(a.Speed, pv * 0.6 + a.Speed * 0.4) + 1.5;
-                a.Armor -= 1 + rel * 0.1;
-                a.HitFlash = 0.1;
+                if (a is not BossCar)                             // ramming never hurts a boss (call 19)
+                {
+                    a.Armor -= 1 + rel * 0.1;
+                    a.HitFlash = 0.1;
+                }
                 w.DamagePlayer(3 + rel * 0.5, "RAMMED");
             }
             else
@@ -107,17 +118,33 @@ public static class Collisions
             int side = dx >= 0 ? 1 : -1;                          // +1: the agent is on the player's right
             double playerInto = Math.Max(0, p.LateralVel * side);
             double agentInto = Math.Max(0, -a.LateralVel * side);
-            a.PushVel = side * (3 + 1.3 * playerInto);
+            Shove(a, side * (3 + 1.3 * playerInto));
             p.PushVel = -side * (2.5 + 1.0 * agentInto);
             a.Lateral += side * overlapX * 0.5;
             p.Lateral -= side * overlapX * 0.5;
             w.DamagePlayer(2 + agentInto * 1.2, "SIDESWIPED");
-            if (playerInto > (a.Kind == AgentKind.Armored ? ArmoredSpinInto : 5) && a.State == VehicleState.Driving)
+            if (playerInto > (a.Kind == AgentKind.Armored ? ArmoredSpinInto : 5) && CanBeSpunByContact(a))
                 w.Spin(a, side, $"{KindName(a)} KNOCKED INTO A SPIN");
         }
 
-        if (a.Armor <= 0) w.Destroy(a, KillCause.Rammed);
+        if (RammedToDeath(a)) w.Destroy(a, KillCause.Rammed);
     }
+
+    // Ramming and car contact never hurt, spin or destroy a boss, and shove it at most 4 m/s (call 19, ENM-3).
+
+    /// <summary>Takes <paramref name="damage"/> armor from an enemy car in a rear-end with another; a boss loses none.</summary>
+    static void Knock(AgentCar a, double damage)
+    {
+        if (a is not BossCar) a.Armor -= damage;
+    }
+
+    /// <summary>Sets a car's sideways shove; a boss's is capped at <see cref="BossDamage.MaxPush"/>.</summary>
+    static void Shove(AgentCar a, double push) =>
+        a.PushVel = a is BossCar ? Math.Clamp(push, -BossDamage.MaxPush, BossDamage.MaxPush) : push;
+
+    static bool CanBeSpunByContact(AgentCar a) => a is not BossCar && a.State == VehicleState.Driving;
+
+    static bool RammedToDeath(AgentCar a) => a is not BossCar && a.Armor <= 0;
 
     static readonly Comparison<AgentCar> ByDistanceThenId = (a, b) =>
         a.Distance != b.Distance ? a.Distance.CompareTo(b.Distance) : a.Id.CompareTo(b.Id);
@@ -165,8 +192,8 @@ public static class Collisions
             // a rear-ended b: held at b's rear edge, a little slower than b (never sped up by a faster car that cut in).
             a.Distance = b.Distance - contactZ;
             a.Speed = Math.Max(0, Math.Min(a.Speed, b.Speed - 2));
-            a.Armor -= AgentRearEndDamage;
-            b.Armor -= AgentRearEndDamage;
+            Knock(a, AgentRearEndDamage);
+            Knock(b, AgentRearEndDamage);
         }
         else
         {
@@ -175,19 +202,19 @@ public static class Collisions
             double push = 2.5 + 0.8 * closing;
             a.Lateral -= side * overlapX * 0.5;
             b.Lateral += side * overlapX * 0.5;
-            a.PushVel = -side * push;
-            b.PushVel = side * push;
+            Shove(a, -side * push);
+            Shove(b, side * push);
             if (closing > AgentSpinClosing)
             {
                 string reason = $"{KindName(a)} AND {KindName(b)} COLLIDED";
-                bool aSpins = a.State == VehicleState.Driving;
+                bool aSpins = CanBeSpunByContact(a);
                 if (aSpins) w.Spin(a, -side, reason);
-                if (b.State == VehicleState.Driving) w.Spin(b, side, reason, announce: !aSpins);   // one collision, one message
+                if (CanBeSpunByContact(b)) w.Spin(b, side, reason, announce: !aSpins);   // one collision, one message
             }
         }
 
-        if (a.Armor <= 0) w.Destroy(a, KillCause.Rammed);
-        if (b.Armor <= 0) w.Destroy(b, KillCause.Rammed);
+        if (RammedToDeath(a)) w.Destroy(a, KillCause.Rammed);
+        if (RammedToDeath(b)) w.Destroy(b, KillCause.Rammed);
     }
 
     /// <summary>

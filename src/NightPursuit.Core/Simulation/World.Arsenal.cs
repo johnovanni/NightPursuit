@@ -134,7 +134,13 @@ public sealed partial class World
                 double along = car.Distance - from.Distance;
                 if (along < nearest) { nearest = along; hit = car; }
             }
-            if (hit is not null)
+            if (hit is BossCar boss)
+            {
+                m.Dead = true;
+                Publish(new Message(Time, "MISSILE HIT THE BOSS", Tone.Good));
+                DamageBoss(boss, BossDamage.MissileFraction * boss.MaxHealth, KillCause.Missile, "MISSILE");
+            }
+            else if (hit is not null)
             {
                 m.Dead = true;
                 Destroy(hit, KillCause.Missile);
@@ -171,7 +177,10 @@ public sealed partial class World
         Publish(new Message(Time, "SATELLITE STRIKE: TARGETING", Tone.Info));
     }
 
-    /// <summary>Runs the sweep; when it ends, every hostile car in range is destroyed (even if the player is wrecked).</summary>
+    /// <summary>
+    /// Runs the sweep; when it ends, every hostile car in range is destroyed (even if the player is wrecked). A boss in
+    /// range loses 35% of its health instead, and counts as destroyed only if that blow destroys it.
+    /// </summary>
     void StepStrike()
     {
         if (!Loadout.Strike.AdvanceSweep(Step)) return;
@@ -179,6 +188,12 @@ public sealed partial class World
         foreach (var car in Agents)
         {
             if (!InStrikeRange(car)) continue;
+            if (car is BossCar boss)
+            {
+                DamageBoss(boss, BossDamage.StrikeFraction * boss.MaxHealth, KillCause.Satellite, "SATELLITE STRIKE");
+                if (boss.State == VehicleState.Wrecked) destroyed++;
+                continue;
+            }
             Destroy(car, KillCause.Satellite);
             destroyed++;
         }

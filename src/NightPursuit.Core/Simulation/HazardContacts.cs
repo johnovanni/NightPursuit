@@ -4,7 +4,7 @@ using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Simulation;
 
-/// <summary>Oil and caltrops against cars: any caltrops puncture enemy cars; enemy oil and caltrops hurt the player.</summary>
+/// <summary>Oil and caltrops against cars: any caltrops puncture enemy cars (a boss is slowed instead); enemy oil and caltrops hurt the player.</summary>
 static class HazardContacts
 {
     const double OilGripLoss = 1.0;
@@ -46,6 +46,12 @@ static class HazardContacts
             foreach (var h in w.Hazards)
             {
                 if (h is not Caltrops c || !c.Covers(a)) continue;
+                if (a is BossCar boss)
+                {
+                    if (c == boss.LastCaltrops) continue;   // these have already slowed it
+                    w.SlowBoss(boss, c);
+                    break;
+                }
                 a.Punctured = true;
                 w.Publish(new VehiclePunctured(w.Time, a.Id));
                 w.Publish(new Message(w.Time, $"{a.Kind.ToString().ToUpperInvariant()} PUNCTURED", Tone.Good));
