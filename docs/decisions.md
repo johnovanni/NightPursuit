@@ -112,7 +112,7 @@ game on a 60 Hz or 144 Hz screen, as the design requires (NFR-2).
 - These figures leave out the graphics card's own work, so the live frame rate still needs your
   check.
 
-## Open items (found by the final review, left for later)
+## Open items (found by the final review; items 1–5 fixed later, see D21)
 
 The build process allows one round of fixes after the final review. These turned up in its
 re-check:
@@ -177,3 +177,12 @@ and on flat road they look as before.
   to spot from far away.
 - The smoke is kept small and faint up close, so it doesn't cover the screen.
 - Drawing still takes 0.55 ms per frame on average.
+
+**D21. The five open items are fixed.**
+- A retreating pursuer stays on its own side of you, at least 2.5 m away. At the road edge, if
+  there's no room, it holds its line until it's 20 m back.
+- It's always slower than you while retreating, so it really drops back instead of creeping up.
+- The game pauses whenever the window isn't active, including just after a respawn.
+- R during a respawn says "RESTART AFTER THE RESPAWN".
+- A pursuer just ahead reads "PURSUER LEFT/RIGHT", not a negative distance.
+- One frame can never run more than 0.25 s of game time.
