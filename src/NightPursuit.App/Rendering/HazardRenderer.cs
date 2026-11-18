@@ -25,7 +25,7 @@ public static class HazardRenderer
 
     // Smoke: a column of grey puffs in world space, driven by the burn time so it never needs randomness.
     const int Puffs = 8;
-    const double PuffLife = 4.0, RiseSpeed = 1.5, WindSpeed = 0.7, StartRadius = 0.6, EndRadius = 3.0, MaxAlpha = 0.5;
+    const double PuffLife = 4.0, RiseSpeed = 1.5, WindSpeed = 0.7, StartRadius = 0.6, EndRadius = 2.2, MaxAlpha = 0.5;
     const double SmokeDistance = 900;   // visible from far away: it helps the WRECK AHEAD warning
     const int AlphaLevels = 10;         // opacity is quantised so the pens and brushes can be built once
     static readonly Pen[] SmokePens = MakeSmokePens();
@@ -45,7 +45,7 @@ public static class HazardRenderer
     static Brush[] MakeSmokeFills()
     {
         var fills = new Brush[AlphaLevels];
-        for (int i = 0; i < fills.Length; i++) fills[i] = Neon.Solid(Colors.Black, 0.55 * (i + 1) / AlphaLevels);
+        for (int i = 0; i < fills.Length; i++) fills[i] = Neon.Solid(Colors.Black, 0.35 * (i + 1) / AlphaLevels);
         return fills;
     }
 
@@ -187,7 +187,8 @@ public static class HazardRenderer
             if (dz < 2 || dz > SmokeDistance) continue;
             double clip = p.ClipAt(dz);
             if (clip <= 0) continue;
-            double phase = wreck.Lateral * 1.37;   // lanes differ, so neighbouring columns do not pulse together
+            double phase = wreck.Lateral * 1.37 + wreck.Distance * 0.113;   // position differs, so neighbouring columns do not pulse together
+            double near = Math.Clamp((dz - 8) / 22, 0.4, 1);   // wrecks within about 30 m get fainter smoke
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
             for (int i = 0; i < Puffs; i++)
             {
@@ -196,9 +197,9 @@ public static class HazardRenderer
                 double lateral = wreck.Lateral + WindSpeed * age + Math.Sin(age * 1.7 + i) * 0.2;
                 double up = WreckHeight + RiseSpeed * age;
                 if (!p.ToScreen(dz, lateral, up, out var c, out double depth)) continue;
-                double r = (StartRadius + (EndRadius - StartRadius) * t) * p.Ppm(depth);
+                double r = Math.Min((StartRadius + (EndRadius - StartRadius) * t) * p.Ppm(depth), 0.11 * p.Height);
                 if (!(r >= 0.5 && r < 5000)) continue;
-                double fade = (1 - t) * Math.Min(1, t / 0.08);   // quick fade-in, then out over the life
+                double fade = (1 - t) * Math.Min(1, t / 0.08) * near;   // quick fade-in, then out over the life
                 int level = Math.Clamp((int)Math.Ceiling(fade * AlphaLevels) - 1, 0, AlphaLevels - 1);
                 dc.DrawEllipse(SmokeFills[level], SmokePens[level], c, r, r * 0.85);
             }
