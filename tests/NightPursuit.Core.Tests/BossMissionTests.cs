@@ -430,6 +430,28 @@ public class BossMissionTests
     }
 
     [Fact]
+    public void Respawn_makes_the_boss_forget_the_hazards_it_clears()
+    {
+        var (run, boss) = RunAtBoss();
+        var p = run.World.Player;
+        p.Speed = 0;
+        var cleared = new NightPursuit.Core.Hazards.OilSlick { Distance = p.Distance + 50, Lateral = -5, Hostile = true };
+        var kept = new NightPursuit.Core.Hazards.OilSlick { Distance = p.Distance + 900, Lateral = -5, Hostile = true };
+        run.World.Hazards.Add(cleared);
+        run.World.Hazards.Add(kept);
+        boss.HazardsMet.Add(cleared);
+        boss.HazardsMet.Add(kept);
+        p.Armor = 0;
+        run.Update(ControlFrame.Empty, 1 / 60.0);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.DoesNotContain(cleared, run.World.Hazards);
+        Assert.DoesNotContain(cleared, boss.HazardsMet);
+        Assert.Contains(kept, run.World.Hazards);
+        Assert.Contains(kept, boss.HazardsMet);
+    }
+
+    [Fact]
     public void Weapon_keys_do_nothing_while_paused_or_respawning()
     {
         var run = Run(Def(6000, null));

@@ -5,6 +5,7 @@ using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Tests;
 
@@ -288,6 +289,47 @@ public class MissionTests
         Wreck(run);
         WaitForRespawn(run);
         Assert.Equal(new[] { 600.0 }, run.World.Hazards.Select(h => h.Distance).ToArray());
+    }
+
+    [Fact]
+    public void Respawn_keeps_supply_crates()
+    {
+        // A respawn never silently costs you supplies: crates stay where they are, however near.
+        var run = Run();
+        var near = new SupplyCrate(SupplyItem.Missile, 1) { Distance = 40, PrevDistance = 40, Lateral = 4 };
+        var behind = new SupplyCrate(SupplyItem.Armor, 1) { Distance = -120, PrevDistance = -120, Lateral = -4 };
+        run.World.Hazards.Add(near);
+        run.World.Hazards.Add(behind);
+        run.World.Hazards.Add(new OilSlick { Distance = 40, Lateral = 0 });
+        Wreck(run);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(new Hazard[] { near, behind }, run.World.Hazards.ToArray());
+    }
+
+    [Fact]
+    public void Respawn_clears_enemy_bullets_but_not_yours()
+    {
+        var run = Run();
+        Wreck(run);
+        while (run.StateTimer > 0.1) run.Update(ControlFrame.Empty, 1 / 60.0);
+        // Bullets still in the air at the respawn, with range to spare.
+        var p = run.World.Player;
+        var hostile = new Tracer
+        {
+            Pose = new RoadPose(p.Distance + 30, 0, Math.PI), PrevDistance = p.Distance + 30, PrevHeading = Math.PI,
+            Speed = 20, MuzzleSpeed = 20, Range = 1000, Hostile = true, OwnerId = 99,
+        };
+        var own = new Tracer
+        {
+            Pose = new RoadPose(p.Distance + 30, 0, 0), PrevDistance = p.Distance + 30,
+            Speed = 20, MuzzleSpeed = 20, Range = 1000, OwnerId = 0,
+        };
+        run.World.Tracers.Add(hostile);
+        run.World.Tracers.Add(own);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(new[] { own }, run.World.Tracers.ToArray());
     }
 
     [Fact]

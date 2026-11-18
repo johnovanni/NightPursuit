@@ -1,7 +1,10 @@
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Tests;
 
@@ -70,6 +73,78 @@ public class WorldLoopTests
         ulong before = w.StateHash();
         w.Advance(new ControlFrame { Gas = true }, 0.25);
         Assert.NotEqual(before, w.StateHash());
+    }
+
+    /// <summary>
+    /// A world with something of everything the hash covers: weapons below full and none cooling down, a boss with a
+    /// missile rack, a Dropper with full droppers, and an oil slick.
+    /// </summary>
+    static (World W, BossCar Boss, AgentCar Dropper) HashWorld()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        w.Loadout = new Loadout(new LoadoutDefinition(Oil: 4, Smoke: 1, Caltrops: 1, Missiles: 1, Strikes: 0));
+        w.Player.Distance = 500;
+        var def = new BossDefinition("Test", 100, [new(AgentKind.Gunner, 0.5), new(AgentKind.Pursuer, 0, FiresMissiles: true)]);
+        var boss = BossCar.Create(w.NextId(), def, 700, 0, 30);
+        w.Agents.Add(boss);
+        var dropper = AgentCar.Create(w.NextId(), AgentKind.Dropper, 650, 2.5, 30);
+        w.Agents.Add(dropper);
+        w.Hazards.Add(new OilSlick { Distance = 600, Lateral = 1, Hostile = true });
+        return (w, boss, dropper);
+    }
+
+    /// <summary>Each change touches one piece of state only (a use and a restock leave the charges as they were).</summary>
+    public static TheoryData<string> HashedState() => new(HashChanges.Keys);
+
+    static readonly Dictionary<string, Action<World, BossCar, AgentCar>> HashChanges = new()
+    {
+        ["hazard type"] = (w, _, _) => w.Hazards[0] = new Caltrops { Distance = 600, Lateral = 1, Hostile = true },
+        ["hazard distance"] = (w, _, _) => w.Hazards[0].Distance += 0.5,
+        ["hazard lateral"] = (w, _, _) => w.Hazards[0].Lateral += 0.5,
+        ["boss phase"] = (_, b, _) => b.PhaseIndex = 1,
+        ["boss shield"] = (_, b, _) => b.Shield = 0.5,
+        ["boss slow"] = (_, b, _) => b.SlowLeft = 2,
+        ["boss engaged"] = (_, b, _) => b.Engaged = !b.Engaged,
+        ["boss missile rack cooldown"] = (_, b, _) => b.Arms.Missiles!.TryLaunch(),
+        ["boss blinded"] = (_, b, _) => b.Blinded = 1,
+        ["agent blinded"] = (_, _, d) => d.Blinded = 1,
+        ["agent caltrops charges"] = (_, _, d) => { d.Arms.Caltrops!.TryUse(); d.Arms.Caltrops.Update(5); },
+        ["agent oil cooldown"] = (_, _, d) => { d.Arms.Oil!.TryUse(); d.Arms.Oil.Restock(1); },
+        ["player grip loss"] = (w, _, _) => w.Player.GripLoss = 1,
+        ["player puncture"] = (w, _, _) => w.Player.PunctureLeft = 1,
+        ["oil charges"] = (w, _, _) => w.Loadout.Oil.Restock(1),
+        ["oil cooldown"] = (w, _, _) => { w.Loadout.Oil.TryUse(); w.Loadout.Oil.Restock(1); },
+        ["oil recharge"] = (w, _, _) => w.Loadout.Oil.Update(1),
+        ["smoke charges"] = (w, _, _) => w.Loadout.Smoke.Restock(1),
+        ["smoke cooldown"] = (w, _, _) => { w.Loadout.Smoke.TryUse(); w.Loadout.Smoke.Restock(1); },
+        ["caltrops charges"] = (w, _, _) => w.Loadout.Caltrops.Restock(1),
+        ["caltrops cooldown"] = (w, _, _) => { w.Loadout.Caltrops.TryUse(); w.Loadout.Caltrops.Restock(1); },
+        ["missile charges"] = (w, _, _) => w.Loadout.Missiles.Restock(1),
+        ["missile cooldown"] = (w, _, _) => { w.Loadout.Missiles.TryUse(); w.Loadout.Missiles.Restock(1); },
+        ["strike charges"] = (w, _, _) => w.Loadout.Strike.Restock(1),
+        ["strike sweep"] = (w, _, _) => { w.Loadout.Strike.Restock(1); w.Loadout.Strike.TryBegin(); w.Loadout.Strike.Restock(1); },
+    };
+
+    [Theory]
+    [MemberData(nameof(HashedState))]
+    public void Hash_covers_the_state_that_shapes_what_happens_next(string what)
+    {
+        var (w, boss, dropper) = HashWorld();
+        ulong before = w.StateHash();
+        Assert.Equal(before, HashWorld().W.StateHash());     // the same world hashes the same
+        HashChanges[what](w, boss, dropper);
+        Assert.NotEqual(before, w.StateHash());
+    }
+
+    [Fact]
+    public void Hash_tells_a_sweep_part_way_from_one_just_begun()
+    {
+        var (a, _, _) = HashWorld();
+        var (b, _, _) = HashWorld();
+        foreach (var w in new[] { a, b }) { w.Loadout.Strike.Restock(1); w.Loadout.Strike.TryBegin(); }
+        Assert.Equal(a.StateHash(), b.StateHash());
+        b.Loadout.Strike.AdvanceSweep(0.5);
+        Assert.NotEqual(a.StateHash(), b.StateHash());
     }
 
     [Fact]

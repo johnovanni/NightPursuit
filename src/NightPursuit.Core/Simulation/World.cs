@@ -471,22 +471,54 @@ public sealed partial class World
     }
 
     /// <summary>
-    /// FNV-1a 64-bit over the player and every agent's Distance, Lateral, Speed and Armor, every missile's and enemy
-    /// missile's Distance and Lateral (to 1e-6), and the number of hazards.
+    /// FNV-1a 64-bit, in a fixed order, over (numbers to 1e-6): the player's Distance, Lateral, Speed, Armor, GripLoss
+    /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its oil and caltrops
+    /// droppers' charges and timers, its missile rack's cooldown and, for a boss, its phase, shield, caltrops slow and
+    /// whether it is engaged; every missile's and enemy missile's Distance and Lateral; each hazard's type, Distance and
+    /// Lateral, and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep.
     /// </summary>
     public ulong StateHash()
     {
         ulong h = 14695981039346656037UL;
         Mix(ref h, Player);
-        foreach (var a in Agents) Mix(ref h, a);
+        Add(ref h, Player.GripLoss); Add(ref h, Player.PunctureLeft);
+        foreach (var a in Agents)
+        {
+            Mix(ref h, a);
+            Add(ref h, a.Blinded);
+            Charged(ref h, a.Arms.Oil);
+            Charged(ref h, a.Arms.Caltrops);
+            Add(ref h, a.Arms.Missiles?.CooldownLeft ?? -1);
+            if (a is BossCar b)
+            {
+                Add(ref h, b.PhaseIndex); Add(ref h, b.Shield); Add(ref h, b.SlowLeft); Add(ref h, b.Engaged ? 1 : 0);
+            }
+        }
         foreach (var m in Missiles) { Add(ref h, m.Pose.Distance); Add(ref h, m.Pose.Lateral); }
         foreach (var m in EnemyMissiles) { Add(ref h, m.Distance); Add(ref h, m.Lateral); }
+        foreach (var z in Hazards)
+        {
+            foreach (char c in z.GetType().Name) { h ^= c; h *= 1099511628211UL; }
+            Add(ref h, z.Distance); Add(ref h, z.Lateral);
+        }
         Add(ref h, Hazards.Count);
+        Charged(ref h, Loadout.Oil);
+        Charged(ref h, Loadout.Smoke);
+        Charged(ref h, Loadout.Caltrops);
+        Charged(ref h, Loadout.Missiles);
+        Charged(ref h, Loadout.Strike);
+        Add(ref h, Loadout.Strike.Targeting ? 1 : 0); Add(ref h, Loadout.Strike.SweepLeft);
         return h;
 
         static void Mix(ref ulong h, Vehicle v)
         {
             Add(ref h, v.Distance); Add(ref h, v.Lateral); Add(ref h, v.Speed); Add(ref h, v.Armor);
+        }
+
+        static void Charged(ref ulong h, ChargedWeapon? w)
+        {
+            if (w is null) { Add(ref h, -1); return; }   // keeps the positions of what follows unambiguous
+            Add(ref h, w.Charges); Add(ref h, w.CooldownLeft); Add(ref h, w.RechargeProgress);
         }
 
         static void Add(ref ulong h, double x)

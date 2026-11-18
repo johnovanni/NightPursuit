@@ -1,5 +1,6 @@
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
@@ -139,6 +140,7 @@ public sealed class MissionRun
         // wrecked); an enemy missile cleared here ends as missed, so every launch has an outcome.
         World.ClearEnemyMissilesAsMissed();
         World.Missiles.Clear();
+        World.Tracers.RemoveAll(t => t.Hostile);   // nor an enemy bullet, which could hit the new car
         // The boss is never cleared (Review Focus 1): it goes back 300 m ahead and eases in again.
         World.Agents.RemoveAll(a => a is not BossCar && Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);
         double bossReturn = p.Distance + MissionDirector.BossAheadDistance;
@@ -150,9 +152,14 @@ public sealed class MissionRun
                 boss.ReturnTo(bossReturn, Math.Max(0, p.Speed - BossCar.ArrivalSlower));
                 bossReturned = true;
             }
-        // Also clear where the boss lands, so a leftover wreck, slick or caltrops can't hit it straight away.
-        World.Hazards.RemoveAll(h => Math.Abs(h.Distance - p.Distance) < RespawnClearRadius
-                                     || (bossReturned && Math.Abs(h.Distance - bossReturn) < BossReturnClearRadius));
+        // Also clear where the boss lands, so a leftover wreck, slick or caltrops can't hit it straight away. Supply
+        // crates are always kept, so a respawn never costs you supplies.
+        World.Hazards.RemoveAll(h => h is not SupplyCrate
+                                     && (Math.Abs(h.Distance - p.Distance) < RespawnClearRadius
+                                         || (bossReturned && Math.Abs(h.Distance - bossReturn) < BossReturnClearRadius)));
+        // The boss forgets the hazards that are gone (it only remembers each one so that it acts on it once).
+        foreach (var a in World.Agents)
+            if (a is BossCar boss && boss.HazardsMet.Count > 0) boss.HazardsMet.RemoveWhere(h => !World.Hazards.Contains(h));
         State = RunState.Playing;
         StateTimer = 0;
     }

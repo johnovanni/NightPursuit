@@ -293,15 +293,17 @@ caltrops, missiles, strikes). A misspelled or unknown weapon name is rejected wi
 
 **D36. The Gunner.** An orange-red fastback with a square gun port in its rear window. It gets ahead of you, holds
 about 45 m in front and follows your lane. Before it fires, the gun port glows and "GUNNER AIMING - LEAVE ITS LANE"
-shows for 0.6 s, and it stops following you, so changing lanes dodges the burst. Then it fires 6 shots backward and
-waits 2.5 s before it can aim again. Each hit costs you 2 armor. Its bullets reach 120 m and never hit other cars. It
-only aims when it's 25 to 90 m ahead and in your lane.
+shows for 0.6 s, and it stops following you, so changing lanes dodges the burst. Then it fires 6 shots backward
+(the port turns white and the words stay up while it fires) and waits 2.5 s before it can aim again. Each hit costs
+you 2 armor. Its bullets reach 120 m and never hit other cars. It only aims when it's 25 to 90 m ahead and in your
+lane. A boss in a Gunner phase does all of this too, in its own words (D67).
 *Cost to change:* a few numbers.
 
 **D37. The Dropper.** A teal van with a tall hatch and a chute. It holds ahead of you in your lane and drops oil and
-caltrops in turn, one every 3.5 s. Before each drop its chute glows for 0.5 s. It only drops where you will have at
-least 1.3 s to react, measured from your front bumper to the near edge of the hazard, and never closer than 60 m (at
-150 mph that is about 87 m). "DROPPER: OIL AHEAD" or "DROPPER: CALTROPS AHEAD" shows.
+caltrops in turn, about one every 4 s: after each drop it waits 3.5 s, then its chute glows for 0.5 s before the next.
+It only drops where you will have at least 1.3 s to react, measured from your front bumper to the near edge of the
+hazard, and never closer than 60 m (at 150 mph that is about 87 m). "DROPPER: OIL AHEAD" or "DROPPER: CALTROPS AHEAD"
+shows. A boss in a Dropper phase does the same, with two chutes and its own words (D67).
 *Cost to change:* a few numbers.
 
 **D38. The Armored car.** The design only said it is tough. It's a steel-blue wedge with armour plates.
@@ -369,8 +371,8 @@ not the drawing code, so the tests can prove each one shows when it should.
 *Cost to change:* text only.
 
 **D46. A test mission: the proving ground.** It has all six enemy kinds, a crate of every item, and a 3-phase boss,
-the Glass Wasp: a Gunner phase, a Dropper phase, then a Pursuer phase that fires missiles. You start with every weapon
-full. Open it with `--mission proving-ground`. The six real missions come in Plan 4, but you need somewhere to try all
+the Glass Wasp: a Gunner phase, a Dropper phase, then a Pursuer phase that fires missiles. In each phase it shows the
+warnings and signs of that kind of car (D67). You start with every weapon full. Open it with `--mission proving-ground`. The six real missions come in Plan 4, but you need somewhere to try all
 of this now.
 *Cost to change:* none; it's a separate file.
 
@@ -480,6 +482,22 @@ weapon panel and the radar, 10 pixels clear of each, as near the middle of the s
 there is no room between them, does it go back to the middle of the screen on top of them.
 *Cost to change:* a few lines.
 
+**D67. A boss warns you like the car its phase drives like.** Until now a boss only ever showed "BOSS BEHIND". In a
+test, its Gunner phase aimed at you for over 5 s in 20 s with no warning, and in its Pursuer phase every ram came
+unwarned. Now each phase shows the same warnings and signs as that kind of enemy, in words that name the boss:
+- Gunner phase: a gun port on its rear deck glows and "BOSS AIMING - LEAVE ITS LANE" shows. Its hits say "SHOT BY THE
+  BOSS".
+- Pursuer phase: from 3 m behind you to 4 m ahead, "BOSS LEFT" or "BOSS RIGHT" shows with an edge arrow (further back,
+  "BOSS BEHIND" as before). It counts as a pursuer for the edge arrows (D63).
+- Blocker phase: "BOSS BLOCKING AHEAD" with an arrow, when it's ahead in your lane.
+- Dropper phase: it has two chutes, one each side of its exhaust, and they glow for 0.5 s before each drop. The message
+  says "BOSS: OIL AHEAD" or "BOSS: CALTROPS AHEAD".
+
+Two smaller changes to respawning: supply crates are always kept, wherever they are, so a respawn never costs you
+supplies; and enemy bullets still in the air are cleared, as enemy missiles already were (D58), so none can hit your
+new car.
+*Cost to change:* a few lines.
+
 ## Open items after Plan 2
 
 From Plan 1's "not urgent" list, these are now done: enemy cars collide with each other (D28), the oil recharge
@@ -491,6 +509,11 @@ New, all small:
 - A boss swerving off a wreck can be drawn passing through it for a moment. It makes no difference to play.
 - Shift is one of the "next rear weapon" keys (D23). Pressing Shift five times quickly makes Windows offer Sticky
   Keys, which takes the focus away, so the game pauses (D12). Z does the same job, so Shift could be dropped.
+- If you move to an outer lane while a boss in a Pursuer phase is dropping back toward you, it can cross in front of
+  you about 8 m ahead.
+- An ordinary pursuer (Plan 1) still has the flaw the boss had when you're in an outer lane: with no room beside you
+  on its side, it can end up almost straight behind or ahead of you instead of beside you. This was fixed for the boss
+  only.
 
 Coming in later plans:
 - Plan 3: a test that the satellite strike spares civilians and police (it already only targets enemies), how
@@ -515,4 +538,6 @@ Coming in later plans:
    yellow Blocker.
 4. Two things the test pictures couldn't show me well:
    - the Dropper's chute glowing just before a drop (too small to make out at 90 m);
+   - the Glass Wasp's gun port and its two chutes in its Gunner and Dropper phases (D67), which no test picture shows
+     yet;
    - whether the game stays smooth with smoke clouds on screen (D65).

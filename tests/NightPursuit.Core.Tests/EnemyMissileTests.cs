@@ -551,7 +551,7 @@ public class EnemyMissileTests
     }
 
     [Fact]
-    public void Proving_ground_is_deterministic_with_every_weapon_used()
+    public void Proving_ground_autopilot_run_gives_the_same_result_twice()
     {
         Assert.Equal(PlayWithAutopilot(new RunLog()), PlayWithAutopilot(new RunLog()));
     }
@@ -583,13 +583,15 @@ public class EnemyMissileTests
 
     /// <summary>
     /// Plays the proving ground with frames of <paramref name="frames"/>, handing each scheduled input change and action to
-    /// the run before the first Update that starts at or after its step, and records the step at which each really went in.
+    /// the run before the first Update that starts at or after its step, and records the step at which each really went in,
+    /// and what the run did (the weapons used, the boss's phases, enemy missiles).
     /// </summary>
-    static ((ulong, RunState, double, int, int) Result, List<(int Step, string What)> Applied) PlaySplit(
+    static ((ulong, RunState, double, int, int) Result, List<(int Step, string What)> Applied, RunLog Log) PlaySplit(
         IEnumerable<double> frames, IReadOnlyList<double> steer)
     {
         var run = new MissionRun(MissionLoader.LoadFile(ProvingGroundPath), new FeelSettings(), 9);
         var applied = new List<(int, string)>();
+        var log = new RunLog();
         int lastSeen = -1, lastBlock = -1;
         foreach (var dt in frames)
         {
@@ -597,7 +599,9 @@ public class EnemyMissileTests
             for (int s = lastSeen + 1; s <= step; s++)
                 if (ActionAt(s) is ActionKind a)
                 {
+                    int before = run.World.Events.Count;
                     run.Handle(new GameAction(a));
+                    log.Read(run.World, before);   // the next Update clears what the action published
                     applied.Add((step, a.ToString()));
                 }
             lastSeen = step;
@@ -608,8 +612,9 @@ public class EnemyMissileTests
                 lastBlock = block;
             }
             run.Update(ScriptedInput(step, steer), dt);
+            log.Read(run.World);
         }
-        return (Result(run), applied);
+        return (Result(run), applied, log);
     }
 
     /// <summary>
@@ -647,5 +652,14 @@ public class EnemyMissileTests
         Assert.Equal(at120.Applied, uneven.Applied);
         Assert.Equal(at120.Result, at60.Result);
         Assert.Equal(at120.Result, uneven.Result);
+
+        // Coverage, on these runs themselves: the boss reached its third phase, fired at least one missile, and every
+        // weapon was used, so the hash really compared all of that state.
+        foreach (var (name, log) in new[] { ("1/120", at120.Log), ("1/60", at60.Log), ("uneven", uneven.Log) })
+        {
+            Assert.True(log.Boss.Phase >= 3, $"{name}: the boss only reached phase {log.Boss.Phase}");
+            Assert.True(log.EnemyMissiles >= 1, $"{name}: no enemy missile (phase {log.Boss.Phase} at {log.Boss.Time:0.0} s)");
+            Assert.Equal(Enum.GetValues<WeaponKind>().OrderBy(k => k), log.Used.OrderBy(k => k));
+        }
     }
 }
