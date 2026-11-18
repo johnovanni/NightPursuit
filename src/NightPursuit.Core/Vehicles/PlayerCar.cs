@@ -11,5 +11,13 @@ public sealed class PlayerCar() : Vehicle(VehicleStats.Player)
     /// <summary>Camera shake strength, decays by 1 per second.</summary>
     public double Shake { get; set; }
     public bool OffRoad { get; set; }
+    /// <summary>Seconds of lost steering after hitting an enemy's oil (counts down).</summary>
+    public double GripLoss { get; set; }
+    /// <summary>Seconds of wobble and a 100 mph limit after hitting an enemy's caltrops (counts down).</summary>
+    public double PunctureLeft { get; set; }
+    /// <summary>While punctured the car is held to this speed, m/s (100 mph).</summary>
+    public const double PunctureSpeedCap = 100 / Common.Units.MphPerMs;
+    /// <summary>Total slowdown on the flat while punctured and above the cap, m/s².</summary>
+    public const double PunctureBrakeDecel = 4.5;
     public int SpareCars { get; set; } = 3;
 }

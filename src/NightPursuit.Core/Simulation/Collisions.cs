@@ -52,11 +52,12 @@ public static class Collisions
                 }
             }
 
-            if (Math.Abs(a.Lateral) > OffRoadLimit && (a.State == VehicleState.Spinning || Math.Abs(a.PushVel) > 2))
+            if (Math.Abs(a.Lateral) > OffRoadLimit && (a.State == VehicleState.Spinning || Math.Abs(a.PushVel) > 2 || a.Punctured))
                 w.Destroy(a, KillCause.RanOffRoad);
         }
 
         if (p.State != VehicleState.Wrecked) PlayerVsWrecks(w);
+        HazardContacts.Resolve(w);
     }
 
     static string KindName(AgentCar a) => a.Kind.ToString().ToUpperInvariant();

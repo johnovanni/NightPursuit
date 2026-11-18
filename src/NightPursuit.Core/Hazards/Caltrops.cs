@@ -18,6 +18,6 @@ public sealed class Caltrops : Hazard
     public override void Update(double dt, double playerDistance)
     {
         Life -= dt;
-        if (Life <= 0 || Distance < playerDistance - ClearBehind) Expired = true;
+        if (Life <= 1e-9 || Distance < playerDistance - ClearBehind) Expired = true;
     }
 }

@@ -109,7 +109,27 @@ public sealed partial class World
                 pedals = new PedalOutput(input.PadGas, input.PadBrake);   // analog triggers work in every scheme
 
             Steering.Update(input, Feel, Step);
-            CarPhysics.StepPlayer(Player, pedals, Steering.Value, Track, Feel, Step);
+            double steer = Player.GripLoss > 0 ? 0 : Steering.Value;     // no grip on enemy oil
+            if (Player.PunctureLeft > 0)
+            {
+                steer = Math.Clamp(steer + 0.15 * Math.Sin(4 * Math.PI * Time), -1, 1);
+                if (Player.Speed >= PlayerCar.PunctureSpeedCap)
+                {
+                    // Throttle cut; above the cap a gentle automatic brake tops CarPhysics's coasting drag up to 4.5 m/s^2.
+                    double auto = 0;
+                    if (Player.Speed > PlayerCar.PunctureSpeedCap)
+                    {
+                        double coast = 0.6 + 1.6 * Player.Speed / Feel.MaxSpeed;
+                        auto = Math.Max(0, PlayerCar.PunctureBrakeDecel - coast) / Feel.BrakeDecel;
+                    }
+                    pedals = new PedalOutput(0, Math.Max(pedals.Brake, auto));
+                }
+            }
+            CarPhysics.StepPlayer(Player, pedals, steer, Track, Feel, Step);
+            Player.GripLoss = Math.Max(0, Player.GripLoss - Step);
+            if (Player.GripLoss < StepEpsilon) Player.GripLoss = 0;
+            Player.PunctureLeft = Math.Max(0, Player.PunctureLeft - Step);
+            if (Player.PunctureLeft < StepEpsilon) Player.PunctureLeft = 0;
             if (Player.Armor <= 0) WreckPlayer("SCRAPED TO PIECES");     // guard-rail scraping drains armor in StepPlayer
         }
 
@@ -142,6 +162,7 @@ public sealed partial class World
     {
         foreach (var a in Agents)
         {
+            if (a.Punctured && a.IsOnRoadDriving) a.PunctureSeconds += Step;
             UpdateBlindness(a);
             switch (a.State)
             {
@@ -153,6 +174,7 @@ public sealed partial class World
                     // A blinded car can't see the car ahead either, which is how cars collide inside smoke.
                     if (!blind)
                         intent = DriverHelpers.KeepClearOfCarAhead(a, _view, intent, a.AheadMemory, DriverHelpers.ReactionDelay(a.Kind), Step);
+                    if (a.Punctured) intent = PuncturedIntent(a, intent);
                     CarPhysics.StepAgent(a, intent, Step);
                     break;
                 case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
@@ -162,6 +184,17 @@ public sealed partial class World
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
             a.AgentContactCooldown = Math.Max(0, a.AgentContactCooldown - Step);
         }
+    }
+
+    /// <summary>A punctured car sheds speed and limps toward the edge of the road on its own side, wobbling as it goes.</summary>
+    static DriveIntent PuncturedIntent(AgentCar a, DriveIntent decided)
+    {
+        int side = Math.Abs(a.Lateral) < 0.5 ? a.Side : Math.Sign(a.Lateral);
+        return decided with
+        {
+            TargetSpeed = Math.Max(0, a.Speed - 5 * Step),
+            TargetLateral = a.Lateral + side * 0.5 * a.Stats.SideSpeed / 1.8 + 0.8 * Math.Sin(2 * Math.PI * 1.5 * a.PunctureSeconds),
+        };
     }
 
     /// <summary>Smoke blinds a driving car for 2 s after it was last inside a cloud; a spinning or wrecked car isn't blinded.</summary>

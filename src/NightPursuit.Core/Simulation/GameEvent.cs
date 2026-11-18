@@ -16,6 +16,8 @@ public sealed record VehicleDestroyed(double Time, int VehicleId, AgentKind Kind
 
 public sealed record PlayerDamaged(double Time, double Amount, string Reason) : GameEvent(Time);
 
+public sealed record VehiclePunctured(double Time, int VehicleId) : GameEvent(Time);
+
 public sealed record VehicleSpun(double Time, int VehicleId, string Reason) : GameEvent(Time);
 
 public sealed record PlayerWrecked(double Time, string Reason) : GameEvent(Time);

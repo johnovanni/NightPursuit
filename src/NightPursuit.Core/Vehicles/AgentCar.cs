@@ -25,6 +25,10 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
     public double WanderTimer { get; set; }
     /// <summary>What this car is doing about the car ahead of it (see <see cref="DriverHelpers.KeepClearOfCarAhead"/>).</summary>
     public CarAheadMemory AheadMemory { get; } = new();
+    /// <summary>A caltrop has burst a tyre: the car slows, wobbles and limps off the road.</summary>
+    public bool Punctured { get; set; }
+    /// <summary>Seconds since the puncture (counts up while the car is on the road).</summary>
+    public double PunctureSeconds { get; set; }
 
     static readonly IDriver RunnerDriver = new Drivers.RunnerDriver();
     static readonly IDriver BlockerDriver = new Drivers.BlockerDriver();
