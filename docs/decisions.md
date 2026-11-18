@@ -152,3 +152,28 @@ Also noted, not urgent:
    - oil a pursuer;
    - ram a runner off the road.
 5. Debug build only: press F12 for the tuning panel.
+
+## After your second playtest (2026-11-17)
+
+**D18. Smooth motion at any refresh rate.** The new game runs its rules in fixed 1/120 s steps
+and drew the latest step. Your monitors run at 75 Hz and 60 Hz. At 75 Hz each frame got one step,
+then two, then one. At 150 mph the scene jumped 0.56 m, then 1.12 m, then 0.56 m: an uneven
+judder, most visible sideways while steering. The prototype split frames into equal steps, so this
+was new in the real game. Each frame is now drawn at the exact in-between moment, so every frame
+moves the same amount. A test checks this at 75 Hz to within a millionth of a metre. The
+simulation itself is unchanged, so runs are still repeatable.
+If you still see a sideways weave, tell me whether it's a quick shake or a slow sway. The slow
+sway was the earlier steering-overshoot problem (D1).
+
+**D19. Hills hide the mountains.** Nothing filled the ground, so when the road climbed ahead, the
+far road rose above the horizon and the mountain line showed through it. The ground is now
+filled black up to the highest visible point of the road. A hill hides the mountains behind it,
+and on flat road they look as before.
+
+**D20. Wrecks have depth and smoke.**
+- A gunfire wreck is now a crumpled 3D body, with a back, a front, a roof and sides, and the
+  flames rising from it.
+- A column of grey smoke rises from it and drifts with the wind. The column makes a wreck easier
+  to spot from far away.
+- The smoke is kept small and faint up close, so it doesn't cover the screen.
+- Drawing still takes 0.55 ms per frame on average.
