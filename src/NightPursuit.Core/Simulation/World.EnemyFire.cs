@@ -23,7 +23,7 @@ public sealed partial class World
                 PrevDistance = d, PrevLateral = a.Lateral, PrevHeading = Math.PI,   // created after the Prev refresh: drawn where it starts
                 Speed = Math.Max(20, EnemyMuzzleSpeed - a.Speed),
                 MuzzleSpeed = EnemyMuzzleSpeed, Range = EnemyRange,
-                OwnerId = a.Id, Hostile = true,
+                OwnerId = a.Id, Hostile = true, FromBoss = a is BossCar,
             });
         }
         if (intent.DropRear) DropFromAgent(a);
@@ -149,17 +149,20 @@ public sealed partial class World
             a.Arms.Oil!.TryDrop();
             Hazards.Add(new OilSlick { Distance = d, Lateral = a.Lateral, Hostile = true });
             Publish(new WeaponUsed(Time, WeaponKind.Oil, a.Id));
-            Publish(new Message(Time, "DROPPER: OIL AHEAD", Tone.Bad));
+            Publish(new Message(Time, $"{DropperName(a)}: OIL AHEAD", Tone.Bad));
         }
         else
         {
             a.Arms.Caltrops!.TryUse();
             Hazards.Add(new Caltrops { Distance = d, Lateral = DriverHelpers.NearestLane(a.Lateral), Hostile = true });
             Publish(new WeaponUsed(Time, WeaponKind.Caltrops, a.Id));
-            Publish(new Message(Time, "DROPPER: CALTROPS AHEAD", Tone.Bad));
+            Publish(new Message(Time, $"{DropperName(a)}: CALTROPS AHEAD", Tone.Bad));
         }
         a.Arms.NextDropIsOil = !oil;
     }
+
+    /// <summary>Who the drop message names: "BOSS" for a boss in a Dropper phase, "DROPPER" for a Dropper.</summary>
+    static string DropperName(AgentCar a) => a is BossCar ? "BOSS" : "DROPPER";
 
     /// <summary>An enemy bullet only ever tests the player; it passes through other cars.</summary>
     void StepHostileTracer(Tracer t)
@@ -167,6 +170,6 @@ public sealed partial class World
         if (Player.State == VehicleState.Wrecked) return;
         if (!SweptHit(t.PrevDistance, t.PrevLateral, t.Pose.Distance, t.Pose.Lateral, Player, EnemyTracerMargin)) return;
         t.Dead = true;
-        DamagePlayer(2, "SHOT BY A GUNNER", messageGap: 1.0);
+        DamagePlayer(2, t.FromBoss ? "SHOT BY THE BOSS" : "SHOT BY A GUNNER", messageGap: 1.0);
     }
 }

@@ -11,7 +11,8 @@ namespace NightPursuit.App.Rendering;
 /// <summary>
 /// Enemy cars seen from behind. Each kind has its own outline as well as its own colour: a sedan (Runner),
 /// a tall box truck with a door line (Blocker), a low car with a spoiler (Pursuer), an orange-red fastback with a gun port
-/// (Gunner), a teal van with a hatch and chute (Dropper), a steel-blue plated wedge (Armored) and the white finned boss.
+/// (Gunner), a teal van with a hatch and chute (Dropper), a steel-blue plated wedge (Armored) and the white finned boss,
+/// which in a Gunner or Dropper phase also carries the gun port or a pair of chutes.
 /// </summary>
 public static class VehicleRenderer
 {
@@ -232,32 +233,27 @@ public static class VehicleRenderer
                         dc.DrawEllipse(pen.Core.Brush, null, P(f * x, y + 0.07), rr, rr);
                 }
                 break;
+        }
+
+        // The gun port and the chute. A boss carries the ones of the car its current phase drives like (D67), placed
+        // to suit its long, low body: the port on the rear deck above the tail strip, a chute either side of the exhaust.
+        switch (boss is null ? kind : boss.Phase.Behaviour)
+        {
             case AgentKind.Gunner:
                 // The gun port: dim while it rides along (or is blinded by smoke), glowing while it aims, white during the burst.
-                double port = Math.Max(4, 0.42 * s);
+                double port = Math.Max(4, (boss is null ? 0.42 : 0.3) * s);
                 var portBrush = !GunnerDriver.IsAiming(car) ? Neon.PortDim
                               : car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst } ? Neon.PortBurst : Neon.PortGlow;
-                var pc = P(0, 1.06);
+                var pc = P(0, boss is null ? 1.06 : 0.84);
                 var portRect = new Rect(pc.X - port / 2, pc.Y - port / 2, port, port);
                 if (!ReferenceEquals(portBrush, Neon.PortDim)) dc.DrawRectangle(portBrush, Neon.GunnerCar.Glow, portRect);
                 dc.DrawRectangle(portBrush, pen.Core, portRect);
                 break;
             case AgentKind.Dropper:
                 // The chute under the bumper: a down chevron, bright and filled while arming.
-                var chute = new StreamGeometry();
-                using (var c = chute.Open())
-                {
-                    c.BeginFigure(P(-0.4, 0.42), true, true);
-                    c.LineTo(P(0, 0.08), true, false);
-                    c.LineTo(P(0.4, 0.42), true, false);
-                }
-                chute.Freeze();
-                if (DropperDriver.IsArming(car))
-                {
-                    dc.DrawGeometry(Neon.ChuteFill, Neon.ChuteGlow.Glow, chute);
-                    dc.DrawGeometry(null, Neon.ChuteGlow.Core, chute);
-                }
-                else dc.DrawGeometry(null, pen.Core, chute);
+                bool arming = DropperDriver.IsArming(car);
+                if (boss is null) Chute(dc, P, 0, 0.4, arming, pen);
+                else foreach (int side in Projector.Sides) Chute(dc, P, side * 0.5, 0.22, arming, pen);
                 break;
         }
 
@@ -292,6 +288,28 @@ public static class VehicleRenderer
         if (car.Punctured) TyreSpark(dc, car, g, w, wheel);   // after the body fill, or the outline would hide it
 
         dc.Pop();
+    }
+
+    /// <summary>
+    /// A dropper's chute: a down chevron centred on <paramref name="x"/> (a fraction of the half-width), from just above
+    /// the road to under the bumper; bright and filled while <paramref name="arming"/>.
+    /// </summary>
+    static void Chute(DrawingContext dc, Func<double, double, Point> P, double x, double halfWidth, bool arming, NeonPen pen)
+    {
+        var chute = new StreamGeometry();
+        using (var c = chute.Open())
+        {
+            c.BeginFigure(P(x - halfWidth, 0.42), true, true);
+            c.LineTo(P(x, 0.08), true, false);
+            c.LineTo(P(x + halfWidth, 0.42), true, false);
+        }
+        chute.Freeze();
+        if (arming)
+        {
+            dc.DrawGeometry(Neon.ChuteFill, Neon.ChuteGlow.Glow, chute);
+            dc.DrawGeometry(null, Neon.ChuteGlow.Core, chute);
+        }
+        else dc.DrawGeometry(null, pen.Core, chute);
     }
 
     /// <summary>One reusable point buffer per outline length: drawing happens on the UI thread only, and PolyLineTo copies the points.</summary>

@@ -41,58 +41,67 @@ public static class Warnings
 
         AgentCar? pursuer = null, blocker = null, gunner = null, hostile = null;
         int pursuerSides = 0;          // bit 0: one on the left, bit 1: centred, bit 2: one on the right
-        BossCar? boss = null;
+        BossCar? boss = null, bossAlongside = null;
         foreach (var e in w.Agents)
         {
             if (e.State != VehicleState.Driving) continue;
             double dz = e.Distance - p.Distance;
-            if (e is BossCar b)
-            {
-                if (dz <= -HostileMinGap && dz >= -BossRange && (boss is null || dz > boss.Distance - p.Distance)) boss = b;
-            }
-            else if (e.Kind == AgentKind.Pursuer)
+            // A boss also gets the warnings of the car its phase drives like, in words that name it (D67).
+            var bossCar = e as BossCar;
+            var drivesLike = bossCar is null ? e.Kind : bossCar.Phase.Behaviour;
+            if (bossCar is not null && dz <= -HostileMinGap && dz >= -BossRange
+                && (boss is null || dz > boss.Distance - p.Distance)) boss = bossCar;
+            if (drivesLike == AgentKind.Pursuer)
             {
                 if (dz < AlongsideAhead && dz > -PursuerRange)
                 {
                     pursuerSides |= 1 << (SideOf(e.Lateral - p.Lateral) + 1);
-                    if (pursuer is null || dz > pursuer.Distance - p.Distance) pursuer = e;
+                    if (bossCar is null)
+                    {
+                        if (pursuer is null || dz > pursuer.Distance - p.Distance) pursuer = e;
+                    }
+                    else if (dz > -AlongsideZone && (bossAlongside is null || dz > bossAlongside.Distance - p.Distance))
+                        bossAlongside = bossCar;     // further back, BOSS BEHIND warns of it
                 }
             }
             else
             {
-                if (e.Kind == AgentKind.Blocker && dz > 0 && dz < AheadRange && Math.Abs(e.Lateral - p.Lateral) < BlockerLane
+                if (drivesLike == AgentKind.Blocker && dz > 0 && dz < AheadRange && Math.Abs(e.Lateral - p.Lateral) < BlockerLane
                     && (blocker is null || dz < blocker.Distance - p.Distance)) blocker = e;
-                if (e.Kind == AgentKind.Gunner && GunnerDriver.IsAiming(e) && dz > 0 && dz <= GunnerRange
+                if (drivesLike == AgentKind.Gunner && GunnerDriver.IsAiming(e) && dz > 0 && dz <= GunnerRange
                     && Math.Abs(e.Lateral - p.Lateral) < GunnerLane && (gunner is null || dz < gunner.Distance - p.Distance)) gunner = e;
-                if (dz <= -HostileMinGap && dz >= -HostileRange && e.Speed - p.Speed > HostileClosing
+                if (bossCar is null && dz <= -HostileMinGap && dz >= -HostileRange && e.Speed - p.Speed > HostileClosing
                     && (hostile is null || dz > hostile.Distance - p.Distance)) hostile = e;
             }
         }
 
+        // Every pursuer in range keeps its edge arrow (D14), a boss in a Pursuer phase included: one side when they
+        // all share it, both edges otherwise.
+        int pursuerSide = pursuerSides == 1 ? -1 : pursuerSides == 4 ? 1 : 0;
         if (pursuer is not null)
         {
             double dx = pursuer.Lateral - p.Lateral;
             int own = SideOf(dx);
-            // Every pursuer in range keeps its edge arrow (D14): one side when they all share it, both edges otherwise.
-            int side = pursuerSides == 1 ? -1 : pursuerSides == 4 ? 1 : 0;
             double dist = p.Distance - pursuer.Distance;
             if (dist < AlongsideZone)     // beside you or slightly ahead: it is about to ram, so no distance
-            {
-                string where = own == 0 ? (dx < 0 ? "LEFT" : "RIGHT") : own < 0 ? "LEFT" : "RIGHT";
-                found[(int)WarningKind.PursuerAlongside] = new Warning(WarningKind.PursuerAlongside, $"PURSUER {where}", side, true);
-            }
+                found[(int)WarningKind.PursuerAlongside] = new Warning(WarningKind.PursuerAlongside, $"PURSUER {Beside(dx)}", pursuerSide, true);
             else
             {
                 string text = own == 0 ? $"PURSUER BEHIND  {Metres(dist)} m" : $"PURSUER BEHIND {(own < 0 ? "LEFT" : "RIGHT")}  {Metres(dist)} m";
-                found[(int)WarningKind.PursuerBehind] = new Warning(WarningKind.PursuerBehind, text, side, true);
+                found[(int)WarningKind.PursuerBehind] = new Warning(WarningKind.PursuerBehind, text, pursuerSide, true);
             }
         }
+        if (bossAlongside is not null)    // the boss is named even when an ordinary pursuer is alongside too
+            found[(int)WarningKind.PursuerAlongside] = new Warning(WarningKind.PursuerAlongside,
+                $"BOSS {Beside(bossAlongside.Lateral - p.Lateral)}", pursuerSide, true);
         if (gunner is not null)
-            found[(int)WarningKind.GunnerAiming] = new Warning(WarningKind.GunnerAiming, "GUNNER AIMING - LEAVE ITS LANE", 0, false);
+            found[(int)WarningKind.GunnerAiming] = new Warning(WarningKind.GunnerAiming,
+                gunner is BossCar ? "BOSS AIMING - LEAVE ITS LANE" : "GUNNER AIMING - LEAVE ITS LANE", 0, false);
         if (blocker is not null)
         {
             int side = SideOf(blocker.Lateral - p.Lateral);
-            found[(int)WarningKind.BlockerAhead] = new Warning(WarningKind.BlockerAhead, "BLOCKER AHEAD", side, true);
+            found[(int)WarningKind.BlockerAhead] = new Warning(WarningKind.BlockerAhead,
+                blocker is BossCar ? "BOSS BLOCKING AHEAD" : "BLOCKER AHEAD", side, true);
         }
         if (boss is not null)
             found[(int)WarningKind.BossBehind] = Behind(WarningKind.BossBehind, "BOSS", boss, p);
@@ -126,6 +135,9 @@ public static class Warnings
             : $"{name} BEHIND {(side < 0 ? "LEFT" : "RIGHT")} {Metres(p.Distance - car.Distance)} m";
         return new Warning(kind, text, side, true);
     }
+
+    /// <summary>The side of a car beside you, in words: the side it leans to even inside the dead zone (right when exactly level).</summary>
+    static string Beside(double dx) => dx < 0 ? "LEFT" : "RIGHT";
 
     static string Metres(double d) => d.ToString("0", CultureInfo.InvariantCulture);
 

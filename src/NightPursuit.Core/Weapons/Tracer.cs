@@ -17,6 +17,8 @@ public sealed class Tracer
     public double Range { get; init; } = MachineGuns.Range;
     /// <summary>True for an enemy bullet: it hits only the player.</summary>
     public bool Hostile { get; init; }
+    /// <summary>Fired by the boss, so a hit says "SHOT BY THE BOSS" (even if the boss is gone by the time it lands).</summary>
+    public bool FromBoss { get; init; }
     public int OwnerId { get; set; }
     public bool Dead { get; set; }
 }
