@@ -20,8 +20,6 @@ public sealed class MissionDirector(MissionDefinition def)
 
     /// <summary>How far ahead of the player the boss appears, metres (also where a respawn puts it back).</summary>
     public const double BossAheadDistance = 300;
-    /// <summary>The boss appears this much slower than the player, m/s, so it eases in (call 21).</summary>
-    public const double BossArrivalSlower = 10;
 
     int _nextWave;
     int _nextCrate;
@@ -67,7 +65,7 @@ public sealed class MissionDirector(MissionDefinition def)
     void SpawnBoss(World w, BossDefinition bossDef)
     {
         var p = w.Player;
-        Boss = BossCar.Create(w.NextId(), bossDef, p.Distance + BossAheadDistance, 0, Math.Max(0, p.Speed - BossArrivalSlower));
+        Boss = BossCar.Create(w.NextId(), bossDef, p.Distance + BossAheadDistance, 0, Math.Max(0, p.Speed - BossCar.ArrivalSlower));
         w.Agents.Add(Boss);
         Stage = MissionStage.Boss;
         w.Publish(new BossAppeared(w.Time, bossDef.Name));

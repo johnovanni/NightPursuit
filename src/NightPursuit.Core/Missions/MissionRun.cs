@@ -14,6 +14,7 @@ public sealed class MissionRun
 {
     const double RespawnSeconds = 3;
     const double RespawnClearRadius = 200;
+    const double BossReturnClearRadius = 20;
 
     readonly MissionDefinition _def;
     readonly FeelSettings _feel;
@@ -136,10 +137,18 @@ public sealed class MissionRun
         World.Scheme.Reset(0);
         // The boss is never cleared (Review Focus 1): it goes back 300 m ahead and eases in again.
         World.Agents.RemoveAll(a => a is not BossCar && Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);
+        double bossReturn = p.Distance + MissionDirector.BossAheadDistance;
+        bool bossReturned = false;
         foreach (var a in World.Agents)
             if (a is BossCar boss && boss.State != VehicleState.Wrecked)
-                boss.ReturnTo(p.Distance + MissionDirector.BossAheadDistance, Math.Max(0, p.Speed - MissionDirector.BossArrivalSlower));
-        World.Hazards.RemoveAll(h => Math.Abs(h.Distance - p.Distance) < RespawnClearRadius);
+            {
+                // p.Speed was set to 0 above, so this is 0 on purpose: the boss waits for you, as when it first appears.
+                boss.ReturnTo(bossReturn, Math.Max(0, p.Speed - BossCar.ArrivalSlower));
+                bossReturned = true;
+            }
+        // Also clear where the boss lands, so a leftover wreck, slick or caltrops can't hit it straight away.
+        World.Hazards.RemoveAll(h => Math.Abs(h.Distance - p.Distance) < RespawnClearRadius
+                                     || (bossReturned && Math.Abs(h.Distance - bossReturn) < BossReturnClearRadius));
         State = RunState.Playing;
         StateTimer = 0;
     }

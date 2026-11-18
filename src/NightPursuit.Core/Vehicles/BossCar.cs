@@ -14,6 +14,9 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
 {
     const double Cruise = 52;
 
+    /// <summary>While easing in (not <see cref="Engaged"/>) it drives this much slower than you, m/s (call 21).</summary>
+    public const double ArrivalSlower = 10;
+
     public BossDefinition Definition { get; } = def;
     /// <summary>Which phase it is in, 0-based.</summary>
     public int PhaseIndex { get; set; }

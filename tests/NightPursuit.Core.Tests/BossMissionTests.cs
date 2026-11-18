@@ -288,6 +288,7 @@ public class BossMissionTests
     [Theory]
     [InlineData(50)]
     [InlineData(500)]
+    [InlineData(-100)]     // behind, inside the clear radius
     public void Respawn_puts_the_boss_300_m_ahead_with_its_health_and_phase(double ahead)
     {
         var (run, boss) = RunAtBoss();
@@ -359,6 +360,58 @@ public class BossMissionTests
         Assert.False(b.ArrivalAvoid.Active);
         Assert.False(b.PassAvoid.Active);
         Assert.False(b.AheadMemory.Active);
+    }
+
+    [Fact]
+    public void Respawn_clears_hazards_where_the_boss_returns()
+    {
+        var (run, boss) = RunAtBoss();
+        var p = run.World.Player;
+        p.Speed = 0;                     // the wreck stays where it is, so +300 now is +300 at the respawn
+        boss.Distance = p.Distance + 500;
+        boss.Speed = 0;
+        boss.SnapPrev();
+        var wreck = new NightPursuit.Core.Hazards.Wreck
+        {
+            Distance = p.Distance + 300, PrevDistance = p.Distance + 300, Lateral = 0, Width = 2.4, Length = 5.6,
+        };
+        run.World.Hazards.Add(wreck);
+
+        p.Armor = 0;
+        run.Update(ControlFrame.Empty, 1 / 60.0);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(p.Distance + 300, boss.Distance, 1e-9);
+        Assert.DoesNotContain(wreck, run.World.Hazards);
+
+        double armor = boss.Armor;
+        for (int i = 0; i < 4; i++) run.Update(ControlFrame.Empty, 0.25);
+        Assert.Equal(armor, boss.Armor);
+        Assert.Equal(100, boss.Armor);
+    }
+
+    [Fact]
+    public void A_boss_wrecked_at_the_respawn_stays_put_and_the_mission_completes()
+    {
+        var (run, boss) = RunAtBoss();
+        run.World.Player.Armor = 0;
+        run.Update(ControlFrame.Empty, 1 / 60.0);
+        Assert.Equal(RunState.Respawning, run.State);
+        while (run.StateTimer > 1.0) run.Update(ControlFrame.Empty, 1 / 60.0);
+
+        // Burnt out (not a sliding wreck), so it is still in the list for 1.5 s, past the respawn.
+        boss.Speed = 0;
+        boss.PushVel = 0;
+        run.World.Destroy(boss, KillCause.Rammed);
+        double at = boss.Distance;
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Contains(boss, run.World.Agents);
+        Assert.Equal(VehicleState.Wrecked, boss.State);
+        Assert.Equal(at, boss.Distance);
+
+        run.Update(ControlFrame.Empty, World.Step);
+        Assert.Equal(RunState.Completed, run.State);
     }
 
     [Fact]

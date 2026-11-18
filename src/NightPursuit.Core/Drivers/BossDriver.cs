@@ -10,7 +10,7 @@ namespace NightPursuit.Core.Drivers;
 /// </summary>
 public sealed class BossDriver : IDriver
 {
-    const double EngageWithin = 140, ArrivalSlower = 10;
+    const double EngageWithin = 140;
     const double RunnerGapWanted = 70, RunnerGain = 0.6, RunnerRange = 10;
     const double TopSpeed = 88;
     const double PassFromBehind = 10, PassUntilAhead = 60, PassExtra = 15;
@@ -30,7 +30,7 @@ public sealed class BossDriver : IDriver
         if (!b.Engaged)
         {
             double holdLine = DriverHelpers.SteerAroundWrecks(b, view, b.Lateral, b.ArrivalAvoid, delay, dt);
-            return new DriveIntent(Math.Max(0, p.Speed - ArrivalSlower), holdLine);
+            return new DriveIntent(Math.Max(0, p.Speed - BossCar.ArrivalSlower), holdLine);
         }
 
         var behaviour = b.Phase.Behaviour;
