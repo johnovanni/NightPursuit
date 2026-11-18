@@ -61,6 +61,7 @@ public sealed class GameView : FrameworkElement
         RoadRenderer.Draw(dc, _projector);
         HazardRenderer.DrawSlicks(dc, _projector, world);
         VehicleRenderer.DrawAll(dc, _projector, world);
+        HazardRenderer.DrawSmoke(dc, _projector, world);   // after the cars and wrecks: it rises in front of them
         EffectRenderer.DrawTracers(dc, _projector, world);
         EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
         dc.Pop();
