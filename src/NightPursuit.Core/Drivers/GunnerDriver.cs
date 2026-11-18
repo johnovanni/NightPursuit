@@ -11,8 +11,6 @@ public enum GunnerPhase { Overtake, Hold, Aim, Burst }
 /// </summary>
 public sealed class GunnerDriver : IDriver
 {
-    const double ReactionDelay = 0.4;
-    const double SnapBelow = 1e-9;
     const double OvertakeBelow = 25, HoldFrom = 35;
     const double HoldGapWanted = 45, HoldGain = 0.8, HoldSpeedRange = 10;
     const double HoldSeconds = 2.5, AimSeconds = 0.6, BurstSeconds = 0.45;
@@ -51,7 +49,7 @@ public sealed class GunnerDriver : IDriver
             case GunnerPhase.Hold:
                 speed = HoldSpeed(p.Speed, dD);
                 s.Target = Math.Clamp(p.Lateral, -LaneLimit, LaneLimit);
-                s.Timer = Countdown(s.Timer, dt);
+                s.Timer = DriverHelpers.Countdown(s.Timer, dt);
                 if (s.Timer <= 0 && view.CanSeePlayer(self) && Math.Abs(self.Lateral - p.Lateral) < AimLateral
                     && dD >= AimMin && dD <= AimMax)
                 {
@@ -62,29 +60,23 @@ public sealed class GunnerDriver : IDriver
                 break;
             case GunnerPhase.Aim:
                 speed = HoldSpeed(p.Speed, dD);
-                s.Timer = Countdown(s.Timer, dt);
+                s.Timer = DriverHelpers.Countdown(s.Timer, dt);
                 if (s.Timer <= 0) { s.Phase = GunnerPhase.Burst; s.Timer = BurstSeconds; }
                 break;
             default:
                 speed = HoldSpeed(p.Speed, dD);
                 fire = true;
-                s.Timer = Countdown(s.Timer, dt);
+                s.Timer = DriverHelpers.Countdown(s.Timer, dt);
                 if (s.Timer <= 0) { s.Phase = GunnerPhase.Hold; s.Timer = HoldSeconds; }
                 break;
         }
 
-        double lateral = DriverHelpers.SteerAroundWrecks(self, view, s.Target, s.Avoid, ReactionDelay, dt);
+        double lateral = DriverHelpers.SteerAroundWrecks(self, view, s.Target, s.Avoid, DriverHelpers.ReactionDelay(self.Kind), dt);
         return new DriveIntent(speed, lateral, fire);
     }
 
     static double HoldSpeed(double playerSpeed, double dD) =>
         DriverHelpers.HoldGap(playerSpeed, dD, HoldGapWanted, HoldGain, -HoldSpeedRange, HoldSpeedRange);
-
-    static double Countdown(double timer, double dt)
-    {
-        timer -= dt;
-        return timer < SnapBelow ? 0 : timer;
-    }
 
     /// <summary>The lane centre nearest the car that is not the lane the player is in.</summary>
     static double NearestOtherLane(AgentCar self, double playerLateral)

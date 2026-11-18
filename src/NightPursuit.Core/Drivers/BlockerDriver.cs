@@ -5,8 +5,6 @@ namespace NightPursuit.Core.Drivers;
 /// <summary>Slides into the player's lane when it is within 140 m ahead, and brake-checks inside 30 m.</summary>
 public sealed class BlockerDriver : IDriver
 {
-    const double ReactionDelay = 0.8;
-
     public sealed class State
     {
         public double Target { get; set; }
@@ -27,7 +25,7 @@ public sealed class BlockerDriver : IDriver
             if (dz < 30) speed = Math.Max(15, Math.Min(self.CruiseSpeed, p.Speed - 5));
         }
 
-        double lateral = DriverHelpers.SteerAroundWrecks(self, view, s.Target, s.Avoid, ReactionDelay, dt);
+        double lateral = DriverHelpers.SteerAroundWrecks(self, view, s.Target, s.Avoid, DriverHelpers.ReactionDelay(self.Kind), dt);
         return new DriveIntent(speed, lateral);
     }
 }

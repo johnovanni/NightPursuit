@@ -109,6 +109,7 @@ public static class DriverHelpers
         AgentKind.Gunner => 0.4,
         AgentKind.Dropper => 0.5,
         AgentKind.Armored => 0.6,
+        AgentKind.Boss => 0.3,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no reaction delay for this kind"),
     };
 
@@ -118,6 +119,55 @@ public static class DriverHelpers
     /// </summary>
     public static double HoldGap(double playerSpeed, double gap, double wanted, double gain, double lo, double hi) =>
         playerSpeed + Math.Clamp((wanted - gap) * gain, lo, hi);
+
+    /// <summary>Counts a timer down by <paramref name="dt"/>, landing on exactly 0 rather than a rounding error above it.</summary>
+    public static double Countdown(double timer, double dt)
+    {
+        timer -= dt;
+        return timer < SnapBelow ? 0 : timer;
+    }
+
+    const double SnapBelow = 1e-9;
+
+    /// <summary>A pursuer's attack lasts this long once it is alongside; it rams for the last <see cref="RamSeconds"/>.</summary>
+    public const double AttackSeconds = 3.5, RamSeconds = 2.4;
+    const double AttackGain = 1.5, AttackSpeedRange = 8, AttackOffset = 2.7, RamOffset = 0.8;
+
+    /// <summary>The speed that brings a pursuer level with the player: 1.5 m/s per metre of gap, at most 8 m/s either way.</summary>
+    public static double AttackSpeed(double playerSpeed, double gap) =>
+        HoldGap(playerSpeed, gap, 0, AttackGain, -AttackSpeedRange, AttackSpeedRange);
+
+    /// <summary>
+    /// Where a pursuer steers alongside the player on its <paramref name="side"/>: 2.7 m off (kept within
+    /// <paramref name="limit"/> of the road centre), or 0.8 m off while it rams.
+    /// </summary>
+    public static double AttackLateral(double playerLateral, int side, bool ramming, double limit) =>
+        ramming ? playerLateral + side * RamOffset : Math.Clamp(playerLateral + side * AttackOffset, -limit, limit);
+
+    /// <summary>How far from the road centre a car's centre can be with all of the car on the road.</summary>
+    public static double OnRoadLimit(Vehicle v) => Track.RoadHalfWidth - v.Stats.Width / 2;
+
+    /// <summary>The least sideways distance from the player's centre to a lane a passing car may use.</summary>
+    public const double PassClearance = 2.5;
+
+    /// <summary>
+    /// The lane to pass the player in. <paramref name="current"/> is kept while it is at least <see cref="PassClearance"/>
+    /// from the player, so a player near a lane line can't make the car swing across in front of them; otherwise it is
+    /// the lane centre farthest from the player (always 5 m or more), ties going to the car's own side of the player.
+    /// </summary>
+    public static double PassingLane(AgentCar self, double playerLateral, double? current = null)
+    {
+        if (current is double lane && Math.Abs(lane - playerLateral) >= PassClearance) return lane;
+        double offset = self.Lateral - playerLateral;
+        int side = offset < 0 ? -1 : offset > 0 ? 1 : self.Side;
+        double best = Track.LaneCentres[0];
+        foreach (double l in Track.LaneCentres)
+        {
+            double a = Math.Abs(l - playerLateral), b = Math.Abs(best - playerLateral);
+            if (a > b + Same || (Math.Abs(a - b) <= Same && Math.Sign(l - playerLateral) == side)) best = l;
+        }
+        return best;
+    }
 
     const double BandMargin = 0.3;
     const double ClosingSlack = 0.5;

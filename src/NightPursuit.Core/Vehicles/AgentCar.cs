@@ -3,7 +3,7 @@ using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Vehicles;
 
-public enum AgentKind { Runner, Blocker, Pursuer, Gunner, Dropper, Armored }
+public enum AgentKind { Runner, Blocker, Pursuer, Gunner, Dropper, Armored, Boss }
 
 /// <summary>An enemy car. Its driver (AI) is attached separately through <see cref="DriverState"/>.</summary>
 public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
@@ -44,6 +44,18 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
     static readonly IDriver DropperDriver = new Drivers.DropperDriver();
     static readonly IDriver ArmoredDriver = new Drivers.ArmoredDriver();
 
+    /// <summary>The one driver every car of this behaviour shares. A boss has its own (<see cref="BossDriver"/>), which uses these for its phases.</summary>
+    public static IDriver DriverFor(AgentKind kind) => kind switch
+    {
+        AgentKind.Runner => RunnerDriver,
+        AgentKind.Blocker => BlockerDriver,
+        AgentKind.Pursuer => PursuerDriver,
+        AgentKind.Gunner => GunnerDriver,
+        AgentKind.Dropper => DropperDriver,
+        AgentKind.Armored => ArmoredDriver,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "a boss is made with BossCar.Create"),
+    };
+
     public static AgentCar Create(int id, AgentKind kind, double distance, double lateral, double speed)
     {
         var stats = kind switch
@@ -58,9 +70,7 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
         var car = new AgentCar(kind, stats)
         {
             Id = id, Distance = distance, Lateral = lateral, Speed = speed, CruiseSpeed = speed,
-            Driver = kind switch { AgentKind.Runner => RunnerDriver, AgentKind.Blocker => BlockerDriver,
-                AgentKind.Gunner => GunnerDriver, AgentKind.Dropper => DropperDriver,
-                AgentKind.Armored => ArmoredDriver, _ => PursuerDriver },
+            Driver = DriverFor(kind),
             Arms = kind switch
             {
                 AgentKind.Gunner => new AgentArms { RearGuns = new MachineGuns() },

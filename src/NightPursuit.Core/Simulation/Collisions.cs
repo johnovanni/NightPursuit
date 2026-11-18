@@ -4,7 +4,7 @@ using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Simulation;
 
-/// <summary>Every contact rule: car against car, car against wreck, car against oil, and running off the road.</summary>
+/// <summary>Every contact rule: car against car, car against wreck, car against oil, and running off the road (never a boss).</summary>
 public static class Collisions
 {
     const double ContactCooldown = 0.25;
@@ -53,7 +53,7 @@ public static class Collisions
                 }
             }
 
-            if (Math.Abs(a.Lateral) > OffRoadLimit && (a.State == VehicleState.Spinning || Math.Abs(a.PushVel) > 2 || a.Punctured))
+            if (a is not BossCar && Math.Abs(a.Lateral) > OffRoadLimit && (a.State == VehicleState.Spinning || Math.Abs(a.PushVel) > 2 || a.Punctured))
                 w.Destroy(a, KillCause.RanOffRoad);
         }
 

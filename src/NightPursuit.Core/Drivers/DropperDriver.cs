@@ -10,7 +10,6 @@ namespace NightPursuit.Core.Drivers;
 /// </summary>
 public sealed class DropperDriver : IDriver
 {
-    const double SnapBelow = 1e-9;
     const double DropEvery = 3.5, ArmSeconds = 0.5, RetrySeconds = 0.5;
     const double HoldMin = 80, HoldPerSpeed = 1.5, HoldExtra = 18.5, HoldGain = 0.8, HoldLo = -10, HoldHi = 12;
     const double ArmLateral = 2.5, ArmRange = 200;
@@ -82,7 +81,7 @@ public sealed class DropperDriver : IDriver
 
         if (s.Arming > 0)
         {
-            s.Arming = Countdown(s.Arming, dt);
+            s.Arming = DriverHelpers.Countdown(s.Arming, dt);
             if (s.Arming <= 0)
             {
                 if (GapHolds(self, p, out _)) { drop = true; s.Timer = DropEvery; }
@@ -92,7 +91,7 @@ public sealed class DropperDriver : IDriver
         else
         {
             s.Target = DriverHelpers.NearestLane(p.Lateral);
-            s.Timer = Countdown(s.Timer, dt);
+            s.Timer = DriverHelpers.Countdown(s.Timer, dt);
             if (s.Timer <= 0 && view.CanSeePlayer(self) && Math.Abs(self.Lateral - p.Lateral) < ArmLateral
                 && dD <= ArmRange && GapHolds(self, p, out _))
             {
@@ -102,11 +101,5 @@ public sealed class DropperDriver : IDriver
 
         double lateral = DriverHelpers.SteerAroundWrecks(self, view, s.Target, s.Avoid, DriverHelpers.ReactionDelay(self.Kind), dt);
         return new DriveIntent(speed, lateral, DropRear: drop);
-    }
-
-    static double Countdown(double timer, double dt)
-    {
-        timer -= dt;
-        return timer < SnapBelow ? 0 : timer;
     }
 }

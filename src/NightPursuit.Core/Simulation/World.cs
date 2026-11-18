@@ -178,7 +178,8 @@ public sealed partial class World
             switch (a.State)
             {
                 case VehicleState.Driving:
-                    // Order: the driver decides -> keep clear of the car ahead -> move.
+                    // Order: the driver decides (a boss's driver includes its slow and leash) -> keep clear of the car
+                    // ahead -> a puncture overrides -> move -> a boss is kept on the road -> weapons.
                     bool blind = a.Blinded > 0;
                     var driver = blind ? BlindDriver.Instance : a.Driver;   // DriverState is untouched, so the plan resumes
                     var intent = driver.Decide(a, _view, Step);
@@ -187,11 +188,16 @@ public sealed partial class World
                         intent = DriverHelpers.KeepClearOfCarAhead(a, _view, intent, a.AheadMemory, DriverHelpers.ReactionDelay(a.Kind), Step);
                     if (a.Punctured) intent = PuncturedIntent(a, intent);
                     CarPhysics.StepAgent(a, intent, Step);
+                    if (a is BossCar driving) KeepBossOnRoad(driving);
                     StepAgentWeapons(a, intent);      // after the car has moved
                     break;
-                case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
+                case VehicleState.Spinning:
+                    CarPhysics.StepSpinning(a, Step);
+                    if (a is BossCar spinning) KeepBossOnRoad(spinning);
+                    break;
                 case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
             }
+            if (a is BossCar boss) CountDownBoss(boss);
             if (a.State != VehicleState.Wrecked) a.Arms.Update(Step);
             a.HitFlash = Math.Max(0, a.HitFlash - Step);
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
@@ -233,11 +239,12 @@ public sealed partial class World
         }
     }
 
-    /// <summary>Killed by gunfire, burnt out after 1.5 s, or too far from the player to matter.</summary>
+    /// <summary>Killed by gunfire, burnt out after 1.5 s, or too far from the player to matter (never a boss: it leaves only when destroyed).</summary>
     bool IsGone(AgentCar a)
     {
         if (_removals.Contains(a)) return true;
         if (a.State == VehicleState.Wrecked && a.StateTimer <= 0) return true;
+        if (a is BossCar) return false;
         double ahead = a.Distance - Player.Distance;
         return ahead > MaxAhead || ahead < -MaxBehind;
     }
