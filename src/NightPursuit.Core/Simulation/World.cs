@@ -37,7 +37,7 @@ public sealed class World
     public List<AgentCar> Agents { get; } = new();
     public List<Tracer> Tracers { get; } = new();
     public List<Hazard> Hazards { get; } = new();
-    public Loadout Loadout { get; } = new();
+    public Loadout Loadout { get; set; } = new();
     public SteeringInput Steering { get; } = new();
     public double Time { get; private set; }
     public int Score { get; set; }

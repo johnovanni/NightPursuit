@@ -1,0 +1,16 @@
+{
+  "id": "mission-01",
+  "title": "Midnight Run",
+  "briefing": "The coast road is the only way out of the city tonight, and the syndicate has it watched. Drive the approach, shake off whatever they send, and keep your car in one piece.",
+  "road": { "seed": 7 },
+  "approachLength": 6000,
+  "startingOil": 5,
+  "waves": [
+    { "atDistance": 300,  "kind": "Runner",  "count": 1, "spawnOffset": 450 },
+    { "atDistance": 1100, "kind": "Blocker", "count": 2, "spawnOffset": 500 },
+    { "atDistance": 2000, "kind": "Pursuer", "count": 1, "spawnOffset": -250 },
+    { "atDistance": 3000, "kind": "Runner",  "count": 3, "spawnOffset": 600 },
+    { "atDistance": 4100, "kind": "Blocker", "count": 3, "spawnOffset": 700 },
+    { "atDistance": 5200, "kind": "Pursuer", "count": 2, "spawnOffset": -250 }
+  ]
+}

@@ -1,4 +1,5 @@
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
 
@@ -114,9 +115,9 @@ public class WorldLoopTests
         Assert.Equal("m2", ((Message)w.RecentMessages[3]).Text);
     }
 
-    static World WorldWithAgents(int seed)
+    static World WorldWithAgents(int seed, Track? track = null)
     {
-        var w = TestWorlds.World(seed: seed);
+        var w = TestWorlds.World(seed: seed, track: track);
         w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Runner, 150, -5, 35));
         w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Blocker, 90, 5, 25));
         w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Pursuer, -150, 0, 40));
@@ -124,9 +125,9 @@ public class WorldLoopTests
     }
 
     /// <summary>Feeds 60 s of the same per-frame inputs, each held for 1/60 s, in frames of the given length.</summary>
-    static ulong RunWithFrames(int seed, double frame)
+    static ulong RunWithFrames(int seed, double frame, Track? track = null)
     {
-        var w = WorldWithAgents(seed);
+        var w = WorldWithAgents(seed, track);
         int framesPerInput = (int)Math.Round((1 / 60.0) / frame);
         for (int i = 0; i < 3600 * framesPerInput; i++)
         {
@@ -145,6 +146,8 @@ public class WorldLoopTests
     [Fact]
     public void Different_seeds_give_different_hashes_with_agents_present()
     {
-        Assert.NotEqual(RunWithFrames(11, 1 / 60.0), RunWithFrames(12, 1 / 60.0));
+        // Same track, different RNG seeds: only the agents' use of the RNG can make the hashes differ.
+        var track = TestWorlds.Straight();
+        Assert.NotEqual(RunWithFrames(11, 1 / 60.0, track), RunWithFrames(12, 1 / 60.0, track));
     }
 }
