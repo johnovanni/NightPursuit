@@ -21,27 +21,44 @@ public static class DiagnosticsRunner
     /// <summary>Runs the requested diagnostic and returns the process exit code (0 ok, 1 failed, 2 bad arguments).</summary>
     public static int Run(string[] args)
     {
+        _logPath = LogPathFor(args);
         try
         {
             if (Has(args, "--snapshot")) return Snapshot(args);
             foreach (var name in new[] { "--stress", "--perf" })
                 if (Has(args, name))
                 {
-                    Console.Error.WriteLine($"{name}: not implemented yet");
+                    Error($"{name}: not implemented yet");
                     return 2;
                 }
             return 2;
         }
         catch (MissionFormatException ex)
         {
-            Console.Error.WriteLine(ex.Message);
+            Error(ex.Message);
             return 1;
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"Diagnostics failed: {ex}");
+            Error($"Diagnostics failed: {ex}");
             return 1;
         }
+    }
+
+    static string _logPath = "diagnostics.log";
+
+    /// <summary>Reports an error on stderr and in the log file (a WinExe has no visible console).</summary>
+    static void Error(string message)
+    {
+        Console.Error.WriteLine(message);
+        try { File.AppendAllText(_logPath, message + Environment.NewLine); }
+        catch (Exception) { /* nothing more we can do */ }
+    }
+
+    static string LogPathFor(string[] args)
+    {
+        string? output = Arg(args, "--snapshot");
+        return output is null || output.StartsWith("--") ? "diagnostics.log" : output + ".log";
     }
 
     static int Snapshot(string[] args)
@@ -49,21 +66,22 @@ public static class DiagnosticsRunner
         string? path = Arg(args, "--snapshot");
         if (path is null || path.StartsWith("--"))
         {
-            Console.Error.WriteLine("--snapshot needs an output file name, e.g. --snapshot snapshots/frame.png");
+            Error("--snapshot needs an output file name, e.g. --snapshot snapshots/frame.png");
             return 2;
         }
         string scene = Arg(args, "--scene") ?? "default";
         if (scene != "default")
         {
-            Console.Error.WriteLine($"Unknown scene '{scene}'. Known scenes: default");
+            Error($"Unknown scene '{scene}'. Known scenes: default");
             return 2;
         }
         double seconds = 12;
         string? secondsText = Arg(args, "--seconds");
         if (secondsText is not null
-            && !(double.TryParse(secondsText, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds) && seconds >= 0))
+            && !(double.TryParse(secondsText, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
+                 && double.IsFinite(seconds) && seconds >= 0 && seconds <= 3600))
         {
-            Console.Error.WriteLine($"--seconds needs a number of seconds, not '{secondsText}'");
+            Error($"--seconds needs a number of seconds from 0 to 3600, not '{secondsText}'");
             return 2;
         }
 

@@ -32,4 +32,7 @@ public partial class MainWindow : Window
         _loop = new GameLoop(this, run, Game, _input);
         Closed += (_, _) => _loop.Stop();
     }
+
+    /// <summary>Stops the game loop (used when a fatal error is being shown).</summary>
+    public void StopLoop() => _loop.Stop();
 }

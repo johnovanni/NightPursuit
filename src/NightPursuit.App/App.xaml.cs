@@ -38,15 +38,21 @@ public partial class App : Application
         }
     }
 
+    bool _failing;
+
     void OnUnhandled(object sender, DispatcherUnhandledExceptionEventArgs e)
     {
         e.Handled = true;
+        if (_failing) return;   // the message box pumps the dispatcher; a repeating error must not stack more boxes
+        _failing = true;
+        (MainWindow as NightPursuit.App.MainWindow)?.StopLoop();
         Fail("Night Pursuit: something went wrong", e.Exception.ToString());
     }
 
     /// <summary>Shows a readable message instead of the default crash dialog, then exits with a failure code.</summary>
     void Fail(string title, string message)
     {
+        _failing = true;
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Error);
         Shutdown(1);
     }
