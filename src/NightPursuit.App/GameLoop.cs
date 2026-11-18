@@ -42,7 +42,7 @@ public sealed class GameLoop
         foreach (var a in _input.Drain())
         {
             // The help screen is an App matter: the run never sees it.
-            if (a.Kind == ActionKind.ToggleHelp) { _view.ShowHelp = !_view.ShowHelp; _gasSeen = true; continue; }
+            if (a.Kind == ActionKind.ToggleHelp) { _view.ShowHelp = !_view.ShowHelp; continue; }
             if (a.Kind == ActionKind.Restart) { _view.ShowHelp = true; _gasSeen = false; }
             _run.Handle(a);
         }

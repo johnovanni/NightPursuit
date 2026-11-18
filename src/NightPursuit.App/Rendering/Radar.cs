@@ -56,7 +56,7 @@ internal static class Radar
             switch (e.Kind)
             {
                 case AgentKind.Runner:
-                    Poly(dc, Neon.Solid(Neon.Magenta), Neon.RadarRunner, new Point(at.X, at.Y - u * 1.2), new Point(at.X + u, at.Y),
+                    Poly(dc, Neon.RadarRunnerFill, Neon.RadarRunner, new Point(at.X, at.Y - u * 1.2), new Point(at.X + u, at.Y),
                          new Point(at.X, at.Y + u * 1.2), new Point(at.X - u, at.Y));
                     break;
                 case AgentKind.Blocker:

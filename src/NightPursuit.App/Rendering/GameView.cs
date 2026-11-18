@@ -27,7 +27,21 @@ public sealed class GameView : FrameworkElement
     /// <summary>Whether the controls help is on screen: shown at the start until the first gas, and toggled by F1 (the game loop owns the logic).</summary>
     public bool ShowHelp { get; set; } = true;
 
+    /// <summary>Milliseconds the latest <see cref="OnRender"/> spent recording its draw calls (read by the --perf diagnostic).</summary>
+    public double LastRenderMilliseconds { get; private set; }
+
+    /// <summary>How many times OnRender has run (the diagnostics check that every frame was really redrawn).</summary>
+    public int RenderCount { get; private set; }
+
     protected override void OnRender(DrawingContext dc)
+    {
+        RenderCount++;
+        long start = Stopwatch.GetTimestamp();
+        Draw(dc);
+        LastRenderMilliseconds = Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+    }
+
+    void Draw(DrawingContext dc)
     {
         double w = ActualWidth, h = ActualHeight;
         if (w <= 0 || h <= 0) return;
@@ -60,8 +74,8 @@ public sealed class GameView : FrameworkElement
         Overlays.DrawWarnings(dc, _layout, world);
         Overlays.DrawMessages(dc, _layout, world);
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
-        Overlays.DrawState(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
+        Overlays.DrawState(dc, _layout, run);   // after the help, so PAUSED / GAME OVER etc. are never hidden under it
 
 #if DEBUG
         double now = _frameClock.Elapsed.TotalSeconds, frame = now - _lastFrame;

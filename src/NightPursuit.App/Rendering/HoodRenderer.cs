@@ -25,7 +25,7 @@ internal static class HoodRenderer
         dc.DrawGeometry(null, Neon.Hood.Core, hood);
 
         var guns = new LineBatch();
-        foreach (int side in new[] { -1, 1 })
+        foreach (int side in Projector.Sides)
             guns.Line(new Point(hw + side * 95 * k, top + 6 * k), new Point(hw + side * 78 * k, top - 12 * k));
         guns.Draw(dc, Neon.Gun);
 

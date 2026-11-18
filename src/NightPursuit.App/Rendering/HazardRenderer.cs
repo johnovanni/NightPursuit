@@ -10,6 +10,14 @@ public static class HazardRenderer
 {
     const double MaxDistance = 600;
 
+    // Crumpled low outline: the edges sag at different heights and the roof line is broken.
+    static readonly (double x, double y)[] WreckShape =
+    {
+        (-1.00, 0.00), (-1.05, 0.30), (-0.70, 0.22), (-0.45, 0.58), (-0.15, 0.36),
+        (0.20, 0.64), (0.55, 0.30), (0.90, 0.40), (1.02, 0.12), (1.00, 0.00),
+    };
+    static readonly Point[] WreckPoints = new Point[WreckShape.Length - 1];   // reused scratch (UI thread only)
+
     public static void DrawSlicks(DrawingContext dc, Projector p, World w)
     {
         foreach (var h in w.Hazards)
@@ -49,17 +57,14 @@ public static class HazardRenderer
     static void DrawWreck(DrawingContext dc, Wreck wreck, Point g, double s)
     {
         double hw = wreck.Width / 2 * s;
-        // Crumpled low outline: the edges sag at different heights and the roof line is broken.
-        (double x, double y)[] shape =
-        {
-            (-1.00, 0.00), (-1.05, 0.30), (-0.70, 0.22), (-0.45, 0.58), (-0.15, 0.36),
-            (0.20, 0.64), (0.55, 0.30), (0.90, 0.40), (1.02, 0.12), (1.00, 0.00),
-        };
+        var shape = WreckShape;
         var body = new StreamGeometry();
         using (var c = body.Open())
         {
             c.BeginFigure(new Point(g.X + shape[0].x * hw, g.Y - shape[0].y * s), true, true);
-            c.PolyLineTo(shape.Skip(1).Select(v => new Point(g.X + v.x * hw, g.Y - v.y * s)).ToArray(), true, false);
+            var pts = WreckPoints;
+            for (int i = 1; i < shape.Length; i++) pts[i - 1] = new Point(g.X + shape[i].x * hw, g.Y - shape[i].y * s);
+            c.PolyLineTo(pts, true, false);
         }
         body.Freeze();
         dc.DrawGeometry(Neon.Black, Neon.WreckBody.Glow, body);

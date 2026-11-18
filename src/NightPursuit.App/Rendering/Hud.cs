@@ -111,7 +111,7 @@ internal static class Hud
         for (int i = 0; i < OilDropper.MaxCharges; i++)
         {
             var c = new Point(barX + 8 * k + i * 24 * k, 93 * k);
-            dc.DrawEllipse(i < charges ? Neon.Solid(Neon.Purple) : null, Neon.Oil.Core, c, 7 * k, 7 * k);
+            dc.DrawEllipse(i < charges ? Neon.OilFull : null, Neon.Oil.Core, c, 7 * k, 7 * k);
         }
 
         // Gun heat: amber while firing, red and spelled out when locked.
@@ -141,7 +141,7 @@ internal static class Hud
             }, true, false);
         }
         g.Freeze();
-        dc.DrawGeometry(Neon.Solid(Neon.Green, 0.25), Neon.Hood.Core, g);
+        dc.DrawGeometry(Neon.HoodFill, Neon.Hood.Core, g);
         dc.DrawRectangle(Neon.TextGreen, null, new Rect(at.X + 1 * k, at.Y + 12 * k, 4 * k, 4 * k));
         dc.DrawRectangle(Neon.TextGreen, null, new Rect(at.X + 15 * k, at.Y + 12 * k, 4 * k, 4 * k));
     }

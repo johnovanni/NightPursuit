@@ -38,14 +38,9 @@ public static class EffectRenderer
             double clip = p.ClipAt(dz);
             if (clip <= 0) continue;
             double r = (1 + x.Age * 9) * p.Ppm(depth);
-            var rng = new Random(x.Seed);   // seeded per explosion: the same burst every frame
             var batch = new LineBatch();
-            for (int i = 0; i < 18; i++)
-            {
-                double a = rng.NextDouble() * Math.Tau, len = 0.5 + rng.NextDouble() * 0.5;
-                var dir = new Vector(Math.Cos(a), Math.Sin(a) * 0.8);
+            foreach (var (dir, len) in x.Rays)
                 batch.Line(c + dir * r * 0.35 * len, c + dir * r * len);
-            }
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
             dc.PushOpacity(Math.Max(0, 1 - x.Age / Explosion.Life));
             batch.Draw(dc, Neon.Boom);

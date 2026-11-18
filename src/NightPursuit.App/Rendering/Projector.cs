@@ -13,6 +13,9 @@ public sealed class Projector
     public const double CamHeight = 1.15;
     public static readonly double Focal = 1 / Math.Tan(35 * Math.PI / 180);
 
+    /// <summary>Left and right (-1, 1), shared so per-frame loops over the two sides allocate nothing.</summary>
+    public static readonly int[] Sides = { -1, 1 };
+
     World? _world;
     double _firstD;
     double[] _clip = new double[320];

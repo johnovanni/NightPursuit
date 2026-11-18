@@ -4,7 +4,7 @@
         xmlns:r="clr-namespace:NightPursuit.App.Rendering"
         Title="Night Pursuit" Width="1280" Height="720"
         Background="Black" WindowStartupLocation="CenterScreen">
-    <Grid>
+    <Grid x:Name="Root">
         <r:GameView x:Name="Game" />
     </Grid>
 </Window>

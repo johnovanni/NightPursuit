@@ -14,10 +14,23 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         Game.Run = run;
+#if DEBUG
+        // The run keeps the FeelSettings it was given when it rebuilds after a restart, so this stays the live one.
+        var tuning = new Debug.TuningPanel(run.World.Feel);
+        Root.Children.Add(tuning);
+#endif
 
         PreviewKeyDown += (_, e) =>
         {
             var key = e.Key == Key.System ? e.SystemKey : e.Key;
+#if DEBUG
+            if (key == Key.F12)
+            {
+                if (!e.IsRepeat) tuning.Toggle();
+                e.Handled = true;
+                return;
+            }
+#endif
             if (_input.OnKeyDown(key, e.IsRepeat)) e.Handled = true;
         };
         PreviewKeyUp += (_, e) => _input.OnKeyUp(e.Key == Key.System ? e.SystemKey : e.Key);

@@ -20,11 +20,25 @@ public static class VehicleRenderer
     /// </summary>
     public static void DrawAll(DrawingContext dc, Projector p, World w)
     {
-        var items = new List<(double Distance, Action Draw)>();
-        foreach (var car in w.Agents) items.Add((car.Distance, () => DrawRear(dc, p, car, w)));
-        foreach (var wreck in w.Hazards.OfType<Wreck>()) items.Add((wreck.Distance, () => HazardRenderer.DrawWreck(dc, p, w, wreck)));
-        foreach (var item in items.OrderByDescending(i => i.Distance)) item.Draw();
+        var items = Items;
+        items.Clear();
+        foreach (var car in w.Agents) items.Add(new DrawItem(car.Distance, car, null));
+        foreach (var h in w.Hazards)
+            if (h is Wreck wreck) items.Add(new DrawItem(wreck.Distance, null, wreck));
+        items.Sort(FarToNear);
+        foreach (var item in items)
+        {
+            if (item.Car is not null) DrawRear(dc, p, item.Car, w);
+            else HazardRenderer.DrawWreck(dc, p, w, item.Wreck!);
+        }
+        items.Clear();   // do not keep cars alive between frames
     }
+
+    readonly record struct DrawItem(double Distance, AgentCar? Car, Wreck? Wreck);
+
+    static readonly List<DrawItem> Items = new();   // reused every frame (drawing happens on the UI thread only)
+    static readonly Comparison<DrawItem> FarToNear = static (a, b) => b.Distance.CompareTo(a.Distance);
+    static readonly Point[] BodyPoints = new Point[5];
 
     public static void DrawRear(DrawingContext dc, Projector p, AgentCar car, World w)
     {
@@ -46,7 +60,7 @@ public static class VehicleRenderer
             double bw = Math.Max(16, car.Stats.Width * s), frac = Math.Clamp(car.Armor / car.Stats.Armor, 0, 1);
             var r = new Rect(g.X - bw / 2, g.Y - roof - 10, bw, 4);
             dc.DrawRectangle(Neon.BarBack, null, r);
-            dc.DrawRectangle(Neon.Solid(Neon.Red), null, new Rect(r.X, r.Y, bw * frac, 4));
+            dc.DrawRectangle(Neon.BarFill, null, new Rect(r.X, r.Y, bw * frac, 4));
         }
         dc.Pop();
     }
@@ -71,7 +85,7 @@ public static class VehicleRenderer
         dc.PushTransform(new RotateTransform(tilt, g.X, g.Y - roof / 2));
 
         double ww = Math.Max(1, 0.3 * s * widthScale);
-        foreach (int side in new[] { -1, 1 })
+        foreach (int side in Projector.Sides)
             dc.DrawRectangle(Neon.Black, pen.Core, new Rect(g.X + side * (w / 2 - ww / 2) - ww / 2, g.Y - wheel, ww, wheel));
 
         // Body and cabin as one filled outline, so it hides the road lines behind it.
@@ -79,14 +93,13 @@ public static class VehicleRenderer
         using (var c = body.Open())
         {
             c.BeginFigure(new Point(g.X - w / 2, g.Y - wheel * 0.8), true, true);
-            c.PolyLineTo(new[]
-            {
-                new Point(g.X + w / 2, g.Y - wheel * 0.8),
-                new Point(g.X + w / 2, g.Y - bodyTop),
-                new Point(g.X + w / 2 * (1 - inset), g.Y - roof),
-                new Point(g.X - w / 2 * (1 - inset), g.Y - roof),
-                new Point(g.X - w / 2, g.Y - bodyTop),
-            }, true, false);
+            var pts = BodyPoints;
+            pts[0] = new Point(g.X + w / 2, g.Y - wheel * 0.8);
+            pts[1] = new Point(g.X + w / 2, g.Y - bodyTop);
+            pts[2] = new Point(g.X + w / 2 * (1 - inset), g.Y - roof);
+            pts[3] = new Point(g.X - w / 2 * (1 - inset), g.Y - roof);
+            pts[4] = new Point(g.X - w / 2, g.Y - bodyTop);
+            c.PolyLineTo(pts, true, false);
         }
         body.Freeze();
         dc.DrawGeometry(Neon.Black, pen.Glow, body);
@@ -114,7 +127,7 @@ public static class VehicleRenderer
         detail.Draw(dc, pen);
 
         double lw = Math.Max(2, 0.34 * s * widthScale), lh = Math.Max(1.5, 0.12 * s);
-        foreach (int side in new[] { -1, 1 })
+        foreach (int side in Projector.Sides)
             dc.DrawRectangle(Neon.TailLight, null, new Rect(g.X + side * (w / 2 - lw * 0.7) - lw / 2, g.Y - 0.62 * s, lw, lh));
 
         dc.Pop();

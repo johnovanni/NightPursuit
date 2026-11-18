@@ -44,6 +44,8 @@ internal static class Neon
     public static readonly Brush ThrottleFill = Solid(Green, 0.85), BrakeFill = Solid(Red, 0.85), HudBack = Solid(Cyan, 0.08);
     public static readonly Brush PanelFill = Solid(Color.FromRgb(4, 8, 14), 0.9), RadarFill = Solid(Color.FromRgb(2, 14, 8), 0.85);
     public static readonly Brush HitEdge = Solid(Red, 0.55);
+    public static readonly Brush BarFill = Solid(Red), OilFull = Solid(Purple), HoodFill = Solid(Green, 0.25);
+    public static readonly Brush RadarRunnerFill = Solid(Magenta), TextOrange = Solid(Orange);
 
     public static NeonPen Pen(Color c, double alpha = 1, double width = 1.6)
     {

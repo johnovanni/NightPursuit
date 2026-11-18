@@ -77,6 +77,16 @@ public sealed class MissionRun
         }
     }
 
+    /// <summary>
+    /// DIAGNOSTICS ONLY (used by <c>--stress</c> so every run-state overlay gets drawn). The game never calls this:
+    /// real play reaches these states only through <see cref="Update"/> and <see cref="Handle"/>.
+    /// </summary>
+    public void ForceStateForDiagnostics(RunState state, double stateTimer = 0)
+    {
+        State = state;
+        StateTimer = stateTimer;
+    }
+
     void OnWrecked()
     {
         if (World.Player.SpareCars <= 0)

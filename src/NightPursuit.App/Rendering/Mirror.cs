@@ -54,7 +54,7 @@ internal static class Mirror
             var pen = e.Kind switch { AgentKind.Blocker => Neon.BlockerCar, AgentKind.Pursuer => Neon.PursuerCar, _ => Neon.RunnerCar };
             dc.DrawRectangle(Neon.Black, pen.Core, new Rect(g.X - cw / 2, g.Y - ch, cw, ch));
             double lw = Math.Max(2, 0.3 * s);
-            foreach (int side in new[] { -1, 1 })
+            foreach (int side in Projector.Sides)
                 dc.DrawEllipse(Neon.TextWhite, null, new Point(g.X + side * (cw / 2 - lw), g.Y - 0.5 * s), lw / 2 + 0.5, lw / 2 + 0.5);
         }
         dc.Pop();

@@ -16,6 +16,8 @@ internal static class Overlays
 {
     const double PursuerRange = 120, AheadRange = 150, MessageLife = 2.5, MessageFade = 0.6;
 
+    static readonly int[] LeftOnly = { -1 }, RightOnly = { 1 };
+
     static readonly string[] HelpLines =
     {
         "NIGHT PURSUIT  -  CONTROLS",
@@ -69,7 +71,7 @@ internal static class Overlays
             l.Centered(dc, text, 108 * k, 18, Neon.TextRed);
         }
         if (blocker) l.Centered(dc, "BLOCKER AHEAD", 132 * k, 18, Neon.TextAmber);
-        if (wreck) l.Centered(dc, "WRECK AHEAD", 156 * k, 18, Neon.Solid(Neon.Orange));
+        if (wreck) l.Centered(dc, "WRECK AHEAD", 156 * k, 18, Neon.TextOrange);
         dc.Pop();
     }
 
@@ -77,7 +79,7 @@ internal static class Overlays
     static void DrawEdgeArrow(DrawingContext dc, HudLayout l, int side)
     {
         double k = l.K, y = l.Height * 0.55;
-        foreach (int dir in side == 0 ? new[] { -1, 1 } : new[] { side })
+        foreach (int dir in side == 0 ? Projector.Sides : side < 0 ? LeftOnly : RightOnly)
         {
             double ax = dir < 0 ? 18 * k : l.Width - 18 * k;
             var arrow = new LineBatch();
@@ -118,6 +120,14 @@ internal static class Overlays
     public static void DrawState(DrawingContext dc, HudLayout l, MissionRun run)
     {
         var w = run.World;
+        // A dark backing box keeps the words readable over the help panel or any bright scenery behind them.
+        if (run.State != RunState.Playing)
+        {
+            double boxTop = run.State == RunState.Paused ? l.Height * 0.36 : l.Height * 0.30;
+            double boxHeight = run.State == RunState.Paused ? l.S(54) : l.S(110);
+            double boxWidth = Math.Min(l.Width - 20, l.S(760));
+            dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, boxTop - l.S(12), boxWidth, boxHeight));
+        }
         switch (run.State)
         {
             case RunState.Paused:

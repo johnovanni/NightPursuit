@@ -55,7 +55,7 @@ public static class RoadRenderer
                 }
                 if (index % 8 == 0 && d < 900)
                 {
-                    foreach (int side in new[] { -1, 1 })
+                    foreach (int side in Projector.Sides)
                     {
                         double px = side * (Track.RoadHalfWidth + 2.2);
                         if (!p.ToScreen(d, px, 0, out var foot, out _)) continue;

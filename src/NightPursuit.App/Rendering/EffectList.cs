@@ -1,3 +1,4 @@
+using System.Windows;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Weapons;
@@ -12,6 +13,21 @@ public sealed class Explosion(double distance, double lateral, int seed)
     public double Lateral { get; } = lateral;
     public int Seed { get; } = seed;
     public double Age { get; set; }
+
+    /// <summary>The burst's 18 rays (direction and relative length), worked out once from the seed: the same burst every frame.</summary>
+    public (Vector Dir, double Len)[] Rays { get; } = MakeRays(seed);
+
+    static (Vector, double)[] MakeRays(int seed)
+    {
+        var rng = new Random(seed);
+        var rays = new (Vector, double)[18];
+        for (int i = 0; i < rays.Length; i++)
+        {
+            double a = rng.NextDouble() * Math.Tau, len = 0.5 + rng.NextDouble() * 0.5;
+            rays[i] = (new Vector(Math.Cos(a), Math.Sin(a) * 0.8), len);
+        }
+        return rays;
+    }
 }
 
 /// <summary>Presentation-only effects. The World publishes positions and events; the App turns them into explosions.</summary>
@@ -20,7 +36,7 @@ public sealed class EffectList
     readonly List<Explosion> _explosions = new();
     World? _world;
     double _absorbedTime = double.NaN;
-    HashSet<Tracer> _seenTracers = new();
+    HashSet<Tracer> _seenTracers = new(), _spareTracers = new();   // swapped each call so no set is allocated per frame
     int _nextSeed = 1000;   // deterministic seeds: the same run always draws the same bursts
 
     public IReadOnlyList<Explosion> Explosions => _explosions;
@@ -47,7 +63,8 @@ public sealed class EffectList
         _absorbedTime = w.Time;
 
         // A player tracer we have not seen before is a new shot, however far it flew during a long frame.
-        var seen = new HashSet<Tracer>();
+        var seen = _spareTracers;
+        seen.Clear();
         bool shot = false;
         foreach (var t in w.Tracers)
         {
@@ -55,9 +72,11 @@ public sealed class EffectList
             seen.Add(t);
             if (!_seenTracers.Contains(t)) shot = true;
         }
+        _spareTracers = _seenTracers;
         _seenTracers = seen;
         if (shot) MarkShot(w.Time, w.Loadout.Guns.LeftGun);
 
+        if (w.Events.Count == 0) return;   // nothing happened this advance
         var destroyed = w.Events.OfType<VehicleDestroyed>().ToList();
         if (destroyed.Count == 0) return;
         // A gunfire kill leaves a Wreck at the car's last position; the newest wrecks belong to the newest kills.
