@@ -282,7 +282,7 @@ internal static class ArsenalRenderer
     {
         if (car.State == VehicleState.Wrecked) return null;
         double dz = p.Ahead(car);
-        if (dz < 2 || dz > MaxDistance) return null;
+        if (dz < 2 || dz > MaxDistance) return null;   // cars behind you are shown by the mirror and the radar (Task 16)
         double rear = dz - car.Stats.Length / 2;
         if (!p.ToScreen(rear, p.LateralOf(car), 0, out var g, out double depth)) return null;
         double s = p.Ppm(depth), clip = p.ClipAt(rear);

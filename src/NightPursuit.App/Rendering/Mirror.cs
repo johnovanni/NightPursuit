@@ -9,11 +9,14 @@ namespace NightPursuit.App.Rendering;
 /// <summary>The rear-view mirror: the road and the cars behind, as a mirror shows them (a car behind on your right appears on the right).</summary>
 internal static class Mirror
 {
+    /// <summary>The mirror's rectangle, so the world layer can keep clear of it.</summary>
+    public static Rect Bounds(HudLayout l) => new(l.HalfWidth - 200 * l.K, 10 * l.K, 400 * l.K, 86 * l.K);
+
     public static void Draw(DrawingContext dc, HudLayout l, World w, Projector cam)
     {
         var view = cam.View;
         double k = l.K;
-        var m = new Rect(l.HalfWidth - 200 * k, 10 * k, 400 * k, 86 * k);
+        var m = Bounds(l);
         dc.DrawRectangle(Neon.Black, Neon.Hud.Glow, m);
         dc.DrawRectangle(null, Neon.Hud.Core, m);
         dc.PushClip(new RectangleGeometry(m));

@@ -133,8 +133,8 @@ public static class DiagnosticsRunner
         else if (scene == "offroad") PlaceOffRoad(run);
         else if (scene == "uphill") PlaceUphill(run, width);
         else if (scene == "wreck") PlaceWrecks(run.World, view.Effects);
-        else if (scene == "arsenal") PlaceArsenal(run.World, view.Effects);
-        else if (scene == "strike") PlaceStrike(run.World, view.Effects);
+        else if (scene == "arsenal") { PlaceOnOpenRoad(run.World); PlaceArsenal(run.World, view.Effects); }
+        else if (scene == "strike") { PlaceOnOpenRoad(run.World); PlaceStrike(run.World, view.Effects); }
 
         view.Measure(new Size(width, height));
         view.Arrange(new Rect(0, 0, width, height));
@@ -473,8 +473,39 @@ public static class DiagnosticsRunner
     }
 
     /// <summary>
+    /// Moves the player (centred, straight) to the stretch of track where the next 400 m of road is least hidden by
+    /// its own hills, so a scene's objects can all be seen. The first such stretch wins.
+    /// </summary>
+    static void PlaceOnOpenRoad(World w)
+    {
+        var track = w.Track;
+        int bestHidden = int.MaxValue;
+        double best = 0;
+        for (double s = 0; s < track.Length - 450; s += Track.SegmentLength)
+        {
+            double eye = track.HeightAt(s) + Projector.CamHeight, top = double.MinValue;
+            int hidden = 0;
+            for (double a = 10; a <= 400; a += Track.SegmentLength)
+            {
+                double angle = (track.HeightAt(s + a) - eye) / a;
+                if (angle < top - 1e-4) hidden++;
+                top = Math.Max(top, angle);
+            }
+            if (hidden < bestHidden) { bestHidden = hidden; best = s; }
+        }
+        var p = w.Player;
+        p.Distance = best;
+        p.Lateral = 0;
+        p.Heading = 0;
+        p.OffRoad = false;
+        p.SnapPrev();
+        w.View.Build(track, best);
+        Progress($"open road: player placed at {best:0} m ({bestHidden} hidden road segments in the next 400 m)");
+    }
+
+    /// <summary>
     /// One of everything in the arsenal: own smoke 30 m behind (the mirror) and another 60 m ahead, hostile caltrops 45 m
-    /// ahead in the player's lane, crates (Missile 35 m, Armor 80 m), a player missile 25 m ahead locked on a Runner 140 m
+    /// ahead in the player's lane, crates (Missile 35 m, Armor 22 m on the other side, so the 60 m smoke does not hide its label), a player missile 25 m ahead locked on a Runner 140 m
     /// ahead, an enemy missile 70 m ahead in the next lane and a hostile tracer 30 m ahead.
     /// </summary>
     static void PlaceArsenal(World w, EffectList effects)
@@ -495,7 +526,7 @@ public static class DiagnosticsRunner
         w.Hazards.Add(new SmokeCloud { Distance = p.Distance + 60, PrevDistance = p.Distance + 60, Lateral = p.Lateral, Age = 2.0 });
         w.Hazards.Add(new Caltrops { Distance = p.Distance + 45, Lateral = p.Lateral, Hostile = true });
         w.Hazards.Add(new SupplyCrate(SupplyItem.Missile, 1) { Distance = p.Distance + 35, PrevDistance = p.Distance + 35, Lateral = p.Lateral + 5 });
-        w.Hazards.Add(new SupplyCrate(SupplyItem.Armor, 1) { Distance = p.Distance + 80, PrevDistance = p.Distance + 80, Lateral = p.Lateral - 5 });
+        w.Hazards.Add(new SupplyCrate(SupplyItem.Armor, 1) { Distance = p.Distance + 22, PrevDistance = p.Distance + 22, Lateral = p.Lateral - 5 });
 
         var pose = new RoadPose(p.Distance + 25, p.Lateral, 0);
         w.Missiles.Add(new Missile

@@ -68,7 +68,7 @@ public sealed class GameView : FrameworkElement
         EffectRenderer.DrawTracers(dc, _projector, world);
         ArsenalRenderer.DrawMissiles(dc, _projector, world);
         ArsenalRenderer.DrawStrike(dc, _projector, world);
-        EffectRenderer.DrawBeams(dc, _projector, Effects);
+        EffectRenderer.DrawBeams(dc, _projector, Effects, Mirror.Bounds(_layout));
         EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
         ArsenalRenderer.DrawLock(dc, _projector, world);
         dc.Pop();

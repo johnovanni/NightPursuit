@@ -33,12 +33,16 @@ public static class EffectRenderer
     static readonly Brush BeamFill = Neon.Solid(Color.FromRgb(0x9F, 0xF6, 0xFF), 0.22);
 
     /// <summary>A satellite strike's column of light: a glow from the spot on the road up to the top of the screen, fading over its life.</summary>
-    public static void DrawBeams(DrawingContext dc, Projector p, EffectList effects)
+    public static void DrawBeams(DrawingContext dc, Projector p, EffectList effects, Rect exclude = default)
     {
+        bool hasExclude = !exclude.IsEmpty && exclude.Width > 0;
+        if (hasExclude)   // keep the column off the rear-view mirror
+            dc.PushClip(new CombinedGeometry(GeometryCombineMode.Exclude,
+                new RectangleGeometry(new Rect(-100, -100, p.Width + 200, p.Height + 200)), new RectangleGeometry(exclude)));
         foreach (var b in effects.Beams)
         {
             double dz = b.Distance - p.CamDistance;
-            if (dz < 3 || !p.ToScreen(dz, b.Lateral, 0, out var g, out double depth)) continue;
+            if (dz < 3 || !p.ToScreen(dz, b.Lateral, 0, out var g, out double depth) || g.Y < -60) continue;   // g.Y < -60: the foot is above the beam's top, nothing to draw
             double half = 1.4 * p.Ppm(depth);
             dc.PushOpacity(Math.Max(0, 1 - b.Age / Beam.Life));
             dc.DrawRectangle(BeamFill, null, new Rect(g.X - half, -60, half * 2, g.Y + 60));
@@ -47,6 +51,7 @@ public static class EffectRenderer
             core.Draw(dc, Neon.StrikeBeam);
             dc.Pop();
         }
+        if (hasExclude) dc.Pop();
     }
 
     public static void DrawExplosions(DrawingContext dc, Projector p, World w, EffectList effects)
