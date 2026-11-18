@@ -84,6 +84,10 @@ internal static class Hud
         l.Text(dc, "F1 help   P pause   R restart (when paused or finished)", 16 * k, y + 4 * k, 13, Neon.TextGray);
     }
 
+    /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, oil), so scenery can keep clear of it.</summary>
+    public static Rect ReadoutBounds(HudLayout l) =>
+        new(l.Width - 290 * l.K, 0, 290 * l.K, 108 * l.K);
+
     static void DrawCarState(DrawingContext dc, HudLayout l, MissionRun run)
     {
         var w = run.World;
@@ -102,7 +106,8 @@ internal static class Hud
 
         // Spare cars as little car icons.
         l.Text(dc, "SPARE CARS", labelX, 62 * k, 13, Neon.TextGray, TextAlignment.Right);
-        for (int i = 0; i < p.SpareCars; i++)
+        int spareIcons = run.State == RunState.Respawning ? Math.Max(0, p.SpareCars - 1) : p.SpareCars;   // the banner already counts the car being replaced
+        for (int i = 0; i < spareIcons; i++)
             DrawCarIcon(dc, l, new Point(barX + i * 26 * k, 64 * k));
 
         // Oil charges as pips: filled = ready.

@@ -72,6 +72,24 @@ public class DriverTests
     }
 
     [Fact]
+    public void Retreating_pursuer_drops_back_from_a_slow_player_without_ramming_it()
+    {
+        var w = Straight();
+        var car = AgentCar.Create(w.NextId(), AgentKind.Pursuer, -5, 0, 5);
+        car.DriverState = new PursuerDriver.State { Phase = PursuerPhase.Retreat, Target = 0 };
+        w.Agents.Add(car);
+        double deepest = 0;
+        for (int i = 0; i < 120 * 9; i++)
+        {
+            w.Player.Speed = 5;
+            w.StepOnce(ControlFrame.Empty);
+            deepest = Math.Min(deepest, car.Distance - w.Player.Distance);
+            Assert.Equal(100, w.Player.Armor);                    // never touched
+        }
+        Assert.True(deepest < -20, $"only fell back to {deepest:0.0} m");
+    }
+
+    [Fact]
     public void Destroying_a_car_ahead_of_a_pursuer_blocks_it()
     {
         var w = Straight();

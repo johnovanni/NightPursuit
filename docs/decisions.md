@@ -87,3 +87,6 @@ while you're away.
 **D13. Restart only when paused or finished.** R (or the pad's Back button) restarts only when the
 game is paused or the mission has ended. Pressed while driving, it shows how to restart, so one
 stray key can't throw away a run.
+
+**D14. A pursuer alongside you is always shown.** While a pursuer rides beside you before ramming, a
+"PURSUER LEFT/RIGHT" warning and an edge arrow show it, not just the radar.

@@ -1,3 +1,4 @@
+using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Drivers;
@@ -8,6 +9,7 @@ public enum PursuerPhase { Approach, Attack, Retreat }
 public sealed class PursuerDriver : IDriver
 {
     const double ReactionDelay = 0.3;
+    const double RetreatClearance = 20;
 
     public sealed class State
     {
@@ -42,6 +44,13 @@ public sealed class PursuerDriver : IDriver
                 break;
             default:
                 speed = Math.Max(10, p.Speed - 12);
+                if (dz > -RetreatClearance)
+                {
+                    // Too close to ram-proof: drop back slower than the player (never faster) and keep to its own lane,
+                    // so a slow or stopped player isn't run into while the pursuer "retreats".
+                    speed = Math.Max(0, Math.Min(speed, p.Speed - 2));
+                    s.Target = NearestLane(self.Lateral);
+                }
                 if (dz < -80)
                 {
                     s.Phase = PursuerPhase.Approach;
@@ -53,4 +62,7 @@ public sealed class PursuerDriver : IDriver
         double lateral = DriverHelpers.SteerAroundWrecks(self, view, s.Target, s.Avoid, ReactionDelay, dt);
         return new DriveIntent(speed, lateral);
     }
+
+    static double NearestLane(double lateral) =>
+        Track.LaneCentres.MinBy(lane => Math.Abs(lane - lateral));
 }

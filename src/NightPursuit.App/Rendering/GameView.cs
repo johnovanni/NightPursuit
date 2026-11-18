@@ -57,7 +57,7 @@ public sealed class GameView : FrameworkElement
 
         double shake = world.Player.Shake * 14;
         dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
-        SkyRenderer.Draw(dc, _projector, world);
+        SkyRenderer.Draw(dc, _projector, world, Hud.ReadoutBounds(_layout));
         RoadRenderer.Draw(dc, _projector, world);
         HazardRenderer.DrawSlicks(dc, _projector, world);
         VehicleRenderer.DrawAll(dc, _projector, world);

@@ -288,6 +288,8 @@ public sealed class World
         }
         else if (Loadout.Oil.Charges <= 0)
             Publish(new Message(Time, "NO OIL LEFT (recharging)", Tone.Bad));
+        else
+            Publish(new Message(Time, "OIL NOT READY", Tone.Info));
     }
 
     /// <summary>The next unused vehicle id (the player is 0).</summary>

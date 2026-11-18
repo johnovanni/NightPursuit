@@ -14,7 +14,7 @@ namespace NightPursuit.App.Rendering;
 /// </summary>
 internal static class Overlays
 {
-    const double PursuerRange = 120, AheadRange = 150, MessageLife = 2.5, MessageFade = 0.6;
+    const double PursuerRange = 120, AlongsideAhead = 4, AlongsideZone = 3, AheadRange = 150, MessageLife = 2.5, MessageFade = 0.6;
 
     static readonly int[] LeftOnly = { -1 }, RightOnly = { 1 };
 
@@ -46,7 +46,7 @@ internal static class Overlays
         {
             if (e.State != VehicleState.Driving) continue;
             double dz = e.Distance - p.Distance;
-            if (e.Kind == AgentKind.Pursuer && dz < -3 && dz > -PursuerRange)
+            if (e.Kind == AgentKind.Pursuer && dz < AlongsideAhead && dz > -PursuerRange)
             {
                 if (nearestPursuer is null || dz > nearestPursuer.Distance - p.Distance) nearestPursuer = e;
                 DrawEdgeArrow(dc, l, e.Lateral < p.Lateral - 1 ? -1 : e.Lateral > p.Lateral + 1 ? 1 : 0);
@@ -67,7 +67,11 @@ internal static class Overlays
             double dx = nearestPursuer.Lateral - p.Lateral;
             string side = dx < -1 ? "LEFT" : dx > 1 ? "RIGHT" : "";
             double dist = p.Distance - nearestPursuer.Distance;
-            string text = side.Length == 0 ? $"PURSUER BEHIND  {dist:0} m" : $"PURSUER BEHIND {side}  {dist:0} m";
+            string text;
+            if (Math.Abs(dist) < AlongsideZone)     // riding beside you: it is about to ram, so no distance
+                text = $"PURSUER {(side.Length == 0 ? (dx < 0 ? "LEFT" : "RIGHT") : side)}";
+            else
+                text = side.Length == 0 ? $"PURSUER BEHIND  {dist:0} m" : $"PURSUER BEHIND {side}  {dist:0} m";
             l.Centered(dc, text, 108 * k, 18, Neon.TextRed);
         }
         if (blocker) l.Centered(dc, "BLOCKER AHEAD", 132 * k, 18, Neon.TextAmber);

@@ -64,4 +64,14 @@ public class ThrottleSchemeTests
         Assert.False(ControlFrame.Empty.Gas);
         Assert.Same(ControlFrame.Empty, ControlFrame.Empty);
     }
+
+    [Fact] public void Pad_brake_trigger_cancels_cruise()
+    {
+        var s = new RampPedalScheme(); var f = new FeelSettings();
+        s.Handle(new GameAction(ActionKind.Cruise), 40, f);
+        s.Update(new ControlFrame { PadConnected = true, PadBrake = 0.2 }, 40, f, 0.01);
+        Assert.NotNull(s.TargetSpeed);                       // a light touch (under 0.3) keeps cruise
+        s.Update(new ControlFrame { PadConnected = true, PadBrake = 0.5 }, 40, f, 0.01);
+        Assert.Null(s.TargetSpeed);
+    }
 }

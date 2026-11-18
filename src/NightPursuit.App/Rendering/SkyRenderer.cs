@@ -26,7 +26,8 @@ public static class SkyRenderer
         return s;
     }
 
-    public static void Draw(DrawingContext dc, Projector p, World world)
+    /// <summary>Draws the sky; the moon is skipped where it would sit under <paramref name="keepClear"/> (the top-right readouts).</summary>
+    public static void Draw(DrawingContext dc, Projector p, World world, Rect keepClear)
     {
         double heading = world.Track.HeadingAt(world.Player.Distance) + world.Player.Heading;
         double ppr = p.PxPerRadian, halfW = p.HalfWidth, horizon = p.Horizon;
@@ -39,9 +40,11 @@ public static class SkyRenderer
         }
 
         double moonA = WrapPi(0.5 - heading);
-        if (Math.Abs(moonA) < 1.1)
+        var moon = new Point(halfW + moonA * ppr, horizon - p.Height * 0.26);
+        var moonBox = new Rect(moon.X - 30, moon.Y - 30, 60, 60);
+        if (Math.Abs(moonA) < 1.1 && !moonBox.IntersectsWith(keepClear))
         {
-            var c = new Point(halfW + moonA * ppr, horizon - p.Height * 0.26);
+            var c = moon;
             dc.DrawEllipse(null, Neon.Moon.Glow, c, 20, 20);
             dc.DrawEllipse(null, Neon.Moon.Core, c, 20, 20);
             dc.DrawEllipse(Neon.Black, null, new Point(c.X + 8, c.Y - 4), 17, 17);   // crescent

@@ -71,6 +71,18 @@ public class OilTests
     }
 
     [Fact]
+    public void Drop_during_cooldown_says_it_is_not_ready()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        w.Handle(Drop);
+        int slicks = w.Hazards.Count;
+        w.StepOnce(ControlFrame.Empty);
+        w.Handle(Drop);
+        Assert.Equal(slicks, w.Hazards.Count);
+        Assert.Contains(w.Events, e => e is Message { Text: "OIL NOT READY", Tone: Tone.Info });
+    }
+
+    [Fact]
     public void Wrecked_player_cannot_drop_oil()
     {
         var w = TestWorlds.World(track: TestWorlds.Straight());
