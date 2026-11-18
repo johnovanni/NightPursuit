@@ -89,6 +89,27 @@ public class DriverTests
         Assert.True(deepest < -20, $"only fell back to {deepest:0.0} m");
     }
 
+    [Fact]
+    public void Retreating_pursuer_always_falls_back_to_80_m_without_creeping_up()
+    {
+        var w = Straight();
+        var car = AgentCar.Create(w.NextId(), AgentKind.Pursuer, -5, 0, 5);
+        car.DriverState = new PursuerDriver.State { Phase = PursuerPhase.Retreat, Target = 0 };
+        w.Agents.Add(car);
+        double prevDz = car.Distance - w.Player.Distance;
+        for (int i = 0; i < 120 * 40; i++)
+        {
+            w.Player.Speed = 5;
+            w.StepOnce(ControlFrame.Empty);
+            double dz = car.Distance - w.Player.Distance;
+            Assert.True(dz - prevDz <= 0.01, $"crept up {dz - prevDz:0.000} m at step {i}");
+            Assert.Equal(100, w.Player.Armor);
+            prevDz = dz;
+            if (dz <= -80) return;
+        }
+        Assert.Fail($"only reached dz {prevDz:0.0} in 40 s");
+    }
+
     static bool Overlaps(Vehicle a, Vehicle b) =>
         Math.Abs(a.Lateral - b.Lateral) < (a.Stats.Width + b.Stats.Width) / 2 &&
         Math.Abs(a.Distance - b.Distance) < (a.Stats.Length + b.Stats.Length) / 2;
@@ -106,8 +127,7 @@ public class DriverTests
             w.Player.Speed = 5;
             w.StepOnce(ControlFrame.Empty);
             Assert.False(Overlaps(w.Player, car), $"overlapped the player at step {i}");
-            // The crossing may start at dz = -20; the 1 m margin allows for it briefly creeping back (retreat speed rises once clear).
-            if (car.Distance - w.Player.Distance > -19)
+            if (car.Distance - w.Player.Distance > -20)
                 Assert.True(car.Lateral >= w.Player.Lateral, $"crossed to the player's left at step {i}: {car.Lateral:0.00}");
         }
     }
