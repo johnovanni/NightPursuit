@@ -4,7 +4,7 @@ using NightPursuit.Core.Road;
 
 namespace NightPursuit.App.Rendering;
 
-/// <summary>Road edges, lane dashes, posts and lamps, and the hiding line for scenery behind hill crests.</summary>
+/// <summary>The black ground, road edges, lane dashes, posts and lamps, and the hiding line for scenery behind hill crests.</summary>
 public static class RoadRenderer
 {
     const double DrawDistance = 1500;
@@ -79,6 +79,12 @@ public static class RoadRenderer
             }
             prevOk = ok;
         }
+
+        // Ground: black from the terrain's top edge to the bottom of the screen, so a climbing road hides the mountains
+        // behind it. maxY is the highest visible road sample (nothing nearer hides it); the horizon is the limit on flat land.
+        double groundTop = Math.Min(p.Horizon, maxY);
+        const double margin = 60;   // covers the shake offset
+        dc.DrawRectangle(Neon.Black, null, new Rect(-margin, groundTop, p.Width + 2 * margin, Math.Max(0, p.Height + margin - groundTop)));
 
         posts.Draw(dc, Neon.Post);
         lamps.Draw(dc, Neon.Lamp);

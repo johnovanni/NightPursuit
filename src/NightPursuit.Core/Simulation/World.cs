@@ -30,6 +30,7 @@ public sealed class World
     int _lastId;
 
     public Track Track { get; }
+    /// <summary>The road as seen from the player's latest step; rebuilt on every Advance. Drawing does not use it: the App's Projector builds its own view at the interpolated camera.</summary>
     public RoadView View { get; } = new();
     public FeelSettings Feel { get; }
     public IRng Rng { get; }

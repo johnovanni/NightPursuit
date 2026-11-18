@@ -16,7 +16,7 @@ namespace NightPursuit.App.Diagnostics;
 
 /// <summary>
 /// Command-line diagnostics run instead of the game window:
-/// <c>--snapshot out.png [--seconds S] [--scene name]</c>, <c>--stress report.txt</c> and <c>--perf report.txt</c>.
+/// <c>--snapshot out.png [--seconds S] [--scene name] [--size WxH]</c>, <c>--stress report.txt</c> and <c>--perf report.txt</c>.
 /// </summary>
 public static class DiagnosticsRunner
 {
@@ -46,6 +46,8 @@ public static class DiagnosticsRunner
         }
     }
 
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck" };
+
     static string _logPath = "diagnostics.log";
 
     /// <summary>Reports an error on stderr and in the log file (a WinExe has no visible console).</summary>
@@ -71,10 +73,23 @@ public static class DiagnosticsRunner
             return 2;
         }
         string scene = Arg(args, "--scene") ?? "default";
-        if (scene != "default" && scene != "close-cars" && scene != "offroad")
+        if (Array.IndexOf(Scenes, scene) < 0)
         {
-            Error($"Unknown scene '{scene}'. Known scenes: default, close-cars, offroad");
+            Error($"Unknown scene '{scene}'. Known scenes: {string.Join(", ", Scenes)}");
             return 2;
+        }
+        int width = Width, height = Height;
+        string? sizeText = Arg(args, "--size");
+        if (sizeText is not null)
+        {
+            string[] parts = sizeText.Split('x');
+            if (!(parts.Length == 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out width)
+                  && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out height)
+                  && width is >= 1 and <= 8192 && height is >= 1 and <= 8192))
+            {
+                Error($"--size needs WIDTHxHEIGHT from 1x1 to 8192x8192, e.g. --size 320x200, not '{sizeText}'");
+                return 2;
+            }
         }
         double seconds = 12;
         string? secondsText = Arg(args, "--seconds");
@@ -87,7 +102,7 @@ public static class DiagnosticsRunner
         }
 
         var run = NewRun();
-        var view = new GameView { Run = run, Width = Width, Height = Height, ShowHelp = false };
+        var view = new GameView { Run = run, Width = width, Height = height, ShowHelp = false };
         for (double t = 0; t < seconds; t += Dt)
         {
             run.Update(Autopilot.Next(run.World), Dt);
@@ -96,11 +111,13 @@ public static class DiagnosticsRunner
         }
         if (scene == "close-cars") PlaceCloseCars(run.World, view.Effects);
         else if (scene == "offroad") PlaceOffRoad(run);
+        else if (scene == "uphill") PlaceUphill(run, width);
+        else if (scene == "wreck") PlaceWrecks(run.World, view.Effects);
 
-        view.Measure(new Size(Width, Height));
-        view.Arrange(new Rect(0, 0, Width, Height));
+        view.Measure(new Size(width, height));
+        view.Arrange(new Rect(0, 0, width, height));
         view.UpdateLayout();
-        var bitmap = new RenderTargetBitmap(Width, Height, 96, 96, PixelFormats.Pbgra32);
+        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(view);
 
         var encoder = new PngBitmapEncoder();
@@ -343,6 +360,52 @@ public static class DiagnosticsRunner
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
         File.WriteAllText(path, text);
         Console.Out.Write(text);
+    }
+
+    /// <summary>
+    /// Finds the spot on the track where the road ahead (0 to 1500 m) climbs steepest as seen from the eye (the largest
+    /// angle above the camera's horizontal), and puts the player there, centred and straight, with nothing else on the road.
+    /// </summary>
+    static void PlaceUphill(MissionRun run, int width)
+    {
+        var w = run.World;
+        var track = w.Track;
+        double bestAngle = double.MinValue, bestStart = 0, bestAt = 0;
+        for (double s = 0; s < track.Length; s += Track.SegmentLength)
+        {
+            double eye = track.HeightAt(s) + Projector.CamHeight;
+            for (double a = 20; a <= 1500; a += Track.SegmentLength)
+            {
+                double angle = (track.HeightAt(s + a) - eye) / a;
+                if (angle > bestAngle) { bestAngle = angle; bestStart = s; bestAt = a; }
+            }
+        }
+        var p = w.Player;
+        p.Distance = bestStart;
+        p.Lateral = 0;
+        p.Heading = 0;
+        p.OffRoad = false;
+        p.SnapPrev();
+        w.View.Build(track, bestStart);
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        double rise = track.HeightAt(bestStart + bestAt) - track.HeightAt(bestStart) - Projector.CamHeight;
+        Progress($"uphill: player at {bestStart:0} m; the road {bestAt:0} m ahead is {rise:0.0} m above the eye (angle {Math.Atan(bestAngle) * 180 / Math.PI:0.00} degrees)");
+        double roadAbove = rise / bestAt * (width / 2.0) * Projector.Focal;   // pixels above the horizon line (straight-ahead estimate)
+        Progress($"uphill: the top of the road is about {roadAbove:0} px above the horizon line; the mountain ridge reaches 8 to 60 px above it");
+    }
+
+    /// <summary>Two burning gunfire wrecks on an otherwise empty road: one 18 m ahead just right of the player, one 60 m ahead in another lane.</summary>
+    static void PlaceWrecks(World w, EffectList effects)
+    {
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        effects.Clear();
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 18, PrevDistance = p.Distance + 18, Lateral = p.Lateral + 2.2, Width = 1.9, Length = 4.4, Burn = 3.0 });
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 60, PrevDistance = p.Distance + 60, Lateral = p.Lateral - 4.5, Width = 1.9, Length = 4.4, Burn = 3.7 });
     }
 
     /// <summary>Puts the player left of the road and steps once so the off-road state is set.</summary>

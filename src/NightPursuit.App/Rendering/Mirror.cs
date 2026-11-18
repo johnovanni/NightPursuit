@@ -46,7 +46,7 @@ internal static class Mirror
         road.Draw(dc, Neon.MirrorRoad);
 
         foreach (var e in w.Agents.Where(e => cam.Ahead(e) is < -2.5 and > -300 && e.State != VehicleState.Wrecked)
-                                  .OrderBy(e => e.Distance))
+                                  .OrderBy(e => cam.Ahead(e)))
         {
             if (!MirrorPoint(cam.Ahead(e), cam.LateralOf(e), out var g, out double s)) continue;
             double cw = e.Stats.Width * s, ch = e.Stats.Height * s;
