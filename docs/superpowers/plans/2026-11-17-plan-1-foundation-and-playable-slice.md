@@ -35,7 +35,7 @@ point to it where porting is the fastest correct path. It is not referenced by a
 - Nothing important may depend on sound. There is no audio in this plan.
 - Original work only: no names, art or music from Spy Hunter, Speed Freak or any other game.
 - No screen-capture scripts. Visual checks use the app's `--snapshot`, `--stress` and `--perf` options.
-- **Commits:** the owner approves committing before execution starts. Commit messages end with
+- **Commits:** local commits on branch `plan-1-foundation` (decision D2). Commit messages end with
   `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`. Never push.
 - Test command (from repo root): `dotnet test tests/NightPursuit.Core.Tests`.
 
@@ -198,7 +198,7 @@ Port `RoadView` from the prototype's `Track.cs` (exact heading integration, with
     - steering: `SteerRampUp 4`, `SteerReturn 7`, `Straighten 8`, `SpeedSensitiveSteering true`, `AssistWhileSteering true` (bool)
     - lever: `LeverRateMph 30`
     - derived: `double MaxSpeed` (m/s), `double TurnRateAt(double v)`, `double MaxHeadingAt(double v)` (copy both from the prototype's `Tuning.cs`), `void Reset()`.
-  - `sealed class ControlFrame { int SteerDir; bool Gas, Brake, Fire; bool PadConnected, PadFire; double PadSteer, PadGas, PadBrake; static ControlFrame Empty }`
+  - `sealed class ControlFrame { int SteerDir; bool Gas, Brake, Fire; bool PadConnected, PadFire; double PadSteer, PadGas, PadBrake; static ControlFrame Empty }`. All members are public `init`-only properties (object initializers work, nothing can change a frame after creation); `Empty` is a `static readonly` instance (decision D7).
   - `enum ActionKind { SelectScheme, Cruise, LeverPreset, LeverUp, LeverDown, DropRear, Pause, ToggleHelp, Restart }`, and `readonly record struct GameAction(ActionKind Kind, int Value = 0)`
   - `readonly record struct PedalOutput(double Throttle, double Brake)`
   - `interface IThrottleScheme { string Name { get; } string[] HelpLines { get; } double? TargetSpeed { get; } string? Status { get; } void Reset(double currentSpeed); void Handle(GameAction a, double currentSpeed, FeelSettings f); PedalOutput Update(ControlFrame input, double currentSpeed, FeelSettings f, double dt); }`
@@ -254,8 +254,8 @@ The speed model and turn-to-aim steering are ported exactly from the prototype's
 - [ ] **Step 1: Write failing tests** (helper `TestWorlds.Straight()` returns `Track.FromSegments(new double[4000])`; `TestWorlds.Bend(r)` returns a constant bend)
 
 ```csharp
-[Fact] public void Full_throttle_reaches_about_154_mph()   // top speed comes from fall-off and coast, not a hard cap
-{ var car = new PlayerCar(); var f = new FeelSettings(); for (int i = 0; i < 120 * 60; i++) CarPhysics.StepPlayer(car, new(1, 0), 0, TestWorlds.Straight(), f, 1 / 120.0); Assert.InRange(Units.MsToMph(car.Speed), 150, 155); }
+[Fact] public void Full_throttle_tops_out_near_150_mph()   // top speed comes from fall-off and coast, not a hard cap: 9(1−r²) = 0.6 → r = 0.966 → 149.7 mph (decision D3)
+{ var car = new PlayerCar(); var f = new FeelSettings(); for (int i = 0; i < 120 * 60; i++) CarPhysics.StepPlayer(car, new(1, 0), 0, TestWorlds.Straight(), f, 1 / 120.0); Assert.InRange(Units.MsToMph(car.Speed), 148, 151); }
 [Fact] public void Brakes_stop_from_60_mph_in_under_30_m() { /* start 26.8 m/s, Brake 1 → distance travelled < 30 */ }
 [Fact] public void Uphill_slows_coasting_car_more_than_flat() { /* height rising 10%: speed after 5 s coasting < flat case */ }
 [Fact] public void No_input_on_bend_settles_at_predicted_drift()   // DRV-5: drift ≈ k·v²/Straighten
@@ -359,8 +359,8 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
     - `bool LeftGun`
   - `sealed class Loadout { MachineGuns Guns; OilDropper Oil; }` (OilDropper comes from Task 9; add it there)
   - `sealed class Tracer { RoadPose Pose; double PrevDistance, PrevLateral, Travel, Speed; int OwnerId; bool Dead; }`
-  - `abstract class Hazard { double Distance, Lateral; bool Expired; }`, and `sealed class Wreck : Hazard { double Width, Length; double Burn; }`, with Burn counting up for the flicker effect
-  - `World.Destroy(AgentCar car, KillCause cause)`: sets Wrecked; if the cause is Gunfire, adds a `Wreck` at the car's Distance/Lateral with its Width/Length; publishes `VehicleDestroyed`; adds Points to Score
+  - `abstract class Hazard { double Distance, Lateral; bool Expired; }`, and `sealed class Wreck : Hazard { double Width, Length, Speed; double Burn; bool HitPlayer; }`, with Burn counting up for the flicker effect. Each step a wreck with Speed > 0 slides along its lane: Speed decreases at 25 m/s² (not below 0) and Distance += Speed·dt; Lateral never changes (decision D4).
+  - `World.Destroy(AgentCar car, KillCause cause)`: sets Wrecked; publishes `VehicleDestroyed`; adds Points to Score. If the cause is Gunfire, it adds a `Wreck` at the car's Distance/Lateral with its Width/Length and Speed, and the agent is **removed from `Agents`** at the end of the step (the wreck hazard replaces it). Other causes keep the agent in `Agents` as Wrecked (removed after 1.5 s in Task 10).
   - In `World.StepOnce` (`// T8`): guns fire from `(Distance + 2cosh − side·sinh, Lateral + 2sinh + side·cosh)` with `side = ±0.7` and Heading = player Heading, and `Speed = player.Speed + MuzzleSpeed`. Tracers move with `RoadMotion.MoveStraight`. The hit test is **swept**: it hits when the car's span `[Distance ± Length/2]` overlaps `[PrevDistance, Distance]`, and the lateral, interpolated at the car's distance, is within `Width/2 + 0.15`. A tracer dies after Range metres of travel or at |Lateral| > 60. Each hit takes 1 armor and sets HitFlash 0.08; armor ≤ 0 calls `Destroy(car, Gunfire)`.
   - Wrecks expire once they are more than 600 m behind the player (WRK-3).
 
@@ -373,6 +373,7 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
 [Fact] public void Guns_overheat_after_4_s_and_lock_2_s() { /* hold Fire: Locked becomes true at 4.0 ± 0.05 s; false again at 6.0 ± 0.05 s */ }
 [Fact] public void Gun_kill_leaves_wreck_in_lane() { /* Runner (6 armor) at lane +5 killed by gunfire → Hazards has one Wreck with Lateral 5 and VehicleDestroyed(Gunfire, 100) published; Score 100 */ }
 [Fact] public void Wrecks_clear_600_m_behind() { /* wreck at 0, player at 601 → Expired */ }
+[Fact] public void Gunfire_wreck_slides_to_a_stop_in_its_lane() { /* Runner at 40 m/s killed by gunfire: agent gone from Agents; wreck Speed 40 → 0 after 1.6 ± 0.02 s, having slid 32 ± 0.5 m; Lateral unchanged */ }
 ```
 - [ ] **Step 2: Run.** Expected: FAIL.
 - [ ] **Step 3: Implement.**
@@ -387,7 +388,7 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
 
 **Interfaces:**
 - Produces:
-  - `sealed class OilDropper : Weapon`: `int Charges` (starts at the mission's StartingOil, max 5), recharges one charge every 8 s, `bool TryDrop()` with a 0.6 s cooldown.
+  - `sealed class OilDropper : Weapon`: `OilDropper(int startingCharges = 5)` (Task 11 passes the mission's StartingOil; decision D8), `int Charges` (max 5), recharges one charge every 8 s, `bool TryDrop()` with a 0.6 s cooldown.
   - `sealed class OilSlick : Hazard { const double Radius = 2.4; double Life = 25; }`, dropped 5 m behind the player.
   - `World.Spin(Vehicle v, int dir, string reason)`:
     - sets Spinning, StateTimer 1.8, SpinRate `dir·(6 + 3·rng)`
@@ -396,7 +397,8 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
   - `static class Collisions`, with `static void Resolve(World w)`:
     - **car vs car** (player against each agent): port the prototype's rules — rear-end, rammed from behind, sideswipe, and spin-on-ram when `playerInto > 5` — using each car's own Width/Length.
     - **car vs wreck** (WRK-3), for the player and agents:
-      - player hits a wreck: 30 damage, Speed = min(Speed, 5), Shake 0.5, message "HIT A WRECK"
+      - player hits a wreck the first time (`!wreck.HitPlayer`): 30 damage, Speed = min(Speed, 5), Shake 0.5, message "HIT A WRECK", set `HitPlayer` (decision D5)
+      - every step the player overlaps a wreck from behind, the player is put back at the wreck's rear edge (Distance = wreck.Distance − (wreck.Length + player.Length)/2) and Speed = min(Speed, wreck.Speed): the wreck blocks, it does not damage again
       - an agent hits a wreck: `Destroy(agent, WreckCollision)`, which leaves no new wreck
     - **car vs oil**: a driving agent overlapping a slick (|dDist| < R + Length/2, |dLat| < R + Width/2) spins.
   - Off-road crash (WRK-2): an agent with |Lateral| > 8.5 that is Spinning or has |PushVel| > 2 calls `Destroy(agent, RanOffRoad)`, which leaves no wreck.
@@ -409,6 +411,7 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
 [Fact] public void Spinning_car_off_road_crashes_without_wreck() { /* spin with PushVel +7 at lane +5 → Destroy(RanOffRoad); Hazards has no Wreck */ }
 [Fact] public void Hard_side_ram_spins_target() { /* agent alongside at +2.0, player LateralVel +6 → agent Spinning, player armor reduced */ }
 [Fact] public void Player_hitting_wreck_stops_hard() { /* player 60 m/s, wreck 3 m ahead same lateral → after collision Speed ≤ 5, Armor ≤ 70 */ }
+[Fact] public void Wreck_damages_player_once_then_blocks() { /* keep throttle on into a stopped wreck for 2 s: Armor is exactly 70, player Distance never passes the wreck's rear edge */ }
 [Fact] public void Agent_hitting_wreck_is_destroyed_without_new_wreck() { /* … */ }
 [Fact] public void Oil_recharges_one_charge_per_8_s() { /* charges 3 → 4 after 8 s */ }
 ```
@@ -508,7 +511,7 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
   - Startup: loads `content/missions/mission-01.json` with `MissionLoader.LoadFile`. A `MissionFormatException` or missing file shows a message window with the exception text and exits cleanly (Review Focus 4).
 
 - [ ] **Step 1: Build** with `dotnet build src/NightPursuit.App -c Release`. Expected: succeeded.
-- [ ] **Step 2: Manual check (owner):** launch, hold W, and the speed text rises. Hold A, alt-tab away and back: the car is not still steering (Review Focus 2). Rename the mission file, launch, and a readable error appears. Restore the file.
+- [ ] **Step 2: Checks.** The owner is away (decision D6): do not launch the window repeatedly. Verify by reading code that `Read(windowActive: false)` returns `ControlFrame.Empty` and clears held keys, and that the mission-load failure path shows a message window and exits with a non-zero code. Leave the live checks (hold W, alt-tab while steering, renamed mission file) for the owner's list.
 - [ ] **Step 3: Commit** `feat: app shell, input and game loop`.
 
 ### Task 13: Projector, sky and road rendering, snapshot diagnostic
@@ -584,7 +587,7 @@ Write each `/* … */` test with the setup and assertion stated in its comment.
 - [ ] **Step 2: Run** `--stress snapshots/stress.txt`. Expected: `0 failures` at every size.
 - [ ] **Step 3: Run** `--perf snapshots/perf.txt`. Expected: mean `OnRender` < 8 ms (half the 16.7 ms frame budget). If it's slower, profile and batch more lines before continuing.
 - [ ] **Step 4: Run the whole Core test suite.** Expected: all pass.
-- [ ] **Step 5: Manual check (owner):** play mission 1 to the end. Use the guns on a bend, check that a gunfire wreck blocks a lane, oil a pursuer, and ram a runner off the road.
+- [ ] **Step 5: Owner's check (deferred, decision D6):** play mission 1 to the end. Use the guns on a bend, check that a gunfire wreck blocks a lane, oil a pursuer, and ram a runner off the road.
 - [ ] **Step 6: Commit** `feat: stress and perf diagnostics, debug tuning panel`.
 
 ---
