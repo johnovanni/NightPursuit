@@ -6,7 +6,7 @@ using System.Windows.Data;
 using System.Windows.Media;
 using NightPursuit.Core.Control;
 
-namespace NightPursuit.App.Debug;
+namespace NightPursuit.App.Tuning;
 
 /// <summary>
 /// Debug-builds-only side panel (F12) with a slider for every feel value, bound two-way to the live

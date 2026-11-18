@@ -17,7 +17,7 @@ public partial class MainWindow : Window
         Game.Run = run;
 #if DEBUG
         // The run keeps the FeelSettings it was given when it rebuilds after a restart, so this stays the live one.
-        var tuning = new Debug.TuningPanel(run.World.Feel);
+        var tuning = new Tuning.TuningPanel(run.World.Feel);
         Root.Children.Add(tuning);
 #endif
 

@@ -283,12 +283,14 @@ public static class DiagnosticsRunner
             view.Effects.Absorb(run.World);
             view.Effects.Update(1.0 / 60);
 
+            int before = view.RenderCount;
             long start = System.Diagnostics.Stopwatch.GetTimestamp();
             view.InvalidateVisual();
             view.UpdateLayout();
             bitmap.Clear();
             bitmap.Render(view);
             double all = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+            if (view.RenderCount == before) throw new InvalidOperationException("the view was not redrawn");   // a skipped redraw would record a stale time
             if (frame >= 0)
             {
                 onRender.Add(view.LastRenderMilliseconds);

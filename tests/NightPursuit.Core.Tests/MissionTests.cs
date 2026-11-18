@@ -374,4 +374,49 @@ public class MissionTests
         run.Handle(new GameAction(ActionKind.Restart));
         Assert.Equal(0, run.World.Player.Distance);
     }
+
+    [Theory]
+    [InlineData(49)]
+    [InlineData(10)]
+    public void Road_min_radius_below_50_is_rejected(int radius)
+    {
+        var json = Valid.Replace("\"seed\": 7", $"\"seed\": 7, \"minRadius\": {radius}, \"maxRadius\": 400");
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(json, "m.json"));
+        Assert.Equal("m.json: road.minRadius must be at least 50 (got " + radius + ")", ex.Message);
+    }
+
+    [Fact]
+    public void Road_min_radius_of_50_is_accepted()
+    {
+        var json = Valid.Replace("\"seed\": 7", "\"seed\": 7, \"minRadius\": 50, \"maxRadius\": 400");
+        Assert.Equal(50, MissionLoader.Load(json, "m.json").Road.MinRadius);
+    }
+
+    [Theory]
+    [InlineData(29, 1)]       // too close ahead
+    [InlineData(0, 1)]
+    [InlineData(1401, 1)]     // too far ahead
+    [InlineData(1300, 10)]    // last car of the line lands at 1660
+    [InlineData(-29, 1)]      // too close behind
+    [InlineData(-451, 1)]     // too far behind
+    [InlineData(-400, 3)]     // last car of the line lands at -480
+    public void Wave_spawn_window_outside_the_allowed_range_is_rejected(int offset, int count)
+    {
+        var json = Valid.Replace("\"count\": 2, \"spawnOffset\": 400", $"\"count\": {count}, \"spawnOffset\": {offset}");
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(json, "m.json"));
+        Assert.StartsWith("m.json: waves[0].spawnOffset", ex.Message);
+    }
+
+    [Theory]
+    [InlineData(30, 1)]
+    [InlineData(1400, 1)]
+    [InlineData(1000, 10)]    // 1000 .. 1360
+    [InlineData(-30, 1)]
+    [InlineData(-450, 1)]
+    [InlineData(-100, 9)]     // -100 .. -420
+    public void Wave_spawn_window_on_the_edge_is_accepted(int offset, int count)
+    {
+        var json = Valid.Replace("\"count\": 2, \"spawnOffset\": 400", $"\"count\": {count}, \"spawnOffset\": {offset}");
+        Assert.Equal(offset, MissionLoader.Load(json, "m.json").Waves[0].SpawnOffset);
+    }
 }

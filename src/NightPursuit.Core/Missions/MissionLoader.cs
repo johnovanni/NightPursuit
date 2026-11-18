@@ -30,6 +30,10 @@ public static class MissionLoader
             return new Reader(sourceName).Read(doc.RootElement);
     }
 
+    const double MinAllowedRadius = 50;
+    const double CarSpacing = 40;   // matches MissionDirector
+    const double BehindNear = -30, BehindFar = -450, AheadNear = 30, AheadFar = 1400;
+
     sealed class Reader(string source)
     {
         MissionFormatException Fail(string message) => new($"{source}: {message}");
@@ -65,7 +69,7 @@ public static class MissionLoader
             double max = Opt(el, "maxRadius", "road.maxRadius", d.MaxRadius);
             double hill = Opt(el, "hillAmplitude", "road.hillAmplitude", d.HillAmplitude);
             int segments = el.TryGetProperty("segments", out _) ? Int(el, "segments", "road.segments") : d.Segments;
-            if (min <= 0) throw Fail("road.minRadius must be greater than 0");
+            if (min < MinAllowedRadius) throw Fail($"road.minRadius must be at least {MinAllowedRadius} (got {min})");
             if (max < min) throw Fail("road.maxRadius must not be less than road.minRadius");
             if (hill < 0) throw Fail("road.hillAmplitude must not be negative");
             if (segments is < 100 or > 20000) throw Fail($"road.segments must be from 100 to 20000 (got {segments})");
@@ -91,7 +95,19 @@ public static class MissionLoader
             int count = Int(el, "count", $"{p}.count");
             if (count is < 1 or > 10) throw Fail($"{p}.count must be from 1 to 10 (got {count})");
             double offset = Num(el, "spawnOffset", $"{p}.spawnOffset");
+            CheckSpawnWindow(p, offset, count);
             return new WaveDefinition(at, kind, count, offset);
+        }
+
+        /// <summary>A wave's first and last car must both appear clear of the player: 30 to 450 m behind, or 30 to 1400 m ahead.</summary>
+        void CheckSpawnWindow(string p, double offset, int count)
+        {
+            double last = offset + (count - 1) * CarSpacing * (offset >= 0 ? 1 : -1);
+            bool ahead = offset >= AheadNear && offset <= AheadFar && last >= AheadNear && last <= AheadFar;
+            bool behind = offset <= BehindNear && offset >= BehindFar && last <= BehindNear && last >= BehindFar;
+            if (!ahead && !behind)
+                throw Fail($"{p}.spawnOffset {offset} with count {count} puts cars from {offset} to {last} m; " +
+                           $"all must be between {BehindFar} and {BehindNear} (behind) or between {AheadNear} and {AheadFar} (ahead)");
         }
 
         JsonElement Required(JsonElement obj, string name, string path) =>
