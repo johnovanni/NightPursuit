@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
 using NightPursuit.Core.Simulation;
-using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.App.Rendering;
 
@@ -10,10 +9,9 @@ public static class EffectRenderer
 {
     public const double StreakLength = 7;
 
-    /// <summary>7 m amber streaks along each tracer's own heading (a bullet flies straight, not along the road).</summary>
+    /// <summary>7 m amber streaks along each tracer's own heading (a bullet flies straight, not along the road), hidden behind hill crests.</summary>
     public static void DrawTracers(DrawingContext dc, Projector p, World w)
     {
-        var batch = new LineBatch();
         foreach (var t in w.Tracers)
         {
             double dz = t.Pose.Distance - w.Player.Distance;
@@ -22,10 +20,13 @@ public static class EffectRenderer
             double tailL = t.Pose.Lateral - StreakLength * Math.Sin(t.Pose.Heading);
             if (!p.ToScreen(dz, t.Pose.Lateral, 0.6, out var head, out _) || !p.ToScreen(tailD, tailL, 0.6, out var tail, out _)) continue;
             double clip = p.ClipAt(dz);
-            if (clip <= 0 || tail.Y > clip) continue;
+            if (clip <= 0) continue;
+            var batch = new LineBatch();
             batch.Line(tail, head);
+            dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
+            batch.Draw(dc, Neon.Tracer);
+            dc.Pop();
         }
-        batch.Draw(dc, Neon.Tracer);
     }
 
     public static void DrawExplosions(DrawingContext dc, Projector p, World w, EffectList effects)
@@ -53,26 +54,22 @@ public static class EffectRenderer
         }
     }
 
-    /// <summary>A star burst at the gun that fired last, in screen space (the hood and guns are drawn elsewhere).</summary>
-    public static void DrawMuzzleFlash(DrawingContext dc, Projector p, World w)
+    /// <summary>
+    /// A star burst at the gun that fired last, in screen space (drawn with the hood). It stays for a minimum
+    /// of world time after the shot so a slow frame rate cannot skip it.
+    /// </summary>
+    internal static void DrawMuzzleFlash(DrawingContext dc, HudLayout l, World w, EffectList effects)
     {
-        Tracer? fresh = null;
-        foreach (var t in w.Tracers)
-            if (t.OwnerId == w.Player.Id && t.Travel < 6 && (fresh is null || t.Travel < fresh.Travel)) fresh = t;
-        if (fresh is null) return;
+        double age = w.Time - effects.LastShotTime;
+        if (age < 0 || age > EffectList.MuzzleFlashSeconds) return;
 
-        // Which gun: the sideways offset of the new tracer from the car's centre line (the guns sit 0.7 m either side).
-        double h = w.Player.Heading;
-        double dx = fresh.Pose.Lateral - w.Player.Lateral, dd = fresh.Pose.Distance - w.Player.Distance;
-        bool left = dx * Math.Cos(h) - dd * Math.Sin(h) < 0;
-
-        double top = p.Height * 0.86;
-        var m = new Point(p.HalfWidth + (left ? -78 : 78), top - 14);
+        double k = l.K;
+        var m = new Point(l.HalfWidth + (effects.LastShotLeft ? -78 : 78) * k, l.HoodTop - 14 * k);
         var flash = new LineBatch();
         for (int i = 0; i < 6; i++)
         {
             double a = i * Math.PI / 3 + w.Time * 7;
-            flash.Line(m, m + new Vector(Math.Cos(a), Math.Sin(a)) * 12);
+            flash.Line(m, m + new Vector(Math.Cos(a), Math.Sin(a)) * 12 * k);
         }
         flash.Draw(dc, Neon.Tracer);
     }

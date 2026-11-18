@@ -1,23 +1,31 @@
-using System.Globalization;
+using System.Diagnostics;
 using System.Windows;
 using System.Windows.Media;
-using NightPursuit.Core.Common;
 using NightPursuit.Core.Missions;
 
 namespace NightPursuit.App.Rendering;
 
-/// <summary>Stub view: black plus the speed readout. Real rendering arrives in later tasks.</summary>
+/// <summary>
+/// Draws one frame: the first-person vector world inside a shake transform, then everything that is fixed to
+/// the screen (hood, readouts, mirror, radar, warnings, messages and overlays) on top of it.
+/// </summary>
 public sealed class GameView : FrameworkElement
 {
-    static readonly Brush Amber = Freeze(new SolidColorBrush(Color.FromRgb(0xFF, 0xB0, 0x00)));
-    static readonly Typeface Face = new("Consolas");
-
     readonly Projector _projector = new();
+    readonly HudLayout _layout = new();
+
+#if DEBUG
+    readonly Stopwatch _frameClock = Stopwatch.StartNew();
+    double _lastFrame, _fps = 60;
+#endif
 
     public MissionRun? Run { get; set; }
 
     /// <summary>Explosions and other presentation-only effects; the game loop feeds it after each update.</summary>
     public EffectList Effects { get; } = new();
+
+    /// <summary>Whether the controls help is on screen: shown at the start until the first gas, and toggled by F1 (the game loop owns the logic).</summary>
+    public bool ShowHelp { get; set; } = true;
 
     protected override void OnRender(DrawingContext dc)
     {
@@ -26,28 +34,40 @@ public sealed class GameView : FrameworkElement
         dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, w, h));
         if (Run is null) return;
 
-        var world = Run.World;
-        if (w >= 50 && h >= 50)
-        {
-            _projector.Begin(w, h, world);
-            double shake = world.Player.Shake * 14;
-            dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
-            SkyRenderer.Draw(dc, _projector, world);
-            RoadRenderer.Draw(dc, _projector, world);
-            HazardRenderer.DrawSlicks(dc, _projector, world);
-            VehicleRenderer.DrawAll(dc, _projector, world);
-            EffectRenderer.DrawTracers(dc, _projector, world);
-            EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
-            EffectRenderer.DrawMuzzleFlash(dc, _projector, world);
-            // Later tasks: hood and guns, then the HUD outside the shake.
-            dc.Pop();
-        }
+        var run = Run;
+        var world = run.World;
+        if (w < 50 || h < 50) return;   // too small to draw anything legible
 
-        double mph = Units.MsToMph(Run.World.Player.Speed);
-        var text = new FormattedText($"{mph:0} MPH", CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            Face, 32, Amber, VisualTreeHelper.GetDpi(this).PixelsPerDip);
-        dc.DrawText(text, new Point((w - text.Width) / 2, h - text.Height - 16));
+        _projector.Begin(w, h, world);
+        _layout.Begin(w, h, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+
+        double shake = world.Player.Shake * 14;
+        dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
+        SkyRenderer.Draw(dc, _projector, world);
+        RoadRenderer.Draw(dc, _projector, world);
+        HazardRenderer.DrawSlicks(dc, _projector, world);
+        VehicleRenderer.DrawAll(dc, _projector, world);
+        EffectRenderer.DrawTracers(dc, _projector, world);
+        EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
+        dc.Pop();
+
+        // Screen-fixed from here on.
+        HoodRenderer.Draw(dc, _layout, world);
+        EffectRenderer.DrawMuzzleFlash(dc, _layout, world, Effects);
+        Hud.Draw(dc, _layout, run);
+        Mirror.Draw(dc, _layout, world);
+        Radar.Draw(dc, _layout, world);
+        Overlays.DrawWarnings(dc, _layout, world);
+        Overlays.DrawMessages(dc, _layout, world);
+        Overlays.DrawDamageAndOffRoad(dc, _layout, run);
+        Overlays.DrawState(dc, _layout, run);
+        if (ShowHelp) Overlays.DrawHelp(dc, _layout);
+
+#if DEBUG
+        double now = _frameClock.Elapsed.TotalSeconds, frame = now - _lastFrame;
+        _lastFrame = now;
+        if (frame > 0 && frame < 1) _fps = _fps * 0.95 + 0.05 / frame;
+        _layout.Text(dc, $"{_fps:0} FPS", 16 * _layout.K, h - 24 * _layout.K, 13, Neon.TextGray);
+#endif
     }
-
-    static Brush Freeze(Brush b) { b.Freeze(); return b; }
 }

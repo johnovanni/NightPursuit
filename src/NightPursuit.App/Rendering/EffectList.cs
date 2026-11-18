@@ -1,5 +1,6 @@
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Simulation;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.App.Rendering;
 
@@ -19,9 +20,17 @@ public sealed class EffectList
     readonly List<Explosion> _explosions = new();
     World? _world;
     double _absorbedTime = double.NaN;
+    HashSet<Tracer> _seenTracers = new();
     int _nextSeed = 1000;   // deterministic seeds: the same run always draws the same bursts
 
     public IReadOnlyList<Explosion> Explosions => _explosions;
+
+    /// <summary>World time of the newest player shot seen (negative infinity before any), for the muzzle flash.</summary>
+    public double LastShotTime { get; private set; } = double.NegativeInfinity;
+    public bool LastShotLeft { get; private set; }
+
+    /// <summary>The muzzle flash is shown for this many seconds of world time after a shot.</summary>
+    public const double MuzzleFlashSeconds = 0.05;
 
     public void Spawn(double distance, double lateral) => _explosions.Add(new Explosion(distance, lateral, _nextSeed++));
 
@@ -32,10 +41,22 @@ public sealed class EffectList
         {
             _world = w;
             _absorbedTime = double.NaN;
-            _explosions.Clear();
+            Clear();
         }
         if (w.Time == _absorbedTime) return;   // no new steps since the last call: these are the same events
         _absorbedTime = w.Time;
+
+        // A player tracer we have not seen before is a new shot, however far it flew during a long frame.
+        var seen = new HashSet<Tracer>();
+        bool shot = false;
+        foreach (var t in w.Tracers)
+        {
+            if (t.OwnerId != w.Player.Id) continue;
+            seen.Add(t);
+            if (!_seenTracers.Contains(t)) shot = true;
+        }
+        _seenTracers = seen;
+        if (shot) MarkShot(w.Time, w.Loadout.Guns.LeftGun);
 
         var destroyed = w.Events.OfType<VehicleDestroyed>().ToList();
         if (destroyed.Count == 0) return;
@@ -56,6 +77,21 @@ public sealed class EffectList
                 if (car is not null) Spawn(car.Distance, car.Lateral);
             }
         }
+    }
+
+    /// <summary>Records that a player gun fired at world time <paramref name="time"/>.</summary>
+    public void MarkShot(double time, bool leftGun)
+    {
+        LastShotTime = time;
+        LastShotLeft = leftGun;
+    }
+
+    /// <summary>Forgets every effect (a new run, or a diagnostic scene that places its own).</summary>
+    public void Clear()
+    {
+        _explosions.Clear();
+        _seenTracers.Clear();
+        LastShotTime = double.NegativeInfinity;
     }
 
     public void Update(double seconds)

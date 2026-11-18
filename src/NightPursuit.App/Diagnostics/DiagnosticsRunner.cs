@@ -75,9 +75,9 @@ public static class DiagnosticsRunner
             return 2;
         }
         string scene = Arg(args, "--scene") ?? "default";
-        if (scene != "default" && scene != "close-cars")
+        if (scene != "default" && scene != "close-cars" && scene != "offroad")
         {
-            Error($"Unknown scene '{scene}'. Known scenes: default, close-cars");
+            Error($"Unknown scene '{scene}'. Known scenes: default, close-cars, offroad");
             return 2;
         }
         double seconds = 12;
@@ -91,7 +91,7 @@ public static class DiagnosticsRunner
         }
 
         var run = NewRun();
-        var view = new GameView { Run = run, Width = Width, Height = Height };
+        var view = new GameView { Run = run, Width = Width, Height = Height, ShowHelp = false };
         for (double t = 0; t < seconds; t += Dt)
         {
             run.Update(Autopilot.Next(run.World), Dt);
@@ -99,6 +99,7 @@ public static class DiagnosticsRunner
             view.Effects.Update(Dt);
         }
         if (scene == "close-cars") PlaceCloseCars(run.World, view.Effects);
+        else if (scene == "offroad") PlaceOffRoad(run);
 
         view.Measure(new Size(Width, Height));
         view.Arrange(new Rect(0, 0, Width, Height));
@@ -114,6 +115,13 @@ public static class DiagnosticsRunner
         return 0;
     }
 
+    /// <summary>Puts the player left of the road and steps once so the off-road state is set.</summary>
+    static void PlaceOffRoad(MissionRun run)
+    {
+        run.World.Player.Lateral = -9.2;
+        run.Update(ControlFrame.Empty, Dt);
+    }
+
     /// <summary>Replaces whatever is on the road with one of each thing the renderers draw, at known distances from the player.</summary>
     static void PlaceCloseCars(World w, EffectList effects)
     {
@@ -121,14 +129,15 @@ public static class DiagnosticsRunner
         w.Agents.Clear();
         w.Hazards.Clear();
         w.Tracers.Clear();
+        effects.Clear();
 
         var runner = AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + 22, p.Lateral + 4, p.Speed);
         runner.Armor = 3;   // half of 6, so its health bar shows
-        var blocker = AgentCar.Create(w.NextId(), AgentKind.Blocker, p.Distance + 70, p.Lateral - 3, p.Speed);
+        var blocker = AgentCar.Create(w.NextId(), AgentKind.Blocker, p.Distance + 70, p.Lateral - 1.5, p.Speed);
         var spinner = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance + 140, p.Lateral, p.Speed);
         spinner.State = VehicleState.Spinning;
         spinner.SpinAngle = 0.7;
-        var behind = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance - 25, p.Lateral, p.Speed);
+        var behind = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance - 25, p.Lateral + 3, p.Speed);
         w.Agents.AddRange(new[] { runner, blocker, spinner, behind });
 
         w.Hazards.Add(new Wreck { Distance = p.Distance + 50, Lateral = p.Lateral + 1, Width = 1.9, Length = 4.4, Burn = 0.6 });
@@ -139,6 +148,7 @@ public static class DiagnosticsRunner
 
         w.Tracers.Add(NewTracer(p, 9, 0.7, 3));    // fresh: also shows the muzzle flash
         w.Tracers.Add(NewTracer(p, 60, -0.7, 150));
+        effects.MarkShot(w.Time, leftGun: true);   // the fresh tracer's muzzle flash
     }
 
     static Tracer NewTracer(PlayerCar p, double ahead, double side, double travel)

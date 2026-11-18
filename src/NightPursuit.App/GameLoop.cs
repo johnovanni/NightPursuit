@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using NightPursuit.App.Input;
 using NightPursuit.App.Rendering;
+using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
 
 namespace NightPursuit.App;
@@ -15,6 +16,7 @@ public sealed class GameLoop
     readonly InputHub _input;
     TimeSpan _last;
     bool _haveLast;
+    bool _gasSeen;   // the intro help stays up until the first gas
 
     public GameLoop(Window window, MissionRun run, GameView view, InputHub input)
     {
@@ -37,7 +39,18 @@ public sealed class GameLoop
 
         // Read first: polling the pad is what queues its press-edge actions, and they must act this frame.
         var held = _input.Read(_window.IsActive);
-        foreach (var a in _input.Drain()) _run.Handle(a);
+        foreach (var a in _input.Drain())
+        {
+            // The help screen is an App matter: the run never sees it.
+            if (a.Kind == ActionKind.ToggleHelp) { _view.ShowHelp = !_view.ShowHelp; _gasSeen = true; continue; }
+            if (a.Kind == ActionKind.Restart) { _view.ShowHelp = true; _gasSeen = false; }
+            _run.Handle(a);
+        }
+        if (!_gasSeen && (held.Gas || held.PadGas > 0.2))
+        {
+            _gasSeen = true;
+            _view.ShowHelp = false;
+        }
         _run.Update(held, seconds);   // Core caps a long stall at 0.25 s
         _view.Effects.Absorb(_run.World);
         if (_run.State != RunState.Paused) _view.Effects.Update(seconds);

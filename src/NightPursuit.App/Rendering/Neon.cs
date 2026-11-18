@@ -35,6 +35,16 @@ internal static class Neon
     public static readonly NeonPen WreckBody = Pen(Orange, 0.45, 1.4), FlameOuter = Pen(Orange, 1, 2), FlameInner = Pen(Amber, 1, 1.4);
     public static readonly Brush OilFill = Solid(Purple, 0.16), TailLight = Solid(Red), BarBack = Solid(Colors.Black, 0.7);
 
+    // Cockpit and HUD.
+    public static readonly NeonPen Hood = Pen(Green, 0.8, 1.6), Gun = Pen(Green, 1, 3);
+    public static readonly NeonPen Hud = Pen(Cyan, 0.8, 1.2), RadarLine = Pen(Green, 0.55, 1.0), MirrorRoad = Pen(Cyan, 0.6, 1.0);
+    public static readonly NeonPen RadarWreck = Pen(Orange, 1, 1.6), RadarRunner = Pen(Magenta, 1, 1.5), RadarBlocker = Pen(Amber, 1, 1.5), RadarPursuer = Pen(Red, 1, 1.5);
+    public static readonly Brush TextCyan = Solid(Cyan), TextGray = Solid(Gray), TextAmber = Solid(Amber), TextRed = Solid(Red);
+    public static readonly Brush TextGreen = Solid(Green), TextWhite = Solid(White), TextMagenta = Solid(Magenta);
+    public static readonly Brush ThrottleFill = Solid(Green, 0.85), BrakeFill = Solid(Red, 0.85), HudBack = Solid(Cyan, 0.08);
+    public static readonly Brush PanelFill = Solid(Color.FromRgb(4, 8, 14), 0.9), RadarFill = Solid(Color.FromRgb(2, 14, 8), 0.85);
+    public static readonly Brush HitEdge = Solid(Red, 0.55);
+
     public static NeonPen Pen(Color c, double alpha = 1, double width = 1.6)
     {
         var glow = new Pen(Solid(c, 0.27 * alpha), width + 4)
