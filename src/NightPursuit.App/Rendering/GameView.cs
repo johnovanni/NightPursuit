@@ -74,6 +74,7 @@ public sealed class GameView : FrameworkElement
         Radar.Draw(dc, _layout, world, _projector);
         Overlays.DrawWarnings(dc, _layout, world);
         Overlays.DrawMessages(dc, _layout, world);
+        Overlays.DrawAnnouncement(dc, _layout, world);
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
         Overlays.DrawState(dc, _layout, run);   // after the help, so PAUSED / GAME OVER etc. are never hidden under it

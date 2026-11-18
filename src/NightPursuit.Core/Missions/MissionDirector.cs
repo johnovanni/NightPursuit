@@ -70,6 +70,7 @@ public sealed class MissionDirector(MissionDefinition def)
         Stage = MissionStage.Boss;
         w.Publish(new BossAppeared(w.Time, bossDef.Name));
         w.Publish(new Message(w.Time, $"BOSS AHEAD: {bossDef.Name.ToUpperInvariant()}", Tone.Bad));
+        w.Announce($"BOSS: {bossDef.Name.ToUpperInvariant()}", "DESTROY IT TO FINISH THE MISSION", 3);
     }
 
     static void Spawn(World w, WaveDefinition wave)

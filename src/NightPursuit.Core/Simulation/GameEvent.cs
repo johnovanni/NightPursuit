@@ -36,6 +36,8 @@ public sealed record SupplyCollected(double Time, SupplyItem Item, int Added) : 
 public sealed record StrikeLanded(double Time, int Destroyed) : GameEvent(Time);
 /// <summary>The boss lost <paramref name="Amount"/> health (what was really taken, after the phase floor).</summary>
 public sealed record BossDamaged(double Time, double Amount, string Reason) : GameEvent(Time);
+/// <summary>A warning of this kind appeared on screen this step (it was not there the step before); <paramref name="Text"/> is what it says.</summary>
+public sealed record WarningRaised(double Time, WarningKind Kind, string Text) : GameEvent(Time);
 /// <summary>The mission's boss, called <paramref name="Name"/>, appeared at the end of the approach.</summary>
 public sealed record BossAppeared(double Time, string Name) : GameEvent(Time);
 /// <summary>The boss began phase <paramref name="Phase"/> (1-based) of <paramref name="PhaseCount"/>, driving as <paramref name="Behaviour"/>.</summary>

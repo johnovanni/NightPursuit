@@ -31,6 +31,8 @@ public sealed partial class World
     readonly Dictionary<string, double> _lastDamageMessage = new();
     double _accumulator;
     int _lastId;
+    Announcement? _announcement;
+    WarningKind[] _shownWarnings = [];
 
     public Track Track { get; }
     /// <summary>The road as seen from the player's latest step; rebuilt on every Advance. Drawing does not use it: the App's Projector builds its own view at the interpolated camera.</summary>
@@ -61,6 +63,13 @@ public sealed partial class World
 
     /// <summary>Events published since the last <see cref="Advance"/> began.</summary>
     public IReadOnlyList<GameEvent> Events => _events;
+
+    /// <summary>The banner on screen now (boss, phase, strike), or null once its time is up.</summary>
+    public Announcement? Announcement => _announcement is { } a && Time < a.Until ? a : null;
+
+    /// <summary>Shows a banner for <paramref name="seconds"/>, replacing any other.</summary>
+    public void Announce(string title, string detail, double seconds) =>
+        _announcement = new Announcement(title, detail, Time, Time + seconds);
 
     /// <summary>Newest first, at most 4, each kept 2.5 s.</summary>
     public List<GameEvent> RecentMessages { get; } = new();
@@ -152,8 +161,18 @@ public sealed partial class World
         _removals.Clear();
 
         Player.HitFlash = Math.Max(0, Player.HitFlash - Step);
+        PublishNewWarnings();
         Time += Step;
         RecentMessages.RemoveAll(e => Time - e.Time > MessageLifetime);
+    }
+
+    /// <summary>Publishes a <see cref="WarningRaised"/> for each warning kind on screen now that was not there last step.</summary>
+    void PublishNewWarnings()
+    {
+        var now = Warnings.Collect(this);
+        foreach (var warning in now)
+            if (Array.IndexOf(_shownWarnings, warning.Kind) < 0) Publish(new WarningRaised(Time, warning.Kind, warning.Text));
+        _shownWarnings = now.Select(x => x.Kind).ToArray();
     }
 
     /// <summary>Remembers where everything that moves was before this step, for render interpolation.</summary>

@@ -175,6 +175,7 @@ public sealed partial class World
         strike.TryBegin();
         Publish(new WeaponUsed(Time, WeaponKind.Strike, 0));
         Publish(new Message(Time, "SATELLITE STRIKE: TARGETING", Tone.Info));
+        Announce("SATELLITE STRIKE", $"TARGETING {Agents.Count(InStrikeRange)} HOSTILES", 1.5);
     }
 
     /// <summary>
@@ -199,5 +200,6 @@ public sealed partial class World
         }
         Publish(new StrikeLanded(Time, destroyed));
         Publish(new Message(Time, $"SATELLITE STRIKE: {destroyed} DESTROYED", Tone.Good));
+        Announce($"STRIKE: {destroyed} DESTROYED", "", 1.5);
     }
 }

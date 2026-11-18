@@ -38,7 +38,21 @@ public sealed partial class World
         var behaviour = b.Phase.Behaviour;
         Publish(new BossPhaseChanged(Time, n, m, behaviour));
         Publish(new Message(Time, $"BOSS PHASE {n} OF {m}: {behaviour.ToString().ToUpperInvariant()}", Tone.Info));
+        string hint = PhaseHint(behaviour) + (b.Phase.FiresMissiles ? "  -  FIRES MISSILES" : "");
+        Announce($"PHASE {n} OF {m}: {behaviour.ToString().ToUpperInvariant()}", hint, 2.5);
     }
+
+    /// <summary>One line telling the player what a boss phase does and how to beat it.</summary>
+    static string PhaseHint(AgentKind behaviour) => behaviour switch
+    {
+        AgentKind.Runner => "IT WEAVES FROM LANE TO LANE - KEEP YOUR NOSE ON IT",
+        AgentKind.Blocker => "IT WILL BLOCK AND BRAKE-CHECK YOU",
+        AgentKind.Pursuer => "LET IT PASS, THEN SHOOT",
+        AgentKind.Gunner => "IT SHOOTS BACK - STAY OUT OF ITS LANE",
+        AgentKind.Dropper => "OIL AND CALTROPS AHEAD",
+        AgentKind.Armored => "BULLETS DO A QUARTER - USE MISSILES AND HAZARDS",
+        _ => "",
+    };
 
     /// <summary>Spins the boss out in place for 1.5 s with its armor open; this engages it too.</summary>
     public void SpinBoss(BossCar b)

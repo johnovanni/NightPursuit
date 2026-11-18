@@ -456,7 +456,7 @@ public class EnemyMissileTests
     const int BossFrom = 85 * StepsPerSecond, MissilesUntil = 92 * StepsPerSecond;
 
     /// <summary>Every 2 s, 0.5 s apart: drop the rear weapon, cycle it, fire a missile (85-92 s), call a strike (from 85 s).</summary>
-    static ActionKind? ActionAt(int step)
+    internal static ActionKind? ActionAt(int step)
     {
         if (step % ScheduleSteps != 0) return null;
         return (step / ScheduleSteps % 4) switch
@@ -473,7 +473,7 @@ public class EnemyMissileTests
     /// nearest lane with no wreck or car just ahead, and when nearly stopped (no turning power) crabs toward it, so a
     /// wreck in its lane can't hold it up for the rest of the run.
     /// </summary>
-    static double AutopilotSteer(World w, double lookAhead = 0)
+    internal static double AutopilotSteer(World w, double lookAhead = 0)
     {
         var p = w.Player;
         var feel = w.Feel;

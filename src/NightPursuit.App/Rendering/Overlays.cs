@@ -14,7 +14,7 @@ namespace NightPursuit.App.Rendering;
 /// </summary>
 internal static class Overlays
 {
-    const double PursuerRange = 120, AlongsideAhead = 4, AlongsideZone = 3, AheadRange = 150, MessageLife = 2.5, MessageFade = 0.6;
+    const double MessageLife = 2.5, MessageFade = 0.6;
 
     static readonly int[] LeftOnly = { -1 }, RightOnly = { 1 };
 
@@ -34,48 +34,37 @@ internal static class Overlays
         "Press gas to start.  F1 shows this again.",
     };
 
+    /// <summary>Draws exactly what <see cref="Warnings.Collect"/> says (the rules live in Core, where tests prove each one): words, and an edge arrow where it has one.</summary>
     public static void DrawWarnings(DrawingContext dc, HudLayout l, World w)
     {
-        var p = w.Player;
         double k = l.K;
         double pulse = (w.Time * 3) % 1 < 0.5 ? 1 : 0.5;
-
-        AgentCar? nearestPursuer = null;
-        bool blocker = false;
-        foreach (var e in w.Agents)
-        {
-            if (e.State != VehicleState.Driving) continue;
-            double dz = e.Distance - p.Distance;
-            if (e.Kind == AgentKind.Pursuer && dz < AlongsideAhead && dz > -PursuerRange)
-            {
-                if (nearestPursuer is null || dz > nearestPursuer.Distance - p.Distance) nearestPursuer = e;
-                DrawEdgeArrow(dc, l, e.Lateral < p.Lateral - 1 ? -1 : e.Lateral > p.Lateral + 1 ? 1 : 0);
-            }
-            else if (e.Kind == AgentKind.Blocker && dz > 0 && dz < AheadRange && Math.Abs(e.Lateral - p.Lateral) < 2)
-                blocker = true;
-        }
-
-        bool wreck = w.Hazards.OfType<Wreck>().Any(h =>
-        {
-            double dz = h.Distance - p.Distance;
-            return dz > 0 && dz < AheadRange && Math.Abs(h.Lateral - p.Lateral) < 2.2;
-        });
-
         dc.PushOpacity(pulse);
-        if (nearestPursuer is not null)
+        double y = 108 * k;
+        foreach (var warning in Warnings.Collect(w))
         {
-            double dx = nearestPursuer.Lateral - p.Lateral;
-            string side = dx < -1 ? "LEFT" : dx > 1 ? "RIGHT" : "";
-            double dist = p.Distance - nearestPursuer.Distance;
-            string text;
-            if (dist < AlongsideZone)     // beside you or slightly ahead: it is about to ram, so no distance
-                text = $"PURSUER {(side.Length == 0 ? (dx < 0 ? "LEFT" : "RIGHT") : side)}";
-            else
-                text = side.Length == 0 ? $"PURSUER BEHIND  {dist:0} m" : $"PURSUER BEHIND {side}  {dist:0} m";
-            l.Centered(dc, text, 108 * k, 18, Neon.TextRed);
+            if (warning.ShowArrow) DrawEdgeArrow(dc, l, warning.Side);
+            l.Centered(dc, warning.Text, y, 18, WarningBrush(warning.Kind));
+            y += 22 * k;
         }
-        if (blocker) l.Centered(dc, "BLOCKER AHEAD", 132 * k, 18, Neon.TextAmber);
-        if (wreck) l.Centered(dc, "WRECK AHEAD", 156 * k, 18, Neon.TextOrange);
+        dc.Pop();
+    }
+
+    static Brush WarningBrush(WarningKind kind) => kind switch
+    {
+        WarningKind.BlockerAhead => Neon.TextAmber,
+        WarningKind.WreckAhead or WarningKind.HazardAhead => Neon.TextOrange,
+        _ => Neon.TextRed,
+    };
+
+    /// <summary>The big banner for a boss, a boss phase or a strike: a title and a line of detail, fading out in its last half second.</summary>
+    public static void DrawAnnouncement(DrawingContext dc, HudLayout l, World w)
+    {
+        if (w.Announcement is not { } a) return;
+        double k = l.K;
+        dc.PushOpacity(Math.Clamp((a.Until - w.Time) / MessageFade, 0, 1));
+        l.Centered(dc, a.Title, l.Height * 0.44, 30, Neon.TextAmber);
+        if (a.Detail.Length > 0) l.Centered(dc, a.Detail, l.Height * 0.44 + 40 * k, 18, Neon.TextCyan);
         dc.Pop();
     }
 
@@ -95,7 +84,7 @@ internal static class Overlays
 
     public static void DrawMessages(DrawingContext dc, HudLayout l, World w)
     {
-        double y = l.Height * 0.26;
+        double y = Math.Max(l.Height * 0.26, 200 * l.K);   // below the four warning lines
         foreach (var e in w.RecentMessages)
         {
             if (e is not Message m) continue;
