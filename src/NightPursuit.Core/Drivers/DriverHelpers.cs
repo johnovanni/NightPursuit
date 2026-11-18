@@ -152,40 +152,64 @@ public static class DriverHelpers
     /// <summary>The least sideways distance from the player's centre to a lane a passing car may use.</summary>
     public const double PassClearance = 2.5;
 
-    /// <summary>How far the passing car's rear must be past the player's front before it may cross in front of them, metres.</summary>
-    const double CrossAhead = 2;
+    /// <summary>
+    /// The bumper-to-bumper gap a passing car needs before it may cross the player's path: its rear this far past the
+    /// player's front to cross in front, or its front this far short of the player's rear to cross behind, metres.
+    /// </summary>
+    const double CrossGap = 2;
     /// <summary>Room kept beyond the two cars' half widths while holding a line alongside, metres.</summary>
     const double HoldLineMargin = 0.3;
+    /// <summary>How much slower than the player a car with no way past waits, m/s.</summary>
+    const double YieldSlower = 3;
+
+    /// <summary>Where a passing car steers, and the most it may drive at (infinite when there is no limit).</summary>
+    public readonly record struct PassingLine(double Lateral, double MaxSpeed);
 
     /// <summary>
-    /// Where to pass the player, so the car never swerves across the player's path while alongside.
-    /// <paramref name="current"/> is kept while it is a lane centre at least <see cref="PassClearance"/> from the player.
-    /// Otherwise it is the lane farthest from the player on the car's own side of them (see <see cref="SideOf"/>) that is
-    /// at least <see cref="PassClearance"/> away. When that side has none, the car holds its line (kept the two half widths
-    /// + 0.3 m off the player, on the road) until its rear is 2 m past the player's front, and only then takes the lane
-    /// farthest from the player.
+    /// Where to pass the player, so the car never swerves across the player's path while alongside and never drives
+    /// into them. <paramref name="current"/> is kept while it is a lane centre at least <see cref="PassClearance"/> from
+    /// the player. Otherwise, in order:
+    /// <list type="number">
+    /// <item>the lane farthest from the player on the car's own side of them (see <see cref="SideOf"/>) that is at least
+    /// <see cref="PassClearance"/> away;</item>
+    /// <item>once its rear is 2 m past the player's front, the lane farthest from the player (it crosses in front);</item>
+    /// <item>its own line, pushed out to the two half widths + 0.3 m from the player and kept on the road, if that
+    /// still clears the player by that much;</item>
+    /// <item>while its front is at least 2 m short of the player's rear, the lane farthest from the player (it crosses
+    /// behind);</item>
+    /// <item>otherwise it keeps that line without pushing into the player and waits at the player's speed - 3 m/s
+    /// until it has dropped 2 m behind, then crosses behind.</item>
+    /// </list>
     /// </summary>
-    public static double PassingLane(AgentCar self, PlayerCar p, double? current = null)
+    public static PassingLine PassingLane(AgentCar self, PlayerCar p, double? current = null)
     {
         if (current is double lane && Array.IndexOf(Track.LaneCentres, lane) >= 0 && Math.Abs(lane - p.Lateral) >= PassClearance)
-            return lane;
+            return new PassingLine(lane, double.PositiveInfinity);
         int side = SideOf(self, p.Lateral);
-        if (ClearLaneOnSide(p.Lateral, side) is double own) return own;
+        if (ClearLaneOnSide(p.Lateral, side) is double own) return new PassingLine(own, double.PositiveInfinity);
 
-        bool clearAhead = self.Distance - self.Stats.Length / 2 >= p.Distance + p.Stats.Length / 2 + CrossAhead;
-        if (clearAhead)
-        {
-            double farthest = Track.LaneCentres[0];
-            foreach (double l in Track.LaneCentres)
-                if (Math.Abs(l - p.Lateral) > Math.Abs(farthest - p.Lateral) + Same) farthest = l;
-            return farthest;
-        }
+        double selfHalf = self.Stats.Length / 2, playerHalf = p.Stats.Length / 2;
+        if (self.Distance - selfHalf >= p.Distance + playerHalf + CrossGap)
+            return new PassingLine(FarthestLane(p.Lateral), double.PositiveInfinity);
 
         double keepOff = (self.Stats.Width + p.Stats.Width) / 2 + HoldLineMargin;
         double line = self.Lateral;
         if ((line - p.Lateral) * side < keepOff) line = p.Lateral + side * keepOff;
         double limit = OnRoadLimit(self);
-        return Math.Clamp(line, -limit, limit);
+        line = Math.Clamp(line, -limit, limit);
+        if (Math.Abs(line - p.Lateral) >= keepOff - Same) return new PassingLine(line, double.PositiveInfinity);
+        if (self.Distance + selfHalf <= p.Distance - playerHalf - CrossGap)
+            return new PassingLine(FarthestLane(p.Lateral), double.PositiveInfinity);
+        return new PassingLine(line, Math.Max(0, p.Speed - YieldSlower));
+    }
+
+    /// <summary>The lane centre farthest from the player (5 m or more away).</summary>
+    static double FarthestLane(double playerLateral)
+    {
+        double farthest = Track.LaneCentres[0];
+        foreach (double l in Track.LaneCentres)
+            if (Math.Abs(l - playerLateral) > Math.Abs(farthest - playerLateral) + Same) farthest = l;
+        return farthest;
     }
 
     /// <summary>Which side of the player the car is on: -1 left, +1 right, its own <see cref="AgentCar.Side"/> when level.</summary>

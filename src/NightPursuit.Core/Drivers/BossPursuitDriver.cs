@@ -48,7 +48,7 @@ public sealed class BossPursuitDriver : IDriver
                 if (self.ContactCooldown > 0 || (s.Alongside && s.Timer <= 0))
                 {
                     s.Phase = BossPursuitPhase.Overtake;
-                    s.Target = DriverHelpers.PassingLane(self, p);
+                    s.Target = DriverHelpers.PassingLane(self, p).Lateral;
                 }
                 break;
             case BossPursuitPhase.Overtake:
@@ -73,8 +73,9 @@ public sealed class BossPursuitDriver : IDriver
                     ramming: s.Alongside && s.Timer < DriverHelpers.RamSeconds, limit);
                 break;
             case BossPursuitPhase.Overtake:
-                speed = Math.Min(OvertakeTopSpeed, p.Speed + OvertakeExtra);
-                s.Target = DriverHelpers.PassingLane(self, p, s.Target);
+                var line = DriverHelpers.PassingLane(self, p, s.Target);
+                speed = Math.Min(Math.Min(OvertakeTopSpeed, p.Speed + OvertakeExtra), line.MaxSpeed);
+                s.Target = line.Lateral;
                 break;
             case BossPursuitPhase.HoldAhead:
                 speed = DriverHelpers.HoldGap(p.Speed, dD, HoldGapWanted, HoldGain, -HoldRange, HoldRange);

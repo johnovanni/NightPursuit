@@ -65,11 +65,12 @@ public sealed class BossDriver : IDriver
         }
 
         var p = view.Player;
-        b.PassLane = DriverHelpers.PassingLane(b, p, b.PassLane);
-        double lateral = DriverHelpers.SteerAroundWrecks(b, view, b.PassLane.Value, b.PassAvoid, delay, dt);
+        var line = DriverHelpers.PassingLane(b, p, b.PassLane);
+        b.PassLane = line.Lateral;
+        double lateral = DriverHelpers.SteerAroundWrecks(b, view, line.Lateral, b.PassAvoid, delay, dt);
         return intent with
         {
-            TargetSpeed = Math.Max(intent.TargetSpeed, Math.Min(TopSpeed, p.Speed + PassExtra)),
+            TargetSpeed = Math.Min(Math.Max(intent.TargetSpeed, Math.Min(TopSpeed, p.Speed + PassExtra)), line.MaxSpeed),
             TargetLateral = lateral,
         };
     }
