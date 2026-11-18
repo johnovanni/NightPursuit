@@ -16,6 +16,9 @@ public sealed class GameView : FrameworkElement
 
     public MissionRun? Run { get; set; }
 
+    /// <summary>Explosions and other presentation-only effects; the game loop feeds it after each update.</summary>
+    public EffectList Effects { get; } = new();
+
     protected override void OnRender(DrawingContext dc)
     {
         double w = ActualWidth, h = ActualHeight;
@@ -31,7 +34,12 @@ public sealed class GameView : FrameworkElement
             dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
             SkyRenderer.Draw(dc, _projector, world);
             RoadRenderer.Draw(dc, _projector, world);
-            // Later tasks: vehicles, hazards, tracers and effects here, then the HUD outside the shake.
+            HazardRenderer.DrawSlicks(dc, _projector, world);
+            VehicleRenderer.DrawAll(dc, _projector, world);
+            EffectRenderer.DrawTracers(dc, _projector, world);
+            EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
+            EffectRenderer.DrawMuzzleFlash(dc, _projector, world);
+            // Later tasks: hood and guns, then the HUD outside the shake.
             dc.Pop();
         }
 

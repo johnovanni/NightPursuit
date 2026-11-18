@@ -29,6 +29,12 @@ internal static class Neon
     public static readonly NeonPen Sky = Pen(Indigo, 0.8, 1.2), Moon = Pen(White, 0.6, 1.2);
     public static readonly Brush Star = Solid(White, 0.55);
 
+    // Vehicles, hazards and effects.
+    public static readonly NeonPen RunnerCar = Pen(Magenta), BlockerCar = Pen(Amber), PursuerCar = Pen(Red), CarFlash = Pen(White, 1, 2.4);
+    public static readonly NeonPen Tracer = Pen(Amber, 1, 2), Oil = Pen(Purple, 0.9, 1.4), Boom = Pen(Orange, 1, 2);
+    public static readonly NeonPen WreckBody = Pen(Orange, 0.45, 1.4), FlameOuter = Pen(Orange, 1, 2), FlameInner = Pen(Amber, 1, 1.4);
+    public static readonly Brush OilFill = Solid(Purple, 0.16), TailLight = Solid(Red), BarBack = Solid(Colors.Black, 0.7);
+
     public static NeonPen Pen(Color c, double alpha = 1, double width = 1.6)
     {
         var glow = new Pen(Solid(c, 0.27 * alpha), width + 4)

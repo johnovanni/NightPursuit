@@ -5,7 +5,12 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using NightPursuit.App.Rendering;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
+using NightPursuit.Core.Road;
+using NightPursuit.Core.Simulation;
+using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.App.Diagnostics;
 
@@ -70,9 +75,9 @@ public static class DiagnosticsRunner
             return 2;
         }
         string scene = Arg(args, "--scene") ?? "default";
-        if (scene != "default")
+        if (scene != "default" && scene != "close-cars")
         {
-            Error($"Unknown scene '{scene}'. Known scenes: default");
+            Error($"Unknown scene '{scene}'. Known scenes: default, close-cars");
             return 2;
         }
         double seconds = 12;
@@ -86,9 +91,15 @@ public static class DiagnosticsRunner
         }
 
         var run = NewRun();
-        for (double t = 0; t < seconds; t += Dt) run.Update(Autopilot.Next(run.World), Dt);
-
         var view = new GameView { Run = run, Width = Width, Height = Height };
+        for (double t = 0; t < seconds; t += Dt)
+        {
+            run.Update(Autopilot.Next(run.World), Dt);
+            view.Effects.Absorb(run.World);
+            view.Effects.Update(Dt);
+        }
+        if (scene == "close-cars") PlaceCloseCars(run.World, view.Effects);
+
         view.Measure(new Size(Width, Height));
         view.Arrange(new Rect(0, 0, Width, Height));
         view.UpdateLayout();
@@ -101,6 +112,39 @@ public static class DiagnosticsRunner
         using var file = File.Create(path);
         encoder.Save(file);
         return 0;
+    }
+
+    /// <summary>Replaces whatever is on the road with one of each thing the renderers draw, at known distances from the player.</summary>
+    static void PlaceCloseCars(World w, EffectList effects)
+    {
+        var p = w.Player;
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+
+        var runner = AgentCar.Create(w.NextId(), AgentKind.Runner, p.Distance + 22, p.Lateral + 4, p.Speed);
+        runner.Armor = 3;   // half of 6, so its health bar shows
+        var blocker = AgentCar.Create(w.NextId(), AgentKind.Blocker, p.Distance + 70, p.Lateral - 3, p.Speed);
+        var spinner = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance + 140, p.Lateral, p.Speed);
+        spinner.State = VehicleState.Spinning;
+        spinner.SpinAngle = 0.7;
+        var behind = AgentCar.Create(w.NextId(), AgentKind.Pursuer, p.Distance - 25, p.Lateral, p.Speed);
+        w.Agents.AddRange(new[] { runner, blocker, spinner, behind });
+
+        w.Hazards.Add(new Wreck { Distance = p.Distance + 50, Lateral = p.Lateral + 1, Width = 1.9, Length = 4.4, Burn = 0.6 });
+        w.Hazards.Add(new OilSlick { Distance = p.Distance + 40, Lateral = p.Lateral - 2.5 });
+
+        effects.Spawn(p.Distance + 30, p.Lateral - 1);
+        effects.Update(0.3);
+
+        w.Tracers.Add(NewTracer(p, 9, 0.7, 3));    // fresh: also shows the muzzle flash
+        w.Tracers.Add(NewTracer(p, 60, -0.7, 150));
+    }
+
+    static Tracer NewTracer(PlayerCar p, double ahead, double side, double travel)
+    {
+        var pose = new RoadPose(p.Distance + ahead, p.Lateral + side, 0);
+        return new Tracer { Pose = pose, PrevDistance = pose.Distance - 2.5, PrevLateral = pose.Lateral, Travel = travel, OwnerId = p.Id };
     }
 
     static MissionRun NewRun()

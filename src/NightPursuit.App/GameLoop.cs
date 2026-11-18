@@ -39,6 +39,8 @@ public sealed class GameLoop
         var held = _input.Read(_window.IsActive);
         foreach (var a in _input.Drain()) _run.Handle(a);
         _run.Update(held, seconds);   // Core caps a long stall at 0.25 s
+        _view.Effects.Absorb(_run.World);
+        if (_run.State != RunState.Paused) _view.Effects.Update(seconds);
         _view.InvalidateVisual();
     }
 }
