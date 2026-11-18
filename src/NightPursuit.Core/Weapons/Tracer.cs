@@ -9,9 +9,14 @@ public sealed class Tracer
     public double PrevDistance { get; set; }
     public double PrevLateral { get; set; }
     public double PrevHeading { get; set; }
-    /// <summary>Metres of muzzle travel so far (compared with <see cref="MachineGuns.Range"/>).</summary>
+    /// <summary>Metres of muzzle travel so far (compared with <see cref="Range"/>).</summary>
     public double Travel { get; set; }
     public double Speed { get; set; }
+    /// <summary>How fast the muzzle travel grows per second (compared with <see cref="Range"/>).</summary>
+    public double MuzzleSpeed { get; init; } = MachineGuns.MuzzleSpeed;
+    public double Range { get; init; } = MachineGuns.Range;
+    /// <summary>True for an enemy bullet: it hits only the player.</summary>
+    public bool Hostile { get; init; }
     public int OwnerId { get; set; }
     public bool Dead { get; set; }
 }

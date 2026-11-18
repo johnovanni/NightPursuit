@@ -47,6 +47,7 @@ public sealed class MissionDirector(MissionDefinition def)
             {
                 AgentKind.Runner => 36 + 20 * w.Rng.NextDouble(),
                 AgentKind.Blocker => 30 + 8 * w.Rng.NextDouble(),
+                AgentKind.Gunner => Math.Max(30, w.Player.Speed),
                 _ => w.Player.Speed + 10,
             };
             w.Agents.Add(AgentCar.Create(w.NextId(), wave.Kind, distance, lane, speed));

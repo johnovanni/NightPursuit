@@ -27,6 +27,7 @@ public sealed partial class World
     readonly List<AgentCar> _removals = new();
     readonly IThrottleScheme[] _schemes = { new RampPedalScheme(), new SpeedLeverScheme() };
     readonly WorldView _view;
+    readonly Dictionary<string, double> _lastDamageMessage = new();
     double _accumulator;
     int _lastId;
 
@@ -185,10 +186,12 @@ public sealed partial class World
                         intent = DriverHelpers.KeepClearOfCarAhead(a, _view, intent, a.AheadMemory, DriverHelpers.ReactionDelay(a.Kind), Step);
                     if (a.Punctured) intent = PuncturedIntent(a, intent);
                     CarPhysics.StepAgent(a, intent, Step);
+                    StepAgentWeapons(a, intent);      // after the car has moved
                     break;
                 case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
                 case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
             }
+            if (a.State != VehicleState.Wrecked) a.Arms.Update(Step);
             a.HitFlash = Math.Max(0, a.HitFlash - Step);
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
             a.AgentContactCooldown = Math.Max(0, a.AgentContactCooldown - Step);
@@ -254,13 +257,18 @@ public sealed partial class World
         if (announce) Publish(new Message(Time, reason, Tone.Good));
     }
 
-    internal void DamagePlayer(double amount, string reason)
+    /// <summary>Hurts the player. The Message is skipped when the same reason was messaged less than <paramref name="messageGap"/> seconds ago.</summary>
+    internal void DamagePlayer(double amount, string reason, double messageGap = 0)
     {
         if (Player.State == VehicleState.Wrecked) return;
         Player.Armor -= amount;
         Player.HitFlash = 0.35;
         Publish(new PlayerDamaged(Time, amount, reason));
-        Publish(new Message(Time, reason, Tone.Bad));
+        if (messageGap <= 0 || !_lastDamageMessage.TryGetValue(reason, out double last) || Time - last >= messageGap)
+        {
+            Publish(new Message(Time, reason, Tone.Bad));
+            if (messageGap > 0) _lastDamageMessage[reason] = Time;
+        }
         if (Player.Armor <= 0) WreckPlayer(reason);
     }
 
@@ -297,8 +305,9 @@ public sealed partial class World
             t.PrevLateral = t.Pose.Lateral;
             t.PrevHeading = t.Pose.Heading;
             t.Pose = RoadMotion.MoveStraight(Track, t.Pose, t.Speed * Step);
-            t.Travel += MachineGuns.MuzzleSpeed * Step;
-            if (t.Travel > MachineGuns.Range || Math.Abs(t.Pose.Lateral) > 60) { t.Dead = true; continue; }
+            t.Travel += t.MuzzleSpeed * Step;
+            if (t.Travel > t.Range || Math.Abs(t.Pose.Lateral) > 60) { t.Dead = true; continue; }
+            if (t.Hostile) { StepHostileTracer(t); continue; }
             // Several cars can overlap the swept segment; the bullet hits the one nearest along its path.
             AgentCar? hit = null;
             double nearest = double.MaxValue;

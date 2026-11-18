@@ -106,8 +106,16 @@ public static class DriverHelpers
         AgentKind.Runner => 0.5,
         AgentKind.Blocker => 0.8,
         AgentKind.Pursuer => 0.3,
+        AgentKind.Gunner => 0.4,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no reaction delay for this kind"),
     };
+
+    /// <summary>
+    /// The speed that holds a car <paramref name="wanted"/> metres ahead of the player: the player's speed plus a push
+    /// proportional to how far the gap is from wanted, kept within [<paramref name="lo"/>, <paramref name="hi"/>].
+    /// </summary>
+    public static double HoldGap(double playerSpeed, double gap, double wanted, double gain, double lo, double hi) =>
+        playerSpeed + Math.Clamp((wanted - gap) * gain, lo, hi);
 
     const double BandMargin = 0.3;
     const double ClosingSlack = 0.5;
