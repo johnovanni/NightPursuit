@@ -158,6 +158,20 @@ public class CaltropTests
         }
     }
 
+    [Theory]
+    [InlineData(10)]
+    [InlineData(1)]
+    public void Hostile_caltrops_never_wreck_a_weak_player(double armor)
+    {
+        var w = CaltropsOnPlayer(40);
+        w.Player.Armor = armor;
+        w.StepOnce(ControlFrame.Empty);
+        Assert.NotEqual(VehicleState.Wrecked, w.Player.State);
+        Assert.Equal(1, w.Player.Armor, 1e-9);
+        Assert.Contains(w.Events, e => e is Message { Text: "PUNCTURED", Tone: Tone.Bad });
+        Assert.Equal(5, w.Player.PunctureLeft, 1e-9);
+    }
+
     [Fact]
     public void Hostile_caltrops_cap_a_slower_car_at_100_mph()
     {

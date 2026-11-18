@@ -7,7 +7,7 @@ namespace NightPursuit.Core.Simulation;
 static class HazardContacts
 {
     const double OilGripLoss = 1.0;
-    const double PunctureSeconds = 5;
+    const double PunctureDuration = 5;
     const double CaltropDamage = 10;
 
     public static void Resolve(World w)
@@ -44,8 +44,11 @@ static class HazardContacts
             else if (h is Caltrops c && !c.HitPlayer && c.Covers(p))
             {
                 c.HitPlayer = true;
-                w.DamagePlayer(CaltropDamage, "PUNCTURED");
-                p.PunctureLeft = PunctureSeconds;
+                // Enemy caltrops never kill by themselves: armor is left at 1 at the least.
+                double damage = Math.Min(CaltropDamage, p.Armor - 1);
+                if (damage > 0) w.DamagePlayer(damage, "PUNCTURED");
+                else w.Publish(new Message(w.Time, "PUNCTURED", Tone.Bad));
+                p.PunctureLeft = PunctureDuration;
             }
         }
     }
