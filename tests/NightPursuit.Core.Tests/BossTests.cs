@@ -475,6 +475,66 @@ public class BossTests
         Assert.DoesNotContain(w.Events, e => e is PlayerDamaged);
     }
 
+    /// <summary>Player lateral, speed, and the boss's ΔD with its rear 0.5-1.5 m past your front.</summary>
+    public static TheoryData<double, double, double> JustPastYourFront()
+    {
+        var data = new TheoryData<double, double, double>();
+        foreach (double lateral in new[] { 5, -5, 4.5 })
+            foreach (double speed in new[] { 40.0, 60.0 })
+                foreach (double dD in new[] { 5.5, 6.0, 6.5 })
+                    data.Add(lateral, speed, dD);
+        return data;
+    }
+
+    [Theory]
+    [MemberData(nameof(JustPastYourFront))]
+    public void Overtaking_boss_just_past_your_front_pulls_clear_instead_of_braking_into_you(double playerLateral, double speed, double startGap)
+    {
+        var w = Straight();
+        int side = Math.Sign(playerLateral);                    // on your side, where no line clears you
+        var b = Spawn(w, First(AgentKind.Pursuer), startGap, lateral: side * 6.3, speed: speed);
+        b.Side = side;
+        b.DriverState = new BossPursuitDriver.State { Phase = BossPursuitPhase.Overtake, Target = b.Lateral };
+        double halfWidths = (VehicleStats.Boss.Width + VehicleStats.Player.Width) / 2;
+        double halfLengths = (VehicleStats.Boss.Length + VehicleStats.Player.Length) / 2;
+        for (int i = 0; i < 10 * 120 && Gap(w, b) < 60; i++)
+        {
+            Hold(w, speed, playerLateral);
+            double dD = Gap(w, b), off = Math.Abs(b.Lateral - w.Player.Lateral);
+            if (Math.Abs(dD) < halfLengths) Assert.True(off >= halfWidths, $"alongside {off:F2} m off at ΔD {dD:F2}");
+        }
+        Assert.True(Gap(w, b) >= 60, $"only {Gap(w, b):F1} m ahead after 10 s");
+        Assert.DoesNotContain(w.Events, e => e is PlayerDamaged);
+    }
+
+    [Theory]
+    [InlineData(5, 60)]
+    [InlineData(-5, 60)]
+    [InlineData(4.5, 60)]
+    [InlineData(-4.5, 60)]
+    [InlineData(5, 80)]
+    [InlineData(-5, 80)]
+    [InlineData(4.5, 80)]
+    [InlineData(-4.5, 80)]
+    public void Overtaking_boss_crossing_behind_you_waits_until_it_is_out_of_your_line(double playerLateral, double speed)
+    {
+        var w = Straight();
+        int side = Math.Sign(playerLateral);                    // 1.5 m behind your rear bumper, on your side, at your speed
+        var b = Spawn(w, First(AgentKind.Pursuer), -6.5, lateral: side * 6.3, speed: speed);
+        b.Side = side;
+        b.DriverState = new BossPursuitDriver.State { Phase = BossPursuitPhase.Overtake, Target = b.Lateral };
+        double halfWidths = (VehicleStats.Boss.Width + VehicleStats.Player.Width) / 2;
+        double halfLengths = (VehicleStats.Boss.Length + VehicleStats.Player.Length) / 2;
+        for (int i = 0; i < 15 * 120 && Gap(w, b) < 60; i++)
+        {
+            Hold(w, speed, playerLateral);
+            double dD = Gap(w, b), off = Math.Abs(b.Lateral - w.Player.Lateral);
+            if (Math.Abs(dD) < halfLengths) Assert.True(off >= halfWidths, $"alongside {off:F2} m off at ΔD {dD:F2}");
+        }
+        Assert.True(Gap(w, b) >= 60, $"only {Gap(w, b):F1} m ahead after 15 s");
+        Assert.DoesNotContain(w.Events, e => e is PlayerDamaged);
+    }
+
     [Fact]
     public void Passing_lane_holds_the_line_until_the_rear_is_2_m_past_your_front()
     {
@@ -514,7 +574,29 @@ public class BossTests
         b.Distance = -((5.6 + 4.4) / 2 + 2);                    // front 2 m short of your rear: crosses behind
         line = DriverHelpers.PassingLane(b, w.Player);
         Assert.Equal(-5, line.Lateral, 9);
-        Assert.Equal(double.PositiveInfinity, line.MaxSpeed);
+        Assert.Equal(57, line.MaxSpeed, 9);                     // ... still no faster than you - 3 while in your line
+        Assert.Equal(57, DriverHelpers.PassingLane(b, w.Player, current: -5).MaxSpeed, 9);
+        b.Lateral = 2.55;                                       // half widths + 0.3 off you: out of your line
+        Assert.Equal(double.PositiveInfinity, DriverHelpers.PassingLane(b, w.Player, current: -5).MaxSpeed);
+    }
+
+    [Fact]
+    public void Passing_lane_lets_a_car_already_past_your_front_pull_clear()
+    {
+        var w = Straight();
+        w.Player.Lateral = 5;
+        w.Player.Speed = 60;
+        var b = Spawn(w, First(AgentKind.Pursuer), 0, lateral: 6.3);
+        double halfLengths = (5.6 + 4.4) / 2;
+        foreach (double past in new[] { 0, 0.5, 1.2, 2 - 0.01 })  // rear this far past your front
+        {
+            b.Distance = halfLengths + past;
+            var line = DriverHelpers.PassingLane(b, w.Player);
+            Assert.Equal(6.3, line.Lateral, 9);                 // holds its line, never crosses yet
+            Assert.Equal(double.PositiveInfinity, line.MaxSpeed);   // and never brakes back into you
+        }
+        b.Distance = halfLengths - 0.01;                        // still overlapping you lengthwise: waits
+        Assert.Equal(57, DriverHelpers.PassingLane(b, w.Player).MaxSpeed, 9);
     }
 
     [Theory]

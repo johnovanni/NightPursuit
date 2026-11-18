@@ -177,30 +177,40 @@ public static class DriverHelpers
     /// still clears the player by that much;</item>
     /// <item>while its front is at least 2 m short of the player's rear, the lane farthest from the player (it crosses
     /// behind);</item>
-    /// <item>otherwise it keeps that line without pushing into the player and waits at the player's speed - 3 m/s
-    /// until it has dropped 2 m behind, then crosses behind.</item>
+    /// <item>otherwise it keeps that line without pushing into the player. While its rear has not yet passed the
+    /// player's front it waits at the player's speed - 3 m/s until it has dropped 2 m behind, then crosses behind; once
+    /// its rear is past their front it drives on uncapped until it is 2 m clear, then crosses in front.</item>
     /// </list>
+    /// Whatever the line, a car behind the player (its front short of their rear) and still less than the two half
+    /// widths + 0.3 m off them sideways drives no faster than the player's speed - 3 m/s, so it never closes on them
+    /// while it is in their line.
     /// </summary>
     public static PassingLine PassingLane(AgentCar self, PlayerCar p, double? current = null)
     {
-        if (current is double lane && Array.IndexOf(Track.LaneCentres, lane) >= 0 && Math.Abs(lane - p.Lateral) >= PassClearance)
-            return new PassingLine(lane, double.PositiveInfinity);
-        int side = SideOf(self, p.Lateral);
-        if (ClearLaneOnSide(p.Lateral, side) is double own) return new PassingLine(own, double.PositiveInfinity);
-
         double selfHalf = self.Stats.Length / 2, playerHalf = p.Stats.Length / 2;
-        if (self.Distance - selfHalf >= p.Distance + playerHalf + CrossGap)
-            return new PassingLine(FarthestLane(p.Lateral), double.PositiveInfinity);
-
         double keepOff = (self.Stats.Width + p.Stats.Width) / 2 + HoldLineMargin;
+        double yield = Math.Max(0, p.Speed - YieldSlower);
+        bool behindInLine = self.Distance + selfHalf <= p.Distance - playerHalf
+            && Math.Abs(self.Lateral - p.Lateral) < keepOff - Same;
+        double cap = behindInLine ? yield : double.PositiveInfinity;
+
+        if (current is double lane && Array.IndexOf(Track.LaneCentres, lane) >= 0 && Math.Abs(lane - p.Lateral) >= PassClearance)
+            return new PassingLine(lane, cap);
+        int side = SideOf(self, p.Lateral);
+        if (ClearLaneOnSide(p.Lateral, side) is double own) return new PassingLine(own, cap);
+
+        if (self.Distance - selfHalf >= p.Distance + playerHalf + CrossGap)
+            return new PassingLine(FarthestLane(p.Lateral), cap);
+
         double line = self.Lateral;
         if ((line - p.Lateral) * side < keepOff) line = p.Lateral + side * keepOff;
         double limit = OnRoadLimit(self);
         line = Math.Clamp(line, -limit, limit);
-        if (Math.Abs(line - p.Lateral) >= keepOff - Same) return new PassingLine(line, double.PositiveInfinity);
+        if (Math.Abs(line - p.Lateral) >= keepOff - Same) return new PassingLine(line, cap);
         if (self.Distance + selfHalf <= p.Distance - playerHalf - CrossGap)
-            return new PassingLine(FarthestLane(p.Lateral), double.PositiveInfinity);
-        return new PassingLine(line, Math.Max(0, p.Speed - YieldSlower));
+            return new PassingLine(FarthestLane(p.Lateral), cap);
+        bool rearPastFront = self.Distance - selfHalf >= p.Distance + playerHalf;
+        return new PassingLine(line, rearPastFront ? double.PositiveInfinity : yield);
     }
 
     /// <summary>The lane centre farthest from the player (5 m or more away).</summary>
