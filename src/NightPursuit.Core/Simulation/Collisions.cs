@@ -178,8 +178,9 @@ public static class Collisions
             if (closing > AgentSpinClosing)
             {
                 string reason = $"{KindName(a)} AND {KindName(b)} COLLIDED";
-                if (a.State == VehicleState.Driving) w.Spin(a, -side, reason);
-                if (b.State == VehicleState.Driving) w.Spin(b, side, reason);
+                bool aSpins = a.State == VehicleState.Driving;
+                if (aSpins) w.Spin(a, -side, reason);
+                if (b.State == VehicleState.Driving) w.Spin(b, side, reason, announce: !aSpins);   // one collision, one message
             }
         }
 

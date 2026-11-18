@@ -276,7 +276,7 @@ public class CollisionTests
         Assert.Equal(VehicleState.Spinning, left.State);
         Assert.Equal(VehicleState.Spinning, right.State);
         Assert.Equal(2, w.Events.OfType<VehicleSpun>().Count());
-        Assert.Contains(w.Events, e => e is Message { Text: "RUNNER AND RUNNER COLLIDED" });
+        Assert.Single(w.Events, e => e is Message { Text: "RUNNER AND RUNNER COLLIDED" });   // one collision, one message
         Assert.True(left.PushVel < 0 && right.PushVel > 0, $"push {left.PushVel:0.00} / {right.PushVel:0.00}");   // each spins away from the other
         Assert.Equal(100, w.Player.Armor);
     }

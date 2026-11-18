@@ -308,6 +308,26 @@ public class DriverTests
         Assert.True(ahead || Gap(runner, blocker) >= 0, $"overlapping at the end: gap {Gap(runner, blocker):0.00}");
     }
 
+    [Theory]
+    [InlineData(27)]
+    [InlineData(28)]
+    [InlineData(30)]
+    public void Slowly_passing_runner_stays_out_until_clear_of_the_blocker(double runnerSpeed)
+    {
+        var (w, blocker, runner) = FastRunnerBehindSlowBlocker();
+        runner.Speed = runner.CruiseSpeed = runnerSpeed;            // closing at 2-5 m/s (slower passes run past the 1500 m cull ahead of the stopped player)
+        double passedAt = -1;
+        for (int i = 0; i < 120 * 120 && (passedAt < 0 || w.Time < passedAt + 3); i++)
+        {
+            w.StepOnce(ControlFrame.Empty);
+            AssertNoAgentContact(w, [blocker, runner], i);
+            if (passedAt < 0 && Gap(blocker, runner) >= 0) passedAt = w.Time;
+        }
+        Assert.True(passedAt >= 0, "never passed the blocker in 120 s");
+        Assert.Contains(blocker, w.Agents);                       // not culled 1500 m ahead, so the pass really ran
+        Assert.Contains(runner, w.Agents);
+    }
+
     [Fact]
     public void Boxed_in_car_follows_at_the_leaders_speed()
     {

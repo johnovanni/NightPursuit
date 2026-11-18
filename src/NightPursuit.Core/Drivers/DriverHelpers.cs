@@ -139,10 +139,7 @@ public static class DriverHelpers
         bool unchanged = active == memory.Active
             && (!active || (follow == memory.Follow && (follow || Math.Abs(lateral - memory.Lateral) < Same)));
         if (unchanged)
-        {
             memory.Timer = 0;
-            if (follow) memory.Speed = ahead!.Speed;             // still following: track the leader's speed
-        }
         else
         {
             memory.Timer += dt;
@@ -155,6 +152,8 @@ public static class DriverHelpers
                 memory.Timer = 0;
             }
         }
+        // While following, track the leader's current speed, even while a change of answer is pending.
+        if (memory.Follow && ahead is not null) memory.Speed = ahead.Speed;
 
         if (!memory.Active) return wish;
         return memory.Follow
@@ -174,7 +173,8 @@ public static class DriverHelpers
     /// <summary>
     /// The nearest other enemy car whose rear is within the look-ahead of this car's front, that this car is closing on,
     /// and that is in this car's band or in the band of where it wants to be (so a car that has just moved out to pass
-    /// still sees the car it is passing); <paramref name="gap"/> is the bumper-to-bumper distance to it.
+    /// still sees the car it is passing, even alongside, until its rear clears that car's front); <paramref name="gap"/> is
+    /// the bumper-to-bumper distance to it (negative while alongside).
     /// </summary>
     static AgentCar? FindCarAhead(AgentCar self, WorldView view, double wishLateral, double reactionDelay, out double gap)
     {
@@ -184,11 +184,16 @@ public static class DriverHelpers
         {
             if (ReferenceEquals(other, self) || !other.IsOnRoadDriving) continue;
             double band = Band(self, other);
-            if (Math.Abs(other.Lateral - self.Lateral) >= band && Math.Abs(other.Lateral - wishLateral) >= band) continue;
+            bool inOwnBand = Math.Abs(other.Lateral - self.Lateral) < band;
+            if (!inOwnBand && Math.Abs(other.Lateral - wishLateral) >= band) continue;
             double closing = self.Speed - other.Speed;
             if (closing <= -ClosingSlack) continue;
-            double g = other.Distance - self.Distance - (self.Stats.Length + other.Stats.Length) / 2;
-            if (g < 0 || g > LookAhead(closing, reactionDelay)) continue;
+            double lengths = self.Stats.Length + other.Stats.Length;
+            double g = other.Distance - self.Distance - lengths / 2;
+            // A car this one is passing (out of its own band, in its wish's band) still counts while alongside,
+            // until this car's rear has cleared its front, so the passer doesn't steer back into its side.
+            double nearest = inOwnBand ? 0 : -lengths;
+            if (g < nearest || g > LookAhead(closing, reactionDelay)) continue;
             if (best is null || g < gap)
             {
                 best = other;

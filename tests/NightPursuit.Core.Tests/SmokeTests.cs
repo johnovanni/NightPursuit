@@ -75,7 +75,8 @@ public class SmokeTests
         w.Agents.Add(spinning);
         w.Agents.Add(wrecked);
         w.Destroy(wrecked, KillCause.Rammed);
-        w.Hazards.Add(new SmokeCloud { Distance = 100, PrevDistance = 100, Lateral = 0, Speed = 0 });
+        var cloud = new SmokeCloud { Distance = 100, PrevDistance = 100, Lateral = 0, Speed = 0 };
+        w.Hazards.Add(cloud);
 
         for (int i = 0; i < 60; i++)                               // 0.5 s: still spinning, both still inside the cloud
         {
@@ -84,6 +85,7 @@ public class SmokeTests
             Assert.Equal(0, wrecked.Blinded);
         }
         Assert.Equal(VehicleState.Spinning, spinning.State);
+        Assert.True(cloud.Covers(spinning) && cloud.Covers(wrecked), "a car left the cloud, so the test proves nothing");
         Assert.DoesNotContain(w.Events, e => e is Message { Text: "RUNNER LOST YOU IN THE SMOKE" });
     }
 

@@ -196,8 +196,12 @@ public sealed partial class World
         return ahead > MaxAhead || ahead < -MaxBehind;
     }
 
-    /// <summary>Spins a car out: it turns, slides sideways in direction <paramref name="dir"/> and loses a fifth of its speed.</summary>
-    public void Spin(Vehicle v, int dir, string reason)
+    /// <summary>
+    /// Spins a car out: it turns, slides sideways in direction <paramref name="dir"/> and loses a fifth of its speed.
+    /// With <paramref name="announce"/> false only the <see cref="VehicleSpun"/> event goes out, for a second car spun
+    /// by the same collision, so one collision shows one message.
+    /// </summary>
+    public void Spin(Vehicle v, int dir, string reason, bool announce = true)
     {
         v.State = VehicleState.Spinning;
         v.StateTimer = 1.8;
@@ -205,7 +209,7 @@ public sealed partial class World
         v.PushVel = dir * (4 + Rng.NextDouble() * 3);
         v.Speed *= 0.8;
         Publish(new VehicleSpun(Time, v.Id, reason));
-        Publish(new Message(Time, reason, Tone.Good));
+        if (announce) Publish(new Message(Time, reason, Tone.Good));
     }
 
     internal void DamagePlayer(double amount, string reason)
