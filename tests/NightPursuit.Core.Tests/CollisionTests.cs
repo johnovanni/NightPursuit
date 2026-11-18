@@ -162,6 +162,29 @@ public class CollisionTests
     }
 
     [Fact]
+    public void Player_pinned_behind_a_stopped_wreck_can_steer_round_it()
+    {
+        var w = Straight();
+        w.Player.Speed = 20;
+        var wreck = new Wreck { Distance = 20, Lateral = 0, Width = 1.9, Length = 4.4 };
+        w.Hazards.Add(wreck);
+        var gasRight = new ControlFrame { Gas = true, SteerDir = 1 };
+        double clearWidth = (wreck.Width + w.Player.Stats.Width) / 2;
+
+        int clearAt = -1;
+        for (int i = 0; i < 120 * 2 && clearAt < 0; i++)
+        {
+            w.StepOnce(gasRight);
+            if (w.Player.Lateral - wreck.Lateral >= clearWidth) clearAt = i;
+        }
+        Assert.True(clearAt >= 0, $"still pinned after 2 s, lateral {w.Player.Lateral}");
+
+        for (int i = 0; i < 120 * 6; i++) w.StepOnce(Gas);
+        Assert.True(w.Player.Distance > wreck.Distance + wreck.Length, $"distance {w.Player.Distance}");
+        Assert.Equal(70, w.Player.Armor, 9);
+    }
+
+    [Fact]
     public void Agent_hitting_wreck_is_destroyed_without_new_wreck()
     {
         var w = Straight();

@@ -10,6 +10,8 @@ public static class Collisions
     const double ContactCooldown = 0.25;
     const double WreckDamage = 30;
     const double WreckHitSpeed = 5;
+    const double FirstHitPushBack = 1;
+    const double CrabSpeed = 3;
     const double OffRoadLimit = Track.RoadHalfWidth + 1.0;
 
     public static void Resolve(World w)
@@ -121,7 +123,8 @@ public static class Collisions
         {
             if (h is not Wreck wreck || !Overlaps(p, wreck.Distance, wreck.Lateral, wreck.Length, wreck.Width)) continue;
 
-            if (!wreck.HitPlayer)
+            bool firstHit = !wreck.HitPlayer;
+            if (firstHit)
             {
                 wreck.HitPlayer = true;
                 p.Speed = Math.Min(p.Speed, WreckHitSpeed);
@@ -141,8 +144,11 @@ public static class Collisions
             }
             else if (dz > 0)
             {
-                p.Distance = wreck.Distance - contactZ;
+                // Held back at the wreck's rear edge (1 m further back on the first hit, so the car isn't nose-in).
+                p.Distance = wreck.Distance - contactZ - (firstHit ? FirstHitPushBack : 0);
                 p.Speed = Math.Min(p.Speed, wreck.Speed);
+                // Speed is now ~0, so steering has no turning power: crab sideways round the wreck instead.
+                if (Math.Abs(p.Steer) > 0.05) p.Lateral += Math.Sign(p.Steer) * CrabSpeed * World.Step;
             }
         }
     }

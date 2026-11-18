@@ -50,8 +50,9 @@ warning shows it.
 *Cost to change:* one line.
 
 **D5. A wreck damages you once.** Hitting a wreck does 30 damage and drops you to 5 m/s, once per
-wreck. After that it just blocks you: you stop against its back and must steer round it. Without
-this, a car crawling against a wreck would take 30 damage every step and die at once.
+wreck. You hit it once for 30 damage, it pushes you back 1 m and blocks you, and steering crabs
+you sideways round it. Without this, a car crawling against a wreck would take 30 damage every
+step and die at once, or sit pinned with no way out.
 
 **D6. Owner's manual checks wait for you.** Tasks 12 and 16 end with checks only you can do
 (drive it, alt-tab while steering, rename the mission file, play mission 1 to the end). I do
