@@ -131,7 +131,9 @@ public static class DriverHelpers
 
     /// <summary>A pursuer's attack lasts this long once it is alongside; it rams for the last <see cref="RamSeconds"/>.</summary>
     public const double AttackSeconds = 3.5, RamSeconds = 2.4;
-    const double AttackGain = 1.5, AttackSpeedRange = 8, AttackOffset = 2.7, RamOffset = 0.8;
+    /// <summary>How far to the side of the player a pursuer holds before it rams, metres.</summary>
+    public const double AttackOffset = 2.7;
+    const double AttackGain = 1.5, AttackSpeedRange = 8, RamOffset = 0.8;
 
     /// <summary>The speed that brings a pursuer level with the player: 1.5 m/s per metre of gap, at most 8 m/s either way.</summary>
     public static double AttackSpeed(double playerSpeed, double gap) =>
@@ -151,22 +153,26 @@ public static class DriverHelpers
     public const double PassClearance = 2.5;
 
     /// <summary>
-    /// The lane to pass the player in. <paramref name="current"/> is kept while it is at least <see cref="PassClearance"/>
-    /// from the player, so a player near a lane line can't make the car swing across in front of them; otherwise it is
-    /// the lane centre farthest from the player (always 5 m or more), ties going to the car's own side of the player.
+    /// The lane to pass the player in, so the car never swerves across the player's path while alongside.
+    /// <paramref name="current"/> is kept while it is at least <see cref="PassClearance"/> from the player. Otherwise it is
+    /// the lane farthest from the player on the car's own side of them (its <see cref="AgentCar.Side"/> when level) that
+    /// is at least <see cref="PassClearance"/> away; only when that side has none, the lane farthest from the player.
     /// </summary>
     public static double PassingLane(AgentCar self, double playerLateral, double? current = null)
     {
         if (current is double lane && Math.Abs(lane - playerLateral) >= PassClearance) return lane;
         double offset = self.Lateral - playerLateral;
         int side = offset < 0 ? -1 : offset > 0 ? 1 : self.Side;
-        double best = Track.LaneCentres[0];
+        double? ownSide = null;
+        double farthest = Track.LaneCentres[0];
         foreach (double l in Track.LaneCentres)
         {
-            double a = Math.Abs(l - playerLateral), b = Math.Abs(best - playerLateral);
-            if (a > b + Same || (Math.Abs(a - b) <= Same && Math.Sign(l - playerLateral) == side)) best = l;
+            double fromPlayer = l - playerLateral;
+            if (Math.Abs(fromPlayer) > Math.Abs(farthest - playerLateral) + Same) farthest = l;
+            if (Math.Sign(fromPlayer) != side || Math.Abs(fromPlayer) < PassClearance) continue;
+            if (ownSide is null || Math.Abs(fromPlayer) > Math.Abs(ownSide.Value - playerLateral)) ownSide = l;
         }
-        return best;
+        return ownSide ?? farthest;
     }
 
     const double BandMargin = 0.3;

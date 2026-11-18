@@ -34,8 +34,9 @@ public sealed class BossPursuitDriver : IDriver
         double dD = self.Distance - p.Distance;
         if (self.DriverState is not State s)
         {
-            self.DriverState = s = new State { Target = self.Lateral, Phase = BossPursuitPhase.DropBack };
+            self.DriverState = s = new State { Target = self.Lateral };
             if (dD <= AttackWithin) BeginAttack(self, s, p);
+            else BeginDropBack(self, s, p);
         }
 
         switch (s.Phase)
@@ -55,7 +56,7 @@ public sealed class BossPursuitDriver : IDriver
                 break;
             case BossPursuitPhase.HoldAhead:
                 s.Timer = DriverHelpers.Countdown(s.Timer, dt);
-                if (s.Timer <= 0) s.Phase = BossPursuitPhase.DropBack;
+                if (s.Timer <= 0) BeginDropBack(self, s, p);
                 break;
             default:
                 if (dD <= DropBackUntil) BeginAttack(self, s, p);
@@ -88,7 +89,10 @@ public sealed class BossPursuitDriver : IDriver
         return new DriveIntent(speed, lateral);
     }
 
-    /// <summary>Starts an attack from the side of the player the car is on (its own <see cref="AgentCar.Side"/> when level).</summary>
+    /// <summary>
+    /// Starts an attack from the side of the player the car is on (its own <see cref="AgentCar.Side"/> when level), or
+    /// from the other side when there is no room for it 2.7 m off the player on the road.
+    /// </summary>
     static void BeginAttack(AgentCar self, State s, PlayerCar p)
     {
         s.Phase = BossPursuitPhase.Attack;
@@ -96,5 +100,21 @@ public sealed class BossPursuitDriver : IDriver
         s.Timer = 0;
         double offset = self.Lateral - p.Lateral;
         if (offset != 0) self.Side = Math.Sign(offset);
+        UseSideWithRoom(self, p);
+    }
+
+    static void BeginDropBack(AgentCar self, State s, PlayerCar p)
+    {
+        s.Phase = BossPursuitPhase.DropBack;
+        UseSideWithRoom(self, p);
+    }
+
+    /// <summary>
+    /// With the player in an outer lane, 2.7 m off on the outer side is past the road edge, and the clamp would park the
+    /// car almost straight behind or ahead of them; so it attacks and drops back on the side that has room.
+    /// </summary>
+    static void UseSideWithRoom(AgentCar self, PlayerCar p)
+    {
+        if (Math.Abs(p.Lateral + self.Side * DriverHelpers.AttackOffset) > DriverHelpers.OnRoadLimit(self)) self.Side = -self.Side;
     }
 }

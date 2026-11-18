@@ -55,6 +55,14 @@ public class MissionTests
     }
 
     [Fact]
+    public void A_boss_cannot_be_a_wave()
+    {
+        var ex = Assert.Throws<MissionFormatException>(() =>
+            MissionLoader.Load(Valid.Replace("\"Pursuer\"", "\"boss\""), "m.json"));
+        Assert.Equal("m.json: waves[1].kind 'Boss' cannot be a wave (set the boss in \"boss\")", ex.Message);
+    }
+
+    [Fact]
     public void Waves_out_of_order_are_rejected()
     {
         var json = Valid.Replace("\"atDistance\": 300", "\"atDistance\": 50");

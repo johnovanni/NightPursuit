@@ -154,6 +154,7 @@ public static class MissionLoader
             if (!Enum.TryParse<AgentKind>(kindText, ignoreCase: true, out var kind)
                 || !Enum.IsDefined(kind) || kindText.Length == 0 || char.IsDigit(kindText[0]))
                 throw Fail($"{p}.kind '{kindText}' is not a known enemy type");
+            if (kind == AgentKind.Boss) throw Fail($"{p}.kind 'Boss' cannot be a wave (set the boss in \"boss\")");
 
             int count = Int(el, "count", $"{p}.count");
             if (count is < 1 or > 10) throw Fail($"{p}.count must be from 1 to 10 (got {count})");

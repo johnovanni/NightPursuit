@@ -16,7 +16,7 @@ public sealed partial class World
 
         double floor = b.Phase.EndsBelow * b.MaxHealth;
         double before = b.Armor;
-        b.Armor = Math.Max(floor, b.Armor - amount);
+        b.Armor = Math.Min(b.Armor, Math.Max(floor, b.Armor - amount));   // never heals one already below the floor
         Publish(new BossDamaged(Time, before - b.Armor, reason));
 
         bool lastPhase = b.PhaseIndex == b.Definition.Phases.Count - 1;
@@ -24,7 +24,7 @@ public sealed partial class World
         {
             if (b.Armor <= 0) Destroy(b, cause);
         }
-        else if (floor > 0 && b.Armor <= floor)
+        else if (b.Armor <= floor)
             NextPhase(b);
     }
 

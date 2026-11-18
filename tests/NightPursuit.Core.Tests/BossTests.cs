@@ -27,12 +27,12 @@ public class BossTests
     /// <summary>One step with the player's speed held.</summary>
     static void Step(World w, double speed) { w.Player.Speed = speed; w.StepOnce(ControlFrame.Empty); }
 
-    /// <summary>One step with the player held at <paramref name="speed"/> in the centre lane (no shove carries over).</summary>
-    static void Hold(World w, double speed)
+    /// <summary>One step with the player held at <paramref name="speed"/> and <paramref name="lateral"/> (no shove carries over).</summary>
+    static void Hold(World w, double speed, double lateral = 0)
     {
         var p = w.Player;
         p.Speed = speed;
-        p.Lateral = 0;
+        p.Lateral = lateral;
         p.LateralVel = 0;
         p.PushVel = 0;
         p.Heading = 0;
@@ -141,6 +141,20 @@ public class BossTests
     }
 
     [Fact]
+    public void A_blow_never_heals_a_boss_already_below_its_floor()
+    {
+        var w = Straight();
+        var b = Spawn(w, Two, 50);
+        b.Armor = 40;                                           // below phase 1's floor of 50
+
+        w.DamageBoss(b, 5, KillCause.Gunfire, "TEST");
+
+        Assert.Equal(40, b.Armor);
+        Assert.Equal(1, b.PhaseIndex);
+        Assert.True(Assert.Single(w.Events.OfType<BossDamaged>()).Amount >= 0);
+    }
+
+    [Fact]
     public void Boss_dies_only_when_the_last_phase_reaches_zero()
     {
         var w = Straight();
@@ -231,16 +245,22 @@ public class BossTests
     }
 
     [Theory]
-    [InlineData(AgentKind.Blocker)]
-    [InlineData(AgentKind.Armored)]
-    public void Boss_left_behind_in_a_phase_that_never_overtakes_passes_you_clear_of_your_lane(AgentKind behaviour)
+    [InlineData(AgentKind.Blocker, 0, 0)]
+    [InlineData(AgentKind.Armored, 0, 0)]
+    [InlineData(AgentKind.Blocker, 1, 2.5)]
+    [InlineData(AgentKind.Blocker, -1, -2.5)]
+    [InlineData(AgentKind.Blocker, 1.5, 3)]
+    [InlineData(AgentKind.Blocker, 1, 0)]
+    [InlineData(AgentKind.Armored, 1, 2.5)]
+    [InlineData(AgentKind.Armored, -1, -2.5)]
+    public void Boss_left_behind_in_a_phase_that_never_overtakes_passes_you_clear_of_your_lane(AgentKind behaviour, double playerLateral, double bossLateral)
     {
         var w = Straight();
-        var b = Spawn(w, First(behaviour), -40, lateral: 0, speed: 60);
+        var b = Spawn(w, First(behaviour), -40, lateral: bossLateral, speed: 60);
         bool reached = false;
         for (int i = 0; i < 15 * 120 && !reached; i++)
         {
-            Hold(w, 60);
+            Hold(w, 60, playerLateral);
             double dD = Gap(w, b);
             if (Math.Abs(dD) < (VehicleStats.Boss.Length + VehicleStats.Player.Length) / 2 + 2)
                 Assert.True(Math.Abs(b.Lateral - w.Player.Lateral) >= 2.5, $"alongside {b.Lateral - w.Player.Lateral:F2} m off at ΔD {dD:F1}");
@@ -342,36 +362,47 @@ public class BossTests
 
     static BossPursuitDriver.State Pursuit(BossCar b) => Assert.IsType<BossPursuitDriver.State>(b.DriverState);
 
-    [Fact]
-    public void Pursuit_boss_rams_then_pulls_ahead_into_gun_range()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(-1)]
+    [InlineData(1.5)]
+    public void Pursuit_boss_rams_then_pulls_ahead_into_gun_range(double playerLateral)
     {
         var w = Straight();
         var b = Spawn(w, First(AgentKind.Pursuer), -30, lateral: 2.7, speed: 40);   // Side +1
         int Swipes() => w.Events.OfType<PlayerDamaged>().Count(e => e.Reason == "SIDESWIPED");
+        int Hits() => w.Events.OfType<PlayerDamaged>().Count();
 
         double? swipe = null;
         for (int i = 0; i < 15 * 120 && swipe is null; i++)
         {
-            Hold(w, 40);
+            Hold(w, 40, playerLateral);
             if (Swipes() > 0) swipe = w.Time;
         }
         Assert.True(swipe is not null, "no sideswipe within 15 s");
+        int hitsAtRam = Hits();
+        double halfWidths = (VehicleStats.Boss.Width + VehicleStats.Player.Width) / 2;
+        double contactLength = (VehicleStats.Boss.Length + VehicleStats.Player.Length) / 2;
 
-        // It pulls 60 m ahead within 10 s, clear of your lane while it passes.
+        // It pulls 60 m ahead within 10 s, clear of your lane while it passes, and never touches you on the way.
         double? ahead60 = null;
         double aheadSeconds = 0;
         bool leftAttack = false, backInAttack = false;
         while (w.Time < swipe + 40 && !backInAttack)
         {
-            Hold(w, 40);
+            Hold(w, 40, playerLateral);
             double dD = Gap(w, b);
             var phase = Pursuit(b).Phase;
             if (ahead60 is null)
             {
+                double off = Math.Abs(b.Lateral - w.Player.Lateral);
+                Assert.True(Hits() == hitsAtRam, $"touched you again while passing ({phase}, ΔD {dD:F1}, {w.Time - swipe:F2} s after the ram)");
                 if (dD >= 60) ahead60 = w.Time;
                 else if (w.Time > swipe + 0.5)
-                    Assert.True(Math.Abs(b.Lateral - w.Player.Lateral) >= 2.5,
-                        $"{phase} {b.Lateral - w.Player.Lateral:F2} m off at ΔD {dD:F1}, {w.Time - swipe:F2} s after the ram");
+                    Assert.True(off >= 2.5, $"{phase} {b.Lateral - w.Player.Lateral:F2} m off at ΔD {dD:F1}, {w.Time - swipe:F2} s after the ram");
+                else if (w.Time > swipe + 0.25 && Math.Abs(dD) < contactLength)
+                    Assert.True(off >= halfWidths, $"alongside {off:F2} m off at ΔD {dD:F1}");
             }
             if (dD >= 10) aheadSeconds += Dt;
             if (phase != BossPursuitPhase.Attack) leftAttack = true;
@@ -380,6 +411,21 @@ public class BossTests
         Assert.True(ahead60 is not null && ahead60 - swipe <= 10, $"60 m ahead at {ahead60 - swipe} s after the ram");
         Assert.True(backInAttack, "never came back to attack");
         Assert.True(aheadSeconds >= 6, $"only {aheadSeconds:F1} s at least 10 m ahead in one cycle");
+    }
+
+    [Theory]
+    [InlineData(5, 6.3)]
+    [InlineData(-5, -6.3)]
+    public void Pursuit_boss_attacks_a_player_in_an_outer_lane_from_the_side_with_room(double playerLateral, double bossLateral)
+    {
+        var w = Straight();
+        var b = Spawn(w, First(AgentKind.Pursuer), -30, lateral: bossLateral, speed: 40);   // starts on the side with no room
+        for (int i = 0; i < 60 * 120; i++) Hold(w, 40, playerLateral);
+        var reasons = w.Events.OfType<PlayerDamaged>().Select(e => e.Reason).ToList();
+        Assert.Contains("SIDESWIPED", reasons);
+        Assert.DoesNotContain("RAMMED", reasons);
+        Assert.DoesNotContain("HIT FROM BEHIND", reasons);
+        Assert.Equal(-Math.Sign(playerLateral), b.Side);
     }
 
     [Fact]
