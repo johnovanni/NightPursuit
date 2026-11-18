@@ -192,5 +192,8 @@ and on flat road they look as before.
   last of the four possible warning lines, so nothing overlaps.
 - The announcement banner sits at half the screen height on a dark box, below the messages and the aim mark.
   It fades in over 0.2 s and out over 0.4 s.
+- Warning lines are 22 apart (the brief said 24): four lines at 24 would push the messages down onto the aim mark at 720p.
+- Messages stop above the aim mark: with the boss bar and a 1280x720 window that is three rows (the oldest drops out);
+  the banner starts below whichever is lower, half the height or the last message row.
 - The left edge arrow sits below the weapon panel.
 - The top-left help line now reads "R restart when paused" so the boss bar doesn't cut it off.

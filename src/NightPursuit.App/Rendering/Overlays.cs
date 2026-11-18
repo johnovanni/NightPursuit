@@ -61,6 +61,10 @@ internal static class Overlays
     static double MessagesTop(HudLayout l, bool bossBar) =>
         Math.Max(l.Height * 0.26, (WarningsTop(bossBar) + Warnings.MaxShown * WarningRow + 4) * l.K);
 
+    /// <summary>How many message rows fit between <see cref="MessagesTop"/> and the aim mark (which starts near 0.44 of the height), 1 to 4; the oldest are left out.</summary>
+    static int MessageRows(HudLayout l, bool bossBar) =>
+        Math.Clamp((int)Math.Floor((l.Height * 0.43 - MessagesTop(l, bossBar)) / (MessageRow * l.K)), 1, 4);
+
     static Brush WarningBrush(WarningKind kind) => kind switch
     {
         WarningKind.BlockerAhead => Neon.TextAmber,
@@ -72,13 +76,14 @@ internal static class Overlays
     /// The big banner for a boss, a boss phase or a strike, on a dark backing box: a title (34) and a line of detail (18), fading in over 0.2 s
     /// and out over the last 0.4 s. It sits at half the height (decision D22): below the messages and the aim mark, which are both above it.
     /// </summary>
-    public static void DrawAnnouncement(DrawingContext dc, HudLayout l, World w)
+    public static void DrawAnnouncement(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
         if (w.Announcement is not { } a) return;
         double k = l.K;
         double fade = Math.Clamp(Math.Min((w.Time - a.Start) / BannerFadeIn, (a.Until - w.Time) / BannerFadeOut), 0, 1);
         bool detail = a.Detail.Length > 0;
-        double top = l.Height * 0.50, boxWidth = Math.Min(l.Width - 20, 640 * k), boxHeight = (detail ? 82 : 56) * k;
+        double messagesBottom = MessagesTop(l, bossBar) + MessageRows(l, bossBar) * MessageRow * k + 4 * k;
+        double top = Math.Max(l.Height * 0.50, messagesBottom), boxWidth = Math.Max(0, Math.Min(l.Width - 20, 640 * k)), boxHeight = (detail ? 82 : 56) * k;
         dc.PushOpacity(fade);
         dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, new Rect(l.HalfWidth - boxWidth / 2, top, boxWidth, boxHeight));
         l.Centered(dc, a.Title, top + 6 * k, 34, Neon.TextAmber);
@@ -104,9 +109,11 @@ internal static class Overlays
     public static void DrawMessages(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
         double y = MessagesTop(l, bossBar);
+        int rows = MessageRows(l, bossBar);
         foreach (var e in w.RecentMessages)
         {
             if (e is not Message m) continue;
+            if (rows-- <= 0) break;
             var brush = m.Tone switch { Tone.Good => Neon.TextGreen, Tone.Bad => Neon.TextRed, _ => Neon.TextCyan };
             double left = MessageLife - (w.Time - m.Time);
             dc.PushOpacity(Math.Clamp(left / MessageFade, 0, 1));

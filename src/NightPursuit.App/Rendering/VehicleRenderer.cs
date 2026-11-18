@@ -315,7 +315,7 @@ public static class VehicleRenderer
         return BossShape[^1].X;
     }
 
-    /// <summary>The Armored wedge's of the half-width of the car) at a height in metres.</summary>
+    /// <summary>The Armored wedge's half-width (fraction of the car's half-width) at a height in metres.</summary>
     static double WedgeHalfWidth(double y) => 1 - 0.5 * (y - 0.62) / (1.6 - 0.62);
 
     /// <summary>The "BOSS" tag above a boss, centred on x; <paramref name="y"/> is its bottom edge, set above the missile LOCK label.</summary>
