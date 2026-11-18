@@ -34,8 +34,12 @@ public sealed partial class World
     /// </summary>
     void DropFromAgent(AgentCar a)
     {
-        if (DropperDriver.NextDrop(a.Arms) is not bool oil) return;
-        if (DropperDriver.ReactionGap(a, Player, oil) < DropperDriver.RequiredGap(Player)) return;   // a switched drop is rechecked here
+        if (DropperDriver.NextDrop(a.Arms) is not bool oil
+            || DropperDriver.ReactionGap(a, Player, oil) < DropperDriver.RequiredGap(Player))   // a switched drop is rechecked here
+        {
+            a.Arms.LastDropSkipped = true;      // the driver retries soon
+            return;
+        }
         double d = DropperDriver.CentreBehind(a, oil);
         if (oil)
         {
@@ -47,7 +51,7 @@ public sealed partial class World
         else
         {
             a.Arms.Caltrops!.TryUse();
-            Hazards.Add(new Caltrops { Distance = d, Lateral = NearestLane(a.Lateral), Hostile = true });
+            Hazards.Add(new Caltrops { Distance = d, Lateral = DriverHelpers.NearestLane(a.Lateral), Hostile = true });
             Publish(new WeaponUsed(Time, WeaponKind.Caltrops, a.Id));
             Publish(new Message(Time, "DROPPER: CALTROPS AHEAD", Tone.Bad));
         }

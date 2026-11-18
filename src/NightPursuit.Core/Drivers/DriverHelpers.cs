@@ -247,7 +247,8 @@ public static class DriverHelpers
         return Math.Abs(AvoidWrecks(self, view, lane) - lane) < Same;
     }
 
-    static double NearestLane(double lateral)
+    /// <summary>The lane centre nearest <paramref name="lateral"/>.</summary>
+    public static double NearestLane(double lateral)
     {
         double best = Track.LaneCentres[0];
         foreach (double lane in Track.LaneCentres)

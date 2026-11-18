@@ -148,6 +148,22 @@ public class DropperArmoredTests
         Assert.DoesNotContain(w.Hazards, h => h.Hostile);
         Assert.DoesNotContain(w.Events, e => e is WeaponUsed);
         Assert.Equal(5, d.Arms.Oil!.Charges);             // and no charge is used up
+        Assert.True(d.Arms.LastDropSkipped);              // the driver is told
+    }
+
+    [Fact]
+    public void Dropper_retries_within_about_1_s_after_a_skipped_drop()
+    {
+        var w = Straight();
+        var d = Spawn(w, AgentKind.Dropper, 120, 0, 30);
+        Step(w, 30);                                      // the driver makes its state
+        var s = (DropperDriver.State)d.DriverState!;
+        s.Timer = 3.5;                                    // as just after a drop attempt
+        d.Arms.LastDropSkipped = true;                    // which the world refused
+        var drops = Drops(w, d, 30, 3.0, stopAfter: 1);
+        Assert.Single(drops);
+        Assert.False(d.Arms.LastDropSkipped);
+        Assert.True(w.Time <= 1.2 + 1.0, $"dropped at {w.Time}");
     }
 
     [Fact]

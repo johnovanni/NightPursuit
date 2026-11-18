@@ -9,6 +9,9 @@ public sealed class AgentArms
     /// <summary>Which hazard a dropper-type driver lets go of next (they alternate).</summary>
     public bool NextDropIsOil { get; set; } = true;
 
+    /// <summary>Set by the world when a requested drop was not made; the dropper's driver clears it and retries.</summary>
+    public bool LastDropSkipped { get; set; }
+
     /// <summary>Advances the droppers' timers; the guns time themselves in <see cref="MachineGuns.TryFire"/>.</summary>
     public void Update(double dt)
     {

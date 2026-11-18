@@ -1,3 +1,4 @@
+using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
@@ -37,7 +38,7 @@ public sealed partial class World
                 Publish(new WeaponUsed(Time, WeaponKind.Smoke, Player.Id));
                 break;
             default:
-                Hazards.Add(new Caltrops { Distance = Player.Distance - 5, Lateral = NearestLane(Player.Lateral) });
+                Hazards.Add(new Caltrops { Distance = Player.Distance - 5, Lateral = DriverHelpers.NearestLane(Player.Lateral) });
                 Publish(new Message(Time, "CALTROPS DROPPED", Tone.Info));
                 Publish(new WeaponUsed(Time, WeaponKind.Caltrops, Player.Id));
                 break;
@@ -183,13 +184,5 @@ public sealed partial class World
         }
         Publish(new StrikeLanded(Time, destroyed));
         Publish(new Message(Time, $"SATELLITE STRIKE: {destroyed} DESTROYED", Tone.Good));
-    }
-
-    static double NearestLane(double lateral)
-    {
-        double best = Track.LaneCentres[0];
-        foreach (double lane in Track.LaneCentres)
-            if (Math.Abs(lane - lateral) < Math.Abs(best - lateral)) best = lane;
-        return best;
     }
 }

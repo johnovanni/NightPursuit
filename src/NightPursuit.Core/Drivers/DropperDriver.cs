@@ -1,5 +1,4 @@
 using NightPursuit.Core.Hazards;
-using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
 
@@ -67,13 +66,19 @@ public sealed class DropperDriver : IDriver
     public DriveIntent Decide(AgentCar self, WorldView view, double dt)
     {
         if (self.DriverState is not State s)
-            self.DriverState = s = new State { Target = NearestLane(self.Lateral) };
+            self.DriverState = s = new State { Target = DriverHelpers.NearestLane(self.Lateral) };
 
         var p = view.Player;
         double dD = self.Distance - p.Distance;
         double want = Math.Max(HoldMin, HoldPerSpeed * p.Speed) + HoldExtra;
         double speed = DriverHelpers.HoldGap(p.Speed, dD, want, HoldGain, HoldLo, HoldHi);
         bool drop = false;
+
+        if (self.Arms.LastDropSkipped)           // the world refused the last drop: try again soon
+        {
+            self.Arms.LastDropSkipped = false;
+            s.Timer = RetrySeconds;
+        }
 
         if (s.Arming > 0)
         {
@@ -86,7 +91,7 @@ public sealed class DropperDriver : IDriver
         }
         else
         {
-            s.Target = NearestLane(p.Lateral);
+            s.Target = DriverHelpers.NearestLane(p.Lateral);
             s.Timer = Countdown(s.Timer, dt);
             if (s.Timer <= 0 && view.CanSeePlayer(self) && Math.Abs(self.Lateral - p.Lateral) < ArmLateral
                 && dD <= ArmRange && GapHolds(self, p, out _))
@@ -103,13 +108,5 @@ public sealed class DropperDriver : IDriver
     {
         timer -= dt;
         return timer < SnapBelow ? 0 : timer;
-    }
-
-    static double NearestLane(double lateral)
-    {
-        double best = Track.LaneCentres[0];
-        foreach (double lane in Track.LaneCentres)
-            if (Math.Abs(lane - lateral) < Math.Abs(best - lateral)) best = lane;
-        return best;
     }
 }
