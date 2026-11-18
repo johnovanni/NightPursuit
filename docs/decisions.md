@@ -197,3 +197,310 @@ and on flat road they look as before.
   the banner starts below whichever is lower, half the height or the last message row.
 - The left edge arrow sits below the weapon panel.
 - The top-left help line now reads "R restart when paused" so the boss bar doesn't cut it off.
+
+## Plan 2 calls (before building)
+
+The design left these open, so I picked a default for each before building Plan 2 (weapons, new enemies and
+bosses), and the game follows them. I checked every entry below against the finished code; where the build ended
+up a little different from the plan, the entry says what the game really does.
+
+**D23. Weapon keys.** Z or Shift picks the next rear weapon, X or Ctrl drops it, F fires a missile and V calls
+the satellite strike. On the gamepad: X picks the next rear weapon, B drops it, RB fires a missile and LB calls the
+strike. Your left hand does all the weapons, and the arrow keys stay under your right. F1 shows the full list.
+*Cost to change:* a few lines in the key table and the help text.
+
+**D24. Only the oil recharges.** Oil comes back one charge every 8 s, as before. Smoke (up to 3), caltrops (3),
+missiles (2) and the strike (1) come only from what the mission gives you at the start and from supply crates. The
+design gives recharging to oil alone, and this gives the crates a purpose.
+*Cost to change:* one number per weapon.
+
+**D25. A short wait between uses.** Oil 0.6 s (as before), smoke 1 s, caltrops 0.8 s, missile 1 s. A bouncing key
+can't empty a weapon in one go. Pressing too soon says so, for example "SMOKE NOT READY".
+*Cost to change:* one number each.
+
+**D26. The smoke cloud is big, and drifts along with you.** It is 30 m long and 12 m wide, and it's dropped 6 m
+behind you. It starts moving forward at half your speed, slows to a stop, and lasts 5 s. A small puff that stood
+still would be crossed by a pursuer in a tenth of a second.
+*Cost to change:* four numbers.
+
+**D27. What smoke does to a car.** While a car is inside the cloud, and for 2 s after, it can't see you:
+- it drives at 60% of its usual speed (never below about 34 mph);
+- every 0.8 s it heads for a random spot up to 4 m to either side, never more than 6 m from the middle of the road;
+- it can't aim, fire or drop anything.
+
+"RUNNER LOST YOU IN THE SMOKE" (or whichever kind) shows when it happens. The plan said "anywhere within 6 m"; a
+pre-flight check settled on "up to 4 m from where it is", so a blinded car drifts rather than jumping across the road.
+*Cost to change:* a few numbers.
+
+**D28. Every pair of cars can now collide.** This was an open item from Plan 1: enemy cars no longer pass through
+each other.
+- A car that runs into the back of another is held behind it and slowed to just under its speed. Both lose half a
+  point of armor.
+- Cars that touch side by side are pushed apart. If they come together faster than 4 m/s, both spin.
+
+So that this doesn't happen all the time in ordinary traffic, every enemy car that can see keeps clear of a slower car
+ahead in its lane. It moves to a clear lane beside it, or else matches its speed, after its usual reaction delay
+(D53 says how far ahead it looks). A car blinded by smoke can't do this, which is how cars crash into each other
+inside smoke.
+*Cost to change:* the keep-clear rule is one part of the code; the collision numbers are one line each.
+
+**D29. Caltrops.** You drop them 5 m behind you, in the middle of the lane you're in. A set covers that one lane for
+3 m of road and lasts 30 s. A car that drives over it gets a puncture: it slows by 5 m/s every second, wobbles up to
+0.8 m from side to side, limps to the nearer edge of the road and crashes beside it. Like a car run off the road,
+that leaves no wreck in a lane (WRK-2), and you still get its points.
+*Cost to change:* a few numbers.
+
+**D30. A puncture doesn't stop anything else happening to a car.** A punctured car can still be spun by oil, shot or
+rammed, like any other.
+*Cost to change:* none to keep it; changing it would touch every rule that checks what state a car is in.
+
+**D31. Enemy oil and caltrops affect you; your own never do.**
+- Enemy oil: for 1 s your steering has no grip, you're shoved sideways a little and you lose a tenth of your speed.
+  "OIL - NO GRIP" shows.
+- Enemy caltrops: they cost 10 armor, then for 5 s your car is punctured. Above 100 mph the throttle is cut and a
+  gentle automatic brake slows you (150 down to 100 mph takes about 5 s), and the steering wobbles slightly. Your own
+  brake still works; below 100 mph it is just a speed limit. "PUNCTURED" shows.
+
+You can see both on the road before you reach them, with "OIL AHEAD" or "CALTROPS AHEAD", and neither can wreck you by
+itself (D57).
+*Cost to change:* a few numbers.
+
+**D32. Missiles.** A missile leaves about 250 mph faster than you and flies 700 m. It locks onto the nearest enemy 15
+to 500 m ahead within 25° of your nose (the view is 70° wide, less a margin). A green LOCK box shows which car, and the
+weapon panel says, for example, "LOCK: RUNNER 140 m". It steers after that car and destroys any ordinary enemy,
+leaving a burning wreck; the boss loses a fifth of its health instead. With nothing to lock onto it flies straight
+and says "MISSILE AWAY - NO LOCK". One that flies its full range without hitting anything says "MISSILE LOST".
+*Cost to change:* a few numbers.
+
+**D33. Satellite strike.** If there is no enemy in range (150 m behind you to 400 m ahead) it refuses with "NO
+TARGETS IN STRIKE RANGE" and you keep it, because strikes are rare. Once called, the 1.5 s targeting sweep always
+lands, even if you're wrecked during it. Every enemy in range is destroyed; the boss loses 35% of its health instead
+(D41's limits still apply).
+*Cost to change:* one line for the refusal; a few numbers.
+
+**D34. Supply crates.** Glowing 1.6 m boxes with a label such as "MISSILE +1", placed by the mission file. Each one
+appears on the road 800 m before you reach it. Only you can collect them; enemy cars and bullets pass through them.
+Driving into a crate for a weapon that's already full still uses it up, and says "SUPPLY: SMOKE ALREADY FULL". A sixth
+kind, Armor, repairs 25 for each one in the crate.
+*Cost to change:* a few numbers.
+
+**D35. What you start a mission with.** Each mission file says how much of each weapon you start with (oil, smoke,
+caltrops, missiles, strikes). A misspelled or unknown weapon name is rejected with a clear message. The old
+"startingOil" setting still works on its own; using both is an error. Mission 1 gives you 5 oil, 1 smoke, 1 caltrops,
+1 missile and no strike.
+*Cost to change:* none.
+
+**D36. The Gunner.** An orange-red fastback with a square gun port in its rear window. It gets ahead of you, holds
+about 45 m in front and follows your lane. Before it fires, the gun port glows and "GUNNER AIMING - LEAVE ITS LANE"
+shows for 0.6 s, and it stops following you, so changing lanes dodges the burst. Then it fires 6 shots backward and
+waits 2.5 s before it can aim again. Each hit costs you 2 armor. Its bullets reach 120 m and never hit other cars. It
+only aims when it's 25 to 90 m ahead and in your lane.
+*Cost to change:* a few numbers.
+
+**D37. The Dropper.** A teal van with a tall hatch and a chute. It holds ahead of you in your lane and drops oil and
+caltrops in turn, one every 3.5 s. Before each drop its chute glows for 0.5 s. It only drops where you will have at
+least 1.3 s to react, measured from your front bumper to the near edge of the hazard, and never closer than 60 m (at
+150 mph that is about 87 m). "DROPPER: OIL AHEAD" or "DROPPER: CALTROPS AHEAD" shows.
+*Cost to change:* a few numbers.
+
+**D38. The Armored car.** The design only said it is tough. It's a steel-blue wedge with armour plates.
+- While it's ahead of you, it lumbers along at its cruising speed.
+- Once you pass it, it chases you, rams you from behind, backs off for 2 s, and repeats. It chases at up to about
+  143 mph, so at full speed you can just pull away from it.
+- Your guns point forward, so the answers are a hazard, a ram, or braking to let it pass and then a missile.
+- Bullets barely scratch it: 80 hits to destroy it. The first hit says "ARMORED: USE A MISSILE, A RAM OR A HAZARD".
+- It's hard to spin: a side ram spins it only when you hit it faster than 8 m/s sideways (5 m/s for other cars), so
+  ramming it off the road takes commitment.
+
+*Cost to change:* a few numbers.
+
+**D39. Toughness and points.** Gunner 9 armor and 600 points, Dropper 9 and 600, Armored 12 and 900. The boss's
+health comes from the mission file (mission 1: 180), and destroying it is worth 5000.
+*Cost to change:* one number each.
+
+**D40. Every enemy has its own colour and its own shape**, so colour is never the only clue. On the radar: the Gunner
+is an orange-red ring with a dot, the Dropper a teal triangle pointing down, the Armored a steel-blue hexagon, and the
+boss a pulsing white double ring around a gold ring. Crates are white boxes with a letter for the item (a star for the strike). Your missiles
+are white dots; enemy missiles are red dots in a ring.
+*Cost to change:* drawing only.
+
+**D41. Limits on hurting the boss.**
+- One hit can at most end the current phase: the boss's health stops at that phase's line.
+- After a phase change the boss is shielded for 1.5 s, and its health bar says "SHIELDED".
+- Gunfire does double damage while it's spun out (the bar says "ARMOR OPEN ×2") and a quarter in an Armored phase.
+- Ramming does no damage, can't spin it, and can't push it off the road.
+
+*Cost to change:* a few numbers.
+
+**D42. Smoke works on the boss as on any car.** The design's boss table doesn't mention smoke. Inside the cloud the
+boss loses sight of you, wanders and can't fire, like any other car (D27).
+*Cost to change:* one line.
+
+**D43. How the boss arrives.** At the end of the approach the boss appears 300 m ahead in the centre lane, with a 3 s
+banner: "BOSS: BLACK HERON" and "DESTROY IT TO FINISH THE MISSION".
+- It eases along 10 m/s slower than you (from 300 m to 140 m takes about 16 s) until you're within 140 m or you first
+  hit it with anything. Only then does it start to fight.
+- Enemy cars still on the road stay; no new waves come.
+- It's never removed for being too far away. If it falls more than 120 m behind, it catches up at your speed plus
+  25 m/s; if it gets more than 600 m ahead, it waits for you. So it can't be lost.
+- After a respawn it is put 300 m ahead again and eases in the same way, with its health and phase unchanged.
+
+*Cost to change:* a few numbers.
+
+**D44. Enemy missiles.** Only bosses fire them, and mission 1's boss doesn't.
+- A missile always closes on you at 25 m/s (about 56 mph), and is launched only when you're 60 to 160 m away, ahead or
+  behind. That gives at least 2 s of warning every time (about 2.2 s at the closest).
+- It follows your lane until 1 s before it arrives, then locks and goes straight, so a lane change in the last second
+  dodges it.
+- It hits if you're within 1.4 m of its line, for 25 damage.
+- Only one is in the air at a time, and at most one every 6 s.
+- You can shoot it down with the guns for 50 points.
+
+The warning says where it is and counts down, for example "MISSILE INCOMING AHEAD RIGHT  IMPACT 1.6 s", with an
+arrow at the screen edge. The ending always shows too: "MISSILE DODGED", "MISSILE HIT" or "MISSILE SHOT DOWN +50".
+*Cost to change:* a few numbers.
+
+**D45. Phase banners.** When the boss changes phase, a banner such as "PHASE 2 OF 3: PURSUER" shows for 2.5 s with a
+one-line hint, for example "LET IT PASS, THEN SHOOT". The game's rules decide which warnings and banners are on screen,
+not the drawing code, so the tests can prove each one shows when it should.
+*Cost to change:* text only.
+
+**D46. A test mission: the proving ground.** It has all six enemy kinds, a crate of every item, and a 3-phase boss,
+the Glass Wasp: a Gunner phase, a Dropper phase, then a Pursuer phase that fires missiles. You start with every weapon
+full. Open it with `--mission proving-ground`. The six real missions come in Plan 4, but you need somewhere to try all
+of this now.
+*Cost to change:* none; it's a separate file.
+
+**D47. Mission 1's boss is the Black Heron.** 180 health. In phase 1 it drives like a Blocker until it's down to 60%
+(72 gun hits). In phase 2 it drives like a Pursuer that pulls ahead after each attack (D49), down to 25%. In phase 3
+it drives like a Runner, weaving fast (D50), to the end. It fires no missiles (the design keeps those for later
+missions).
+*Cost to change:* the mission file.
+
+**D48. Repeated hits don't flood the messages.** Gunner bullets show "SHOT BY A GUNNER" at most once a second. The red
+flash at the screen edge still shows for every hit.
+*Cost to change:* one number.
+
+**D49. A boss in a Pursuer phase pulls ahead after each attack**, where an ordinary pursuer drops back. It comes
+alongside and rams, then overtakes in a lane away from you, pulls at least 60 m ahead and holds about 70 m for 2.5 s,
+then drops back toward you (8 m/s slower than you) for the next attack. Your guns point forward, so each round leaves
+the boss in front of them for a while. Ordinary pursuers behave as in Plan 1.
+*Cost to change:* a few numbers.
+
+**D50. A boss in a Runner phase weaves.** It hops to another lane every 1 to 1.8 s, and at once when shot, while
+holding about 70 m ahead of you. So it stays a moving target instead of being passed.
+*Cost to change:* a few numbers.
+
+**D51. Any enemy closing from behind is warned.** An enemy within 60 m behind you and closing faster than 3 m/s shows
+its kind, side and distance, for example "GUNNER BEHIND LEFT 30 m", with an arrow at the screen edge. The Plan 1
+pursuer warning and the boss warning (within 120 m behind) stay as they were.
+*Cost to change:* a few numbers.
+
+**D52. Each warning is also recorded for sound later.** The moment a warning first appears, the game also notes it
+as an event, so sound added later can follow exactly what the screen shows. The screen stays the master: what you
+see is the full list.
+*Cost to change:* none.
+
+## While building Plan 2
+
+**D53. Enemy cars look further ahead at speed.** The keep-clear rule (D28) was planned to look 25 m ahead. A car
+closing fast needs more room to see the car, react and slow down, so it now looks at least 25 m ahead, and further the
+faster it's closing: a Runner closing at 30 m/s (67 mph) looks 65 m ahead. So enemy cars change lanes earlier in
+traffic.
+*Cost to change:* one line.
+
+**D54. When enemy cars crash into each other, you get the points.** If an enemy car is destroyed by hitting another
+enemy car, the points are yours: your smoke, oil or rams caused it.
+*Cost to change:* one line.
+
+**D55. A boss that falls behind you comes back past you by itself.** In a Blocker or Armored phase the boss would
+never overtake on its own, so it could sit behind you, out of reach of your guns. Now, once it's more than 10 m
+behind, it overtakes at up to your speed plus 15 m/s, in a lane at least 2.5 m from yours, until it's 60 m ahead.
+*Cost to change:* a few numbers.
+
+**D56. The boss never drives through you.** When it overtakes, it uses the side with room. With no clear lane it
+holds its line beside you, or drops back and crosses behind you. This took five rounds of review to get right.
+*Cost to change:* hard; this is the most carefully tested driving rule.
+
+**D57. Enemy caltrops can never wreck you.** They always leave you at least 1 armor. That matches the plan's "neither
+can kill you by itself" (D31).
+*Cost to change:* one line.
+
+**D58. A missile in flight when you're wrecked ends as "MISSILE MISSED".** The same goes for one still in the air
+when you respawn. So every missile launched has an ending on screen, and nothing launched before a wreck is still
+flying when your new car starts.
+*Cost to change:* a few lines.
+
+**D59. Each oil slick, set of caltrops and wreck affects the boss only once.** Without this, two wrecks lying together
+destroyed a full-health boss in 3 s, and a slow boss sitting on a slick was spun again and again.
+*Cost to change:* a few lines.
+
+**D60. A wreck can finish off the boss in its last phase.** Hitting a wreck costs the boss a tenth of its health,
+under the normal limits (D41). In earlier phases that can at most end the phase; in the last phase it can destroy the
+boss. You made the wreck, so it counts as yours.
+*Cost to change:* one line.
+
+**D61. At a respawn the boss comes back 300 m ahead**, with its health and phase kept, and eases in again (D43). Any
+wreck, slick or caltrops where it reappears is cleared away, so it can't be hit the moment it arrives.
+*Cost to change:* one line.
+
+**D62. Boss banners come first.** The boss's arrival and phase banners take priority on screen: a strike result
+never covers them (it still shows as a message). A strike that lands while the boss's shield is up says
+"SATELLITE STRIKE: 0 DESTROYED - SHIELDED", so you know why it did nothing.
+*Cost to change:* a few lines.
+
+**D63. Every pursuer near you gets an edge arrow.** With pursuers on both sides, arrows show on both edges, so D14
+still holds: a pursuer beside you is always shown.
+*Cost to change:* a few lines.
+
+**D64. With no missiles left, the lock line says "NO MISSILES"** instead of "NO TARGET IN SIGHT", and no LOCK box
+is drawn on a car you couldn't fire at.
+*Cost to change:* one line.
+
+**D65. Speed figures for Plan 2.**
+- Drawing one frame takes 1.5 ms on average (2.2 ms for the slowest one in twenty), with a crowded scene: 29 enemy
+  cars of every kind, the boss, smoke, crates, missiles and a strike sweep. The limit is 8 ms. Plan 1's simpler scene
+  took 0.55 to 0.84 ms.
+- The stress test drew 12,002 frames, every 10 m of both mission 1 and the proving ground at three window sizes, plus
+  a minimised window, with no failures.
+- These figures leave out the graphics card's own work, as in D17. Turning the frames into pixels without a graphics
+  card got about 3 times slower than in Plan 1, probably because of the big see-through smoke clouds, so please watch
+  for stutter when smoke fills the view.
+
+## Open items after Plan 2
+
+From Plan 1's "not urgent" list, these are now done: enemy cars collide with each other (D28), the oil recharge
+shows in the weapon panel, and "BLOCKER AHEAD" has a side arrow. Still open from that list: F1 help doesn't pause the
+game, and you respawn where you crashed rather than a short way back (Plan 4).
+
+New, all small:
+- The F1 help box overlaps the right edge of the weapon panel by about 18 pixels at 1280×720 (seen in a picture
+  today). It only looks untidy: the help box is drawn on top, and every line of help fits inside it.
+- A boss swerving off a wreck can be drawn passing through it for a moment. It makes no difference to play.
+- Shift is one of the "next rear weapon" keys (D23). Pressing Shift five times quickly makes Windows offer Sticky
+  Keys, which takes the focus away, so the game pauses (D12). Z does the same job, so Shift could be dropped.
+
+Coming in later plans:
+- Plan 3: a test that the satellite strike spares civilians and police (it already only targets enemies), how
+  civilians and police react to smoke, and heat from weapons.
+- Plan 4: missions 2–6 (and with them enemy missiles in missions 5 and 6), the briefing screen with the boss drawing
+  and your loadout, the mission bonus, respawning a short way back, and the text-size setting.
+
+## Checks only you can do (Plan 2)
+
+1. Play mission 1 to the Black Heron and beat all three phases. Tell me whether the slow arrival from 300 m (about
+   16 s to close in, D43) and the Pursuer phase that pulls ahead after each attack (D49) feel right.
+2. Start the proving ground: from `C:\repos\NightPursuit`, run
+   `dotnet run -c Release --project src/NightPursuit.App -- --mission proving-ground`. Then:
+   - smoke a pursuer and watch it wander in the mirror;
+   - drop caltrops in front of a runner;
+   - lock onto a car and fire a missile;
+   - use the satellite strike;
+   - dodge a boss missile by changing lanes in its last second, and shoot another one down. The Glass Wasp fires
+     missiles only in its third phase.
+3. Check that every warning and banner is easy to read without sound, and that the new enemy colours are easy to tell
+   apart: orange-red Gunner, teal Dropper, steel-blue Armored, the white-and-gold boss, and the teal Dropper from the
+   yellow Blocker.
+4. Two things the test pictures couldn't show me well:
+   - the Dropper's chute glowing just before a drop (too small to make out at 90 m);
+   - whether the game stays smooth with smoke clouds on screen (D65).
