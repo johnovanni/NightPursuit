@@ -68,7 +68,7 @@ internal static class Overlays
         dc.Pop();
     }
 
-    /// <summary>A chevron on the screen edge pointing out toward the side the pursuer is on (both sides when it is dead behind).</summary>
+    /// <summary>A chevron on the screen edge pointing out toward the side a warning comes from (both sides when it is dead behind): pursuers, missiles, blockers, the boss and hostiles.</summary>
     static void DrawEdgeArrow(DrawingContext dc, HudLayout l, int side)
     {
         double k = l.K, y = l.Height * 0.55;

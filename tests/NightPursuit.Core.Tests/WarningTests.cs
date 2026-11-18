@@ -222,6 +222,55 @@ public class WarningTests
     }
 
     [Fact]
+    public void Pursuers_on_both_sides_show_both_arrows_and_on_one_side_only_that_one()
+    {
+        var w = Straight();
+        Car(w, AgentKind.Pursuer, -1, -3);
+        Car(w, AgentKind.Pursuer, -1, 3);
+        Assert.Equal(0, Single(w, WarningKind.PursuerAlongside).Side);
+
+        w.Agents.Clear();
+        Car(w, AgentKind.Pursuer, -1, 3);
+        Car(w, AgentKind.Pursuer, -40, 3);
+        var one = Single(w, WarningKind.PursuerAlongside);
+        Assert.Equal(1, one.Side);
+        Assert.Equal("PURSUER RIGHT", one.Text);
+
+        w.Agents.Clear();
+        Car(w, AgentKind.Pursuer, -40, 3);
+        Car(w, AgentKind.Pursuer, -60, -3);
+        var behind = Single(w, WarningKind.PursuerBehind);
+        Assert.Equal("PURSUER BEHIND RIGHT  40 m", behind.Text);   // the nearest one's words
+        Assert.Equal(0, behind.Side);                              // but both edges, as both are on the road behind
+    }
+
+    [Fact]
+    public void A_strike_that_changes_the_boss_phase_leaves_the_phase_banner_showing()
+    {
+        var w = Straight();
+        w.Loadout.Strike.Restock(2);
+        var boss = BossCar.Create(w.NextId(), Boss, w.Player.Distance + 100, 0, 30);
+        boss.Driver = new StillDriver();
+        boss.Armor = 70;
+        w.Agents.Add(boss);
+        w.Handle(new GameAction(ActionKind.FireStrike));
+        Assert.StartsWith("SATELLITE STRIKE", w.Announcement!.Title);
+        for (int i = 0; i < 200 && !w.Events.Any(e => e is StrikeLanded); i++) w.StepOnce(ControlFrame.Empty);
+        Assert.Contains(w.Events, e => e is BossPhaseChanged);
+        Assert.StartsWith("PHASE 2", w.Announcement!.Title);
+        Assert.Contains(w.Events.OfType<Message>(), m => m.Text.StartsWith("SATELLITE STRIKE: "));
+
+        // Pressing strike during the fresh phase banner does not replace it either (it still says so in a message).
+        w.Loadout.Strike.Restock(1);
+        Car(w, AgentKind.Runner, 80, -5);
+        int before = w.Events.Count;
+        w.Handle(new GameAction(ActionKind.FireStrike));
+        Assert.StartsWith("PHASE 2", w.Announcement!.Title);
+        var msgs = w.Events.Skip(before).OfType<Message>().Select(m => m.Text).ToList();
+        Assert.True(msgs.Contains("SATELLITE STRIKE: TARGETING"), string.Join("|", msgs));
+    }
+
+    [Fact]
     public void A_new_warning_publishes_WarningRaised_once()
     {
         var w = Straight();
@@ -310,20 +359,20 @@ public class WarningTests
         var w = run.World;
         var seen = new HashSet<Type>();
         int raisedChecked = 0;
-        var announcedAt = new HashSet<double>();
+        var announced = new List<(double Start, string Title)>();
         for (int step = 0; step < 120 * 120; step++)
         {
             if (step % 60 == 0 && EnemyMissileTests.ActionAt(step) is ActionKind action)
             {
                 int pre = w.Events.Count;
                 run.Handle(new GameAction(action));
-                if (w.Announcement is { } early) announcedAt.Add(early.Start);
-                Check(w, pre, run, seen, announcedAt, ref raisedChecked);
+                if (w.Announcement is { } early) announced.Add((early.Start, early.Title));
+                Check(w, pre, run, seen, announced, ref raisedChecked);
             }
             int before = w.Events.Count;
             run.Update(new ControlFrame { Gas = true, Fire = true, PadConnected = true, PadSteer = EnemyMissileTests.AutopilotSteer(w) }, World.Step);
-            if (w.Announcement is { } a) announcedAt.Add(a.Start);
-            Check(w, before, run, seen, announcedAt, ref raisedChecked);
+            if (w.Announcement is { } a) announced.Add((a.Start, a.Title));
+            Check(w, before, run, seen, announced, ref raisedChecked);
         }
         Assert.True(raisedChecked > 0, "no WarningRaised in the whole run");
         Assert.Contains(typeof(EnemyMissileEnded), seen);
@@ -331,7 +380,7 @@ public class WarningTests
         Assert.Contains(typeof(StrikeLanded), seen);
     }
 
-    static void Check(World w, int from, MissionRun run, HashSet<Type> seen, HashSet<double> announcedAt, ref int raisedChecked)
+    static void Check(World w, int from, MissionRun run, HashSet<Type> seen, List<(double Start, string Title)> announced, ref int raisedChecked)
     {
         var now = w.Events.Skip(from).ToList();
         var messageTimes = now.OfType<Message>().Select(m => m.Time).ToHashSet();
@@ -349,7 +398,11 @@ public class WarningTests
                     raisedChecked++;
                     break;
                 case BossAppeared or BossPhaseChanged or StrikeLanded:
-                    Assert.True(announcedAt.Contains(e.Time), $"{e.GetType().Name} at {e.Time:0.00} has no announcement");
+                    string prefix = e switch { BossAppeared => "BOSS:", BossPhaseChanged => "PHASE ", _ => "STRIKE:" };
+                    bool shown = announced.Any(x => x.Start == e.Time && x.Title.StartsWith(prefix, StringComparison.Ordinal));
+                    // The one legitimate exception: a strike result while a boss banner holds the screen (it has its Message).
+                    bool held = e is StrikeLanded && w.Announcement is { Urgent: true } && messageTimes.Contains(e.Time);
+                    Assert.True(shown || held, $"{e.GetType().Name} at {e.Time:0.00} has no {prefix} announcement");
                     break;
                 default:
                     Assert.True(messageTimes.Contains(e.Time), $"{e.GetType().Name} at {e.Time:0.00} has no message");

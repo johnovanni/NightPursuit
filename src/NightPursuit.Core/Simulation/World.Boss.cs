@@ -39,7 +39,7 @@ public sealed partial class World
         Publish(new BossPhaseChanged(Time, n, m, behaviour));
         Publish(new Message(Time, $"BOSS PHASE {n} OF {m}: {behaviour.ToString().ToUpperInvariant()}", Tone.Info));
         string hint = PhaseHint(behaviour) + (b.Phase.FiresMissiles ? "  -  FIRES MISSILES" : "");
-        Announce($"PHASE {n} OF {m}: {behaviour.ToString().ToUpperInvariant()}", hint, 2.5);
+        Announce($"PHASE {n} OF {m}: {behaviour.ToString().ToUpperInvariant()}", hint, 2.5, urgent: true);
     }
 
     /// <summary>One line telling the player what a boss phase does and how to beat it.</summary>

@@ -16,6 +16,7 @@ public readonly record struct Warning(WarningKind Kind, string Text, int Side, b
 public static class Warnings
 {
     public const int MaxShown = 4;
+    static readonly int KindCount = Enum.GetValues<WarningKind>().Length;
     const double PursuerRange = 120, AlongsideAhead = 4, AlongsideZone = 3, AheadRange = 150;
     const double WreckLane = 2.2, BlockerLane = 2, OilLane = 2.5, GunnerLane = 2, SideDeadZone = 1;
     const double GunnerRange = 120, BossRange = 120, HostileRange = 60, HostileMinGap = 3, HostileClosing = 3;
@@ -24,7 +25,7 @@ public static class Warnings
     public static IReadOnlyList<Warning> Collect(World w)
     {
         var p = w.Player;
-        var found = new Warning?[Enum.GetValues<WarningKind>().Length];
+        var found = new Warning?[KindCount];
 
         // The soonest enemy missile.
         EnemyMissile? missile = null;
@@ -39,6 +40,7 @@ public static class Warnings
         }
 
         AgentCar? pursuer = null, blocker = null, gunner = null, hostile = null;
+        int pursuerSides = 0;          // bit 0: one on the left, bit 1: centred, bit 2: one on the right
         BossCar? boss = null;
         foreach (var e in w.Agents)
         {
@@ -46,11 +48,15 @@ public static class Warnings
             double dz = e.Distance - p.Distance;
             if (e is BossCar b)
             {
-                if (dz < -HostileMinGap && dz > -BossRange && (boss is null || dz > boss.Distance - p.Distance)) boss = b;
+                if (dz <= -HostileMinGap && dz >= -BossRange && (boss is null || dz > boss.Distance - p.Distance)) boss = b;
             }
             else if (e.Kind == AgentKind.Pursuer)
             {
-                if (dz < AlongsideAhead && dz > -PursuerRange && (pursuer is null || dz > pursuer.Distance - p.Distance)) pursuer = e;
+                if (dz < AlongsideAhead && dz > -PursuerRange)
+                {
+                    pursuerSides |= 1 << (SideOf(e.Lateral - p.Lateral) + 1);
+                    if (pursuer is null || dz > pursuer.Distance - p.Distance) pursuer = e;
+                }
             }
             else
             {
@@ -66,16 +72,18 @@ public static class Warnings
         if (pursuer is not null)
         {
             double dx = pursuer.Lateral - p.Lateral;
-            int side = SideOf(dx);
+            int own = SideOf(dx);
+            // Every pursuer in range keeps its edge arrow (D14): one side when they all share it, both edges otherwise.
+            int side = pursuerSides == 1 ? -1 : pursuerSides == 4 ? 1 : 0;
             double dist = p.Distance - pursuer.Distance;
             if (dist < AlongsideZone)     // beside you or slightly ahead: it is about to ram, so no distance
             {
-                string where = side == 0 ? (dx < 0 ? "LEFT" : "RIGHT") : side < 0 ? "LEFT" : "RIGHT";
+                string where = own == 0 ? (dx < 0 ? "LEFT" : "RIGHT") : own < 0 ? "LEFT" : "RIGHT";
                 found[(int)WarningKind.PursuerAlongside] = new Warning(WarningKind.PursuerAlongside, $"PURSUER {where}", side, true);
             }
             else
             {
-                string text = side == 0 ? $"PURSUER BEHIND  {Metres(dist)} m" : $"PURSUER BEHIND {(side < 0 ? "LEFT" : "RIGHT")}  {Metres(dist)} m";
+                string text = own == 0 ? $"PURSUER BEHIND  {Metres(dist)} m" : $"PURSUER BEHIND {(own < 0 ? "LEFT" : "RIGHT")}  {Metres(dist)} m";
                 found[(int)WarningKind.PursuerBehind] = new Warning(WarningKind.PursuerBehind, text, side, true);
             }
         }
