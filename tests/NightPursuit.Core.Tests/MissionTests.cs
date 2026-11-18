@@ -360,6 +360,18 @@ public class MissionTests
     }
 
     [Fact]
+    public void Restart_during_a_respawn_says_to_wait_for_it()
+    {
+        var run = Run();
+        run.World.Player.Armor = 0;
+        run.Update(ControlFrame.Empty, 0.02);
+        Assert.Equal(RunState.Respawning, run.State);
+        run.Handle(new GameAction(ActionKind.Restart));
+        Assert.Equal(RunState.Respawning, run.State);
+        Assert.Contains(run.World.RecentMessages, m => m is Message { Text: "RESTART AFTER THE RESPAWN", Tone: Tone.Info });
+    }
+
+    [Fact]
     public void Restart_works_when_paused_or_finished()
     {
         var run = Run();

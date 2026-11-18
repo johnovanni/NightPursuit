@@ -68,7 +68,7 @@ internal static class Overlays
             string side = dx < -1 ? "LEFT" : dx > 1 ? "RIGHT" : "";
             double dist = p.Distance - nearestPursuer.Distance;
             string text;
-            if (Math.Abs(dist) < AlongsideZone)     // riding beside you: it is about to ram, so no distance
+            if (dist < AlongsideZone)     // beside you or slightly ahead: it is about to ram, so no distance
                 text = $"PURSUER {(side.Length == 0 ? (dx < 0 ? "LEFT" : "RIGHT") : side)}";
             else
                 text = side.Length == 0 ? $"PURSUER BEHIND  {dist:0} m" : $"PURSUER BEHIND {side}  {dist:0} m";

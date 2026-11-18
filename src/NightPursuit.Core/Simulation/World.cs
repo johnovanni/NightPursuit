@@ -74,7 +74,8 @@ public sealed class World
     public int Advance(ControlFrame input, double frameSeconds, Func<bool>? afterStep = null)
     {
         _events.Clear();
-        _accumulator += Math.Clamp(frameSeconds, 0, MaxFrameSeconds);
+        // Clamp the total, not just the frame: time left over from an early exit must not stack past 0.25 s.
+        _accumulator = Math.Min(_accumulator + Math.Clamp(frameSeconds, 0, MaxFrameSeconds), MaxFrameSeconds);
         int steps = 0;
         while (_accumulator >= Step - StepEpsilon)
         {

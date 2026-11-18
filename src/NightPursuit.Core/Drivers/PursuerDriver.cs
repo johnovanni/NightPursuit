@@ -49,7 +49,7 @@ public sealed class PursuerDriver : IDriver
                     // Too close to ram-proof: drop back slower than the player (never faster) and keep to its own lane,
                     // so a slow or stopped player isn't run into while the pursuer "retreats".
                     speed = Math.Max(0, Math.Min(speed, p.Speed - 2));
-                    s.Target = NearestLane(self.Lateral);
+                    s.Target = RetreatLane(self, p.Lateral);
                 }
                 if (dz < -80)
                 {
@@ -63,6 +63,23 @@ public sealed class PursuerDriver : IDriver
         return new DriveIntent(speed, lateral);
     }
 
-    static double NearestLane(double lateral) =>
-        Track.LaneCentres.MinBy(lane => Math.Abs(lane - lateral));
+    const double MinLaneGapFromPlayer = 2.5;
+
+    /// <summary>
+    /// The lane on the pursuer's own side of the player that is at least 2.5 m from the player and nearest to the pursuer;
+    /// if no lane qualifies, the lane farthest from the player. Never a lane that crosses the player's path.
+    /// </summary>
+    static double RetreatLane(AgentCar self, double playerLateral)
+    {
+        double offset = self.Lateral - playerLateral;
+        int side = offset < 0 ? -1 : offset > 0 ? 1 : self.Side;
+        double? best = null;
+        foreach (double lane in Track.LaneCentres)
+        {
+            double fromPlayer = lane - playerLateral;
+            if (Math.Sign(fromPlayer) != side || Math.Abs(fromPlayer) < MinLaneGapFromPlayer) continue;
+            if (best is null || Math.Abs(lane - self.Lateral) < Math.Abs(best.Value - self.Lateral)) best = lane;
+        }
+        return best ?? Track.LaneCentres.MaxBy(lane => Math.Abs(lane - playerLateral));
+    }
 }

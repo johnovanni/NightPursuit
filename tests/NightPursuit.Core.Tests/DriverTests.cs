@@ -90,6 +90,24 @@ public class DriverTests
     }
 
     [Fact]
+    public void Retreating_pursuer_alongside_never_steers_back_into_the_players_lane()
+    {
+        var w = Straight();
+        w.Player.Lateral = 0;
+        var car = AgentCar.Create(w.NextId(), AgentKind.Pursuer, 0, -2.2, 5);
+        car.DriverState = new PursuerDriver.State { Phase = PursuerPhase.Retreat, Target = -2.2 };
+        w.Agents.Add(car);
+        for (int i = 0; i < 120 * 4; i++)
+        {
+            w.Player.Speed = 5;
+            w.StepOnce(ControlFrame.Empty);
+            bool overlap = Math.Abs(car.Lateral - w.Player.Lateral) < 1.9 && Math.Abs(car.Distance - w.Player.Distance) < 4.4;
+            Assert.False(overlap, $"overlapped the player at step {i}");
+        }
+        Assert.True(Math.Abs(car.Lateral - w.Player.Lateral) >= 2.5, $"ended {car.Lateral - w.Player.Lateral:0.00} m from the player");
+    }
+
+    [Fact]
     public void Destroying_a_car_ahead_of_a_pursuer_blocks_it()
     {
         var w = Straight();

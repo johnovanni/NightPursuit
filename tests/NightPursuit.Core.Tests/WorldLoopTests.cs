@@ -24,6 +24,27 @@ public class WorldLoopTests
     }
 
     [Fact]
+    public void Early_exit_leftover_does_not_let_the_next_advance_exceed_30_steps()
+    {
+        var w = TestWorlds.World();
+        Assert.Equal(1, w.Advance(ControlFrame.Empty, 0.25, () => true));   // stops after one step, ~29 steps of time unused
+        int steps = w.Advance(ControlFrame.Empty, 0.25);
+        Assert.True(steps <= 30, $"ran {steps} steps");
+    }
+
+    [Fact]
+    public void Alpha_after_an_early_exit_is_within_0_1_and_equals_leftover_over_step()
+    {
+        var w = TestWorlds.World();
+        w.Advance(ControlFrame.Empty, 2.5 * World.Step, () => true);   // one step run, 1.5 steps left unused
+        Assert.InRange(w.Alpha, 0, 1);
+        Assert.Equal(1.0, w.Alpha, 6);                                  // 1.5 steps leftover clamps to a full step
+        var v = TestWorlds.World();
+        v.Advance(ControlFrame.Empty, 1.5 * World.Step, () => true);   // one step run, 0.5 left
+        Assert.Equal(0.5, v.Alpha, 6);
+    }
+
+    [Fact]
     public void Negative_frame_time_runs_no_steps()
     {
         Assert.Equal(0, TestWorlds.World().Advance(ControlFrame.Empty, -1));

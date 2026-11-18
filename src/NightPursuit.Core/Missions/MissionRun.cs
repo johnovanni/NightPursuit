@@ -84,6 +84,7 @@ public sealed class MissionRun
         {
             case ActionKind.Restart:
                 if (CanRestart) Rebuild();
+                else if (State == RunState.Respawning) World.Publish(new Message(World.Time, "RESTART AFTER THE RESPAWN", Tone.Info));
                 else World.Publish(new Message(World.Time, "PRESS P TO PAUSE, THEN R TO RESTART", Tone.Info));
                 break;
             case ActionKind.Pause:

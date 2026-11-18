@@ -1,6 +1,7 @@
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Drivers;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
@@ -92,6 +93,39 @@ public class InterpolationTests
             return x.StateHash();
         }
         Assert.Equal(Run(_ => 0), Run(x => x.Alpha + x.Player.PrevDistance));
+    }
+
+    [Fact]
+    public void Tracer_prev_fields_equal_their_values_at_the_start_of_the_latest_step()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        w.StepOnce(new ControlFrame { Fire = true });
+        Assert.NotEmpty(w.Tracers);
+        var t = w.Tracers[0];
+        for (int i = 0; i < 5; i++)
+        {
+            var before = t.Pose;
+            w.StepOnce(ControlFrame.Empty);
+            Assert.Equal(before.Distance, t.PrevDistance);
+            Assert.Equal(before.Lateral, t.PrevLateral);
+            Assert.Equal(before.Heading, t.PrevHeading);
+            Assert.NotEqual(before.Distance, t.Pose.Distance);
+        }
+    }
+
+    [Fact]
+    public void Wreck_prev_distance_equals_its_distance_at_the_start_of_the_latest_step()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        var wreck = new Wreck { Distance = 100, Lateral = 3, Width = 1.9, Length = 4.4, Speed = 20 };
+        w.Hazards.Add(wreck);
+        for (int i = 0; i < 5; i++)
+        {
+            double before = wreck.Distance;
+            w.StepOnce(ControlFrame.Empty);
+            Assert.Equal(before, wreck.PrevDistance);
+            Assert.NotEqual(before, wreck.Distance);
+        }
     }
 
     [Fact]

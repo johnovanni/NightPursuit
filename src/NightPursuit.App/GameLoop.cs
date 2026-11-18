@@ -37,6 +37,9 @@ public sealed class GameLoop
         _last = now;
         _haveLast = true;
 
+        // Losing focus pauses the run, including mid-respawn, so it never carries on with nobody at the keyboard.
+        if (!_window.IsActive && _run.State == RunState.Playing) _run.Handle(new GameAction(ActionKind.Pause));
+
         // Read first: polling the pad is what queues its press-edge actions, and they must act this frame.
         var held = _input.Read(_window.IsActive);
         foreach (var a in _input.Drain())
