@@ -129,6 +129,29 @@ public class InterpolationTests
     }
 
     [Fact]
+    public void Smoke_prev_distance_equals_its_distance_at_the_start_of_the_latest_step()
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        var cloud = new SmokeCloud { Distance = 50, PrevDistance = 50, Lateral = 0, Speed = 20 };
+        w.Hazards.Add(cloud);
+        Assert.Equal(cloud.Distance, cloud.PrevDistance);
+
+        double startOfNextStep = cloud.Distance, startOfLastStep = cloud.Distance;
+        for (int frame = 0; frame < 60; frame++)
+        {
+            int steps = w.Advance(ControlFrame.Empty, 1.0 / 75, () =>
+            {
+                startOfLastStep = startOfNextStep;     // this step began where the previous one ended
+                startOfNextStep = cloud.Distance;
+                return false;
+            });
+            if (steps == 0) continue;
+            Assert.Equal(startOfLastStep, cloud.PrevDistance, 1e-12);
+            Assert.NotEqual(cloud.Distance, cloud.PrevDistance);
+        }
+    }
+
+    [Fact]
     public void Agent_create_leaves_prev_equal_to_current()
     {
         var c = AgentCar.Create(3, AgentKind.Pursuer, 123.4, -2.5, 30);

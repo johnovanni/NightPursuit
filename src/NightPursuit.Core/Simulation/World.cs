@@ -19,6 +19,7 @@ public sealed partial class World
     const double StepEpsilon = 1e-9;
     const double MaxAhead = 1500;
     const double MaxBehind = 500;
+    const double BlindSeconds = 2.0;
     const int MaxRecentMessages = 4;
     const double MessageLifetime = 2.5;
 
@@ -132,20 +133,44 @@ public sealed partial class World
         foreach (var a in Agents) a.SnapPrev();
         foreach (var h in Hazards)
             if (h is Wreck w) w.PrevDistance = w.Distance;
+            else if (h is SmokeCloud s) s.PrevDistance = s.Distance;
     }
 
     void StepAgents()
     {
         foreach (var a in Agents)
         {
+            UpdateBlindness(a);
             switch (a.State)
             {
-                case VehicleState.Driving: CarPhysics.StepAgent(a, a.Driver.Decide(a, _view, Step), Step); break;
+                case VehicleState.Driving:
+                    var driver = a.Blinded > 0 ? BlindDriver.Instance : a.Driver;   // DriverState is untouched, so the plan resumes
+                    CarPhysics.StepAgent(a, driver.Decide(a, _view, Step), Step);
+                    break;
                 case VehicleState.Spinning: CarPhysics.StepSpinning(a, Step); break;
                 case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
             }
             a.HitFlash = Math.Max(0, a.HitFlash - Step);
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
+        }
+    }
+
+    /// <summary>Smoke blinds a car for 2 s after it was last inside a cloud.</summary>
+    void UpdateBlindness(AgentCar a)
+    {
+        bool covered = false;
+        foreach (var h in Hazards)
+            if (h is SmokeCloud c && c.Covers(a)) { covered = true; break; }
+        if (covered)
+        {
+            if (a.Blinded <= 0)
+                Publish(new Message(Time, $"{a.Kind.ToString().ToUpperInvariant()} LOST YOU IN THE SMOKE", Tone.Good));
+            a.Blinded = BlindSeconds;
+        }
+        else
+        {
+            a.Blinded = Math.Max(0, a.Blinded - Step);
+            if (a.Blinded < StepEpsilon) a.Blinded = 0;
         }
     }
 

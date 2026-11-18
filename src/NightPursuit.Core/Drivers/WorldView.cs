@@ -12,4 +12,7 @@ public sealed class WorldView(World world)
     public IReadOnlyList<AgentCar> Agents => world.Agents;
     public IReadOnlyList<Hazard> Hazards => world.Hazards;
     public IRng Rng => world.Rng;
+
+    /// <summary>False while the car is blinded by smoke.</summary>
+    public bool CanSeePlayer(AgentCar self) => self.Blinded <= 0;
 }

@@ -5,7 +5,7 @@ namespace NightPursuit.Core.Vehicles;
 public enum AgentKind { Runner, Blocker, Pursuer }
 
 /// <summary>An enemy car. Its driver (AI) is attached separately through <see cref="DriverState"/>.</summary>
-public sealed class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
+public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
 {
     public override Faction Faction => Faction.Hostile;
     public AgentKind Kind { get; } = kind;
@@ -17,6 +17,12 @@ public sealed class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats
     public object? DriverState { get; set; }
     /// <summary>The speed this car holds when nothing makes it do otherwise, m/s.</summary>
     public double CruiseSpeed { get; set; }
+    /// <summary>Seconds this car stays unable to see the player after leaving smoke; 0 when it can see.</summary>
+    public double Blinded { get; set; }
+    /// <summary>Where a blinded car is currently steering, metres from the road centre.</summary>
+    public double WanderLateral { get; set; }
+    /// <summary>Seconds until a blinded car picks a new wander target.</summary>
+    public double WanderTimer { get; set; }
 
     static readonly IDriver RunnerDriver = new Drivers.RunnerDriver();
     static readonly IDriver BlockerDriver = new Drivers.BlockerDriver();
