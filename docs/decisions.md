@@ -63,3 +63,18 @@ mean something else everywhere. So its fields can only be set when it's created.
 
 **D8. Oil charges before missions exist.** Task 9 builds the oil dropper before Task 11 adds
 mission files. It starts with 5 charges, and Task 11 sets it from the mission's `startingOil`.
+
+## While building Plan 1
+
+**D9. A car rammed to death doesn't leave a wreck.** The plan only had three causes of destruction:
+gunfire, running off the road, and hitting a wreck. A car whose armor runs out from ramming is
+counted as "rammed": it crashes beside the road like one run off it, and does not block a lane.
+Only gunfire wrecks block lanes (WRK-1, WRK-2).
+
+**D10. Bullets hit the nearest car.** If two cars overlap along a bullet's path in one step, the
+nearer one is hit, so you can't shoot through a car to reach the one behind it.
+
+**D11. Geometry corrections.** Two expected values in the plan were wrong, and the code is right:
+- A straight line leaving a 200 m bend is 23.6 m outside the road after 100 m, not 26.8 m.
+- The road view now uses exact arcs, so a constant bend is a true circle; it was off by about
+  1 mm before.
