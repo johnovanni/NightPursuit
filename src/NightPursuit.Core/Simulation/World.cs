@@ -1,7 +1,9 @@
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Road;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Vehicles;
+using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Simulation;
 
@@ -18,6 +20,7 @@ public sealed class World
     const double MessageLifetime = 2.5;
 
     readonly List<GameEvent> _events = new();
+    readonly List<AgentCar> _removals = new();
     readonly IThrottleScheme[] _schemes = { new RampPedalScheme(), new SpeedLeverScheme() };
     double _accumulator;
     int _lastId;
@@ -28,6 +31,9 @@ public sealed class World
     public IRng Rng { get; }
     public PlayerCar Player { get; } = new() { Id = 0 };
     public List<AgentCar> Agents { get; } = new();
+    public List<Tracer> Tracers { get; } = new();
+    public List<Hazard> Hazards { get; } = new();
+    public Loadout Loadout { get; } = new();
     public SteeringInput Steering { get; } = new();
     public double Time { get; private set; }
     public int Score { get; set; }
@@ -75,12 +81,100 @@ public sealed class World
         Steering.Update(input, Feel, Step);
         CarPhysics.StepPlayer(Player, pedals, Steering.Value, Track, Feel, Step);
 
-        // T8: weapons and tracers
+        // T8: weapons and tracers, then wrecks
+        StepWeapons(input);
+        StepHazards();
         // T9: agents (drivers, spawning) and collisions
         // T10: hazards
 
+        // Cars killed by gunfire leave the list only now, so nothing above sees the list change mid-step.
+        if (_removals.Count > 0)
+        {
+            Agents.RemoveAll(a => _removals.Contains(a));
+            _removals.Clear();
+        }
+
         Time += Step;
         RecentMessages.RemoveAll(e => Time - e.Time > MessageLifetime);
+    }
+
+    void StepWeapons(ControlFrame input)
+    {
+        var guns = Loadout.Guns;
+        guns.Update(Step);
+        bool trigger = (input.Fire || input.PadFire) && Player.State != VehicleState.Wrecked;
+        if (guns.TryFire(trigger, Step))
+        {
+            // Guns sit 2 m ahead of the driver and 0.7 m either side of the car's centre line.
+            double side = guns.LeftGun ? -0.7 : 0.7, c = Math.Cos(Player.Heading), s = Math.Sin(Player.Heading);
+            Tracers.Add(new Tracer
+            {
+                Pose = new RoadPose(Player.Distance + 2 * c - side * s, Player.Lateral + 2 * s + side * c, Player.Heading),
+                Speed = Player.Speed + MachineGuns.MuzzleSpeed,
+                OwnerId = Player.Id,
+            });
+        }
+
+        foreach (var t in Tracers)
+        {
+            t.PrevDistance = t.Pose.Distance;
+            t.PrevLateral = t.Pose.Lateral;
+            t.Pose = RoadMotion.MoveStraight(Track, t.Pose, t.Speed * Step);
+            t.Travel += MachineGuns.MuzzleSpeed * Step;
+            if (t.Travel > MachineGuns.Range || Math.Abs(t.Pose.Lateral) > 60) { t.Dead = true; continue; }
+            foreach (var car in Agents.ToArray())
+            {
+                if (!car.IsOnRoadDriving || !SweptHit(t, car)) continue;
+                t.Dead = true;
+                car.Armor -= 1;
+                car.HitFlash = 0.08;
+                if (car.Armor <= 0) Destroy(car, KillCause.Gunfire);
+                break;
+            }
+        }
+        Tracers.RemoveAll(t => t.Dead);
+    }
+
+    /// <summary>True when the tracer's last step crossed the car's length within its width (plus a little).</summary>
+    static bool SweptHit(Tracer t, AgentCar car)
+    {
+        double d0 = t.PrevDistance, d1 = t.Pose.Distance;
+        double half = car.Stats.Length / 2;
+        if (car.Distance + half < Math.Min(d0, d1) || car.Distance - half > Math.Max(d0, d1)) return false;
+        double span = d1 - d0;
+        double u = Math.Abs(span) < 1e-9 ? 1 : Math.Clamp((car.Distance - d0) / span, 0, 1);
+        double lateral = t.PrevLateral + (t.Pose.Lateral - t.PrevLateral) * u;
+        return Math.Abs(lateral - car.Lateral) <= car.Stats.Width / 2 + 0.15;
+    }
+
+    void StepHazards()
+    {
+        foreach (var h in Hazards) h.Update(Step, Player.Distance);
+        Hazards.RemoveAll(h => h.Expired);
+    }
+
+    /// <summary>
+    /// Kills an enemy car and scores it. Gunfire leaves a sliding <see cref="Wreck"/> and removes the car at the end of
+    /// the step; other causes keep the car as Wrecked for 1.5 s (it is removed in Task 10).
+    /// </summary>
+    public void Destroy(AgentCar car, KillCause cause)
+    {
+        if (car.State == VehicleState.Wrecked || _removals.Contains(car)) return;
+        car.State = VehicleState.Wrecked;
+        car.StateTimer = 1.5;
+        int points = car.Stats.Points;
+        Score += points;
+        Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points));
+        Publish(new Message(Time, $"{car.Kind.ToString().ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
+        if (cause == KillCause.Gunfire)
+        {
+            Hazards.Add(new Wreck
+            {
+                Distance = car.Distance, Lateral = car.Lateral,
+                Width = car.Stats.Width, Length = car.Stats.Length, Speed = car.Speed,
+            });
+            _removals.Add(car);
+        }
     }
 
     public void Handle(GameAction a)
