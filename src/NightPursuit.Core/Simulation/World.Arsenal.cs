@@ -137,7 +137,7 @@ public sealed partial class World
             if (hit is BossCar boss)
             {
                 m.Dead = true;
-                Publish(new Message(Time, "MISSILE HIT THE BOSS", Tone.Good));
+                PublishBossHit(boss, "MISSILE HIT THE BOSS");
                 DamageBoss(boss, BossDamage.MissileFraction * boss.MaxHealth, KillCause.Missile, "MISSILE");
             }
             else if (hit is not null)

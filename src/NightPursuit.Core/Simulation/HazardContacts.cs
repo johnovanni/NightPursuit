@@ -48,7 +48,7 @@ static class HazardContacts
                 if (h is not Caltrops c || !c.Covers(a)) continue;
                 if (a is BossCar boss)
                 {
-                    if (c == boss.LastCaltrops) continue;   // these have already slowed it
+                    if (!boss.HazardsMet.Add(c)) continue;   // these have already slowed it
                     w.SlowBoss(boss, c);
                     break;
                 }

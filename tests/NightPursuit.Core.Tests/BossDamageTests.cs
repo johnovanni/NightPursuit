@@ -105,7 +105,25 @@ public class BossDamageTests
         Assert.Empty(w.Hazards.OfType<Wreck>());
         Assert.Contains(w.Events, e => e is BossDamaged { Reason: "MISSILE" });
         Assert.Contains(w.Events, e => e is Message { Text: "MISSILE HIT THE BOSS", Tone: Tone.Good });
+        Assert.DoesNotContain(w.Events, e => e is Message { Text: "MISSILE HIT THE BOSS - SHIELDED" });
         Assert.DoesNotContain(w.Events, e => e is VehicleDestroyed);
+    }
+
+    [Fact]
+    public void A_blow_on_the_shield_says_it_was_shielded()
+    {
+        var w = Straight();
+        var b = Still(w, Two, 100, speed: 30);
+        b.Shield = 1;
+        MissileAt(w, b);
+        w.Hazards.Add(StoppedWreck(102, 1));
+        Step(w);
+
+        Assert.Equal(100, b.Armor);
+        Assert.Contains(w.Events, e => e is Message { Text: "MISSILE HIT THE BOSS - SHIELDED", Tone: Tone.Info });
+        Assert.Contains(w.Events, e => e is Message { Text: "BOSS HIT A WRECK - SHIELDED", Tone: Tone.Info });
+        Assert.DoesNotContain(w.Events, e => e is Message { Text: "MISSILE HIT THE BOSS" or "BOSS HIT A WRECK" });
+        Assert.Equal(-4, b.PushVel, 9);                         // the shield stops the damage, not the swerve
     }
 
     [Fact]
@@ -227,9 +245,10 @@ public class BossDamageTests
     public void Ramming_pushes_it_aside_but_never_spins_or_wrecks_it()
     {
         var w = Straight();
-        var b = Spawn(w, Two, 50, lateral: 0, speed: 40);
+        var b = Spawn(w, Two, 50, lateral: 5.5, speed: 40);   // near the right edge, so the rams push it against the clamp
         var p = w.Player;
         p.Speed = 40;
+        double widest = 0;
         for (int ram = 0; ram < 10; ram++)
         {
             p.Armor = 100;                                      // keep the player in the fight for all ten rams
@@ -245,9 +264,11 @@ public class BossDamageTests
                 Step(w, 40);
                 Assert.Equal(VehicleState.Driving, b.State);
                 Assert.True(Math.Abs(b.PushVel) <= 4 + 1e-9, $"PushVel {b.PushVel} after ram {ram}");
+                widest = Math.Max(widest, Math.Abs(b.Lateral));
             }
             Assert.True(Math.Abs(b.Lateral) <= 6.3 + 1e-9, $"Lateral {b.Lateral} after ram {ram}");   // preflight F7
         }
+        Assert.Equal(6.3, widest, 9);                           // the rams really did push it to the edge
         Assert.Equal(100, b.Armor);
         Assert.DoesNotContain(w.Events, e => e is BossDamaged);
         Assert.False(BossSpunOrDestroyed(w, b));
@@ -297,6 +318,81 @@ public class BossDamageTests
         w.Hazards.Add(new SmokeCloud { Distance = 60, PrevDistance = 60, Lateral = 0, Speed = 0 });
         Step(w, 40);
         Assert.True(b.Blinded > 0);
+    }
+
+    // ---- each hazard acts on the boss once, ever, even when several overlap (fix round 1) ----
+
+    static int Count(World w, string text) => w.Events.OfType<Message>().Count(m => m.Text == text);
+
+    [Fact]
+    public void Two_overlapping_wrecks_each_hurt_it_once()
+    {
+        var w = Straight();
+        var b = Spawn(w, Three, 40, lateral: 0, speed: 30);
+        var p = w.Player;
+        p.Lateral = -5;                                         // passing in the left lane
+        w.Hazards.Add(StoppedWreck(44, 0.5));
+        w.Hazards.Add(StoppedWreck(44, 1.5));
+        for (int i = 0; i < 5 * 120; i++)
+        {
+            p.Lateral = -5;
+            p.LateralVel = p.PushVel = p.Heading = 0;
+            Step(w, 30);
+            Assert.True(b.Armor >= 80 - 1e-9, $"Armor {b.Armor} at {w.Time:F2} s");
+        }
+
+        Assert.NotEqual(VehicleState.Wrecked, b.State);
+        Assert.Contains(b, w.Agents);
+        Assert.DoesNotContain(w.Events, e => e is VehicleDestroyed);
+        Assert.InRange(Count(w, "BOSS HIT A WRECK"), 1, 2);
+        Assert.InRange(w.Events.OfType<BossDamaged>().Count(e => e.Reason == "HIT A WRECK"), 1, 2);
+    }
+
+    [Fact]
+    public void Two_overlapping_caltrops_sets_each_slow_it_once()
+    {
+        var w = Straight();
+        var b = Spawn(w, Two, 200, speed: 52);
+        w.Hazards.Add(new Caltrops { Distance = 202, Lateral = 0 });
+        w.Hazards.Add(new Caltrops { Distance = 203, Lateral = 0.5 });
+        int rearmed = 0;
+        double last = 0;
+        for (int i = 0; i < 2 * 120; i++)
+        {
+            Step(w, 40);
+            if (b.SlowLeft > last) rearmed++;
+            last = b.SlowLeft;
+        }
+
+        Assert.InRange(rearmed, 1, 2);                          // once per set at most
+        Assert.InRange(Count(w, "BOSS SLOWED BY CALTROPS"), 1, 2);
+        Assert.True(b.SlowLeft > 0 && b.SlowLeft < BossDamage.CaltropSlowSeconds - 1.5, $"SlowLeft {b.SlowLeft}");
+        Assert.False(b.Punctured);
+    }
+
+    [Fact]
+    public void A_slow_boss_spins_once_on_a_slick_and_drives_off_it()
+    {
+        var w = Straight();
+        var b = Spawn(w, new BossDefinition("Test", 100, [new(AgentKind.Runner, 0.5), new(AgentKind.Blocker, 0)]), 40, speed: 8);
+        var slick = new OilSlick { Distance = 41, Lateral = 0 };
+        w.Hazards.Add(slick);
+        bool Over() => Math.Abs(b.Distance - slick.Distance) < OilSlick.Radius + b.Stats.Length / 2
+                       && Math.Abs(b.Lateral - slick.Lateral) < OilSlick.Radius + b.Stats.Width / 2;
+        double? offAt = null;
+        int spinningSteps = 0;
+        for (int i = 0; i < 10 * 120; i++)
+        {
+            Step(w);
+            if (b.State == VehicleState.Spinning) spinningSteps++;
+            if (offAt is null && !Over()) offAt = w.Time;
+        }
+
+        Assert.Equal(1, Count(w, "BOSS SPUN OUT - ARMOR OPEN"));
+        Assert.True(spinningSteps <= 181, $"spinning {spinningSteps} steps");   // 1.5 s + 1 step (preflight F6)
+        Assert.True(offAt is not null && offAt <= 4, $"still on the slick at {offAt}");
+        Assert.False(Over());
+        Assert.Equal(VehicleState.Driving, b.State);
     }
 
     // ---- no path destroys a boss outside its last phase, or skips a phase (Task 10 review) ----

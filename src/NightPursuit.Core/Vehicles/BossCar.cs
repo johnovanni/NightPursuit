@@ -29,8 +29,13 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
     public bool ArmorOpen => State == VehicleState.Spinning;
     /// <summary>The wreck it last ran into, which cannot hurt it again.</summary>
     public Wreck? LastWreck { get; set; }
-    /// <summary>The caltrops that last slowed it; crossing them again cannot slow it again (preflight F7).</summary>
+    /// <summary>The caltrops that last slowed it.</summary>
     public Caltrops? LastCaltrops { get; set; }
+    /// <summary>
+    /// Every wreck, caltrops set and oil slick that has already acted on it. Each acts once, ever, even when several
+    /// overlap (preflight F7); expired ones are dropped.
+    /// </summary>
+    public HashSet<Hazard> HazardsMet { get; } = new();
     /// <summary>False while it eases in after appearing; true once you come within 140 m or hit it, and its phase behaviour starts.</summary>
     public bool Engaged { get; set; }
 

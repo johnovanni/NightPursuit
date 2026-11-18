@@ -38,7 +38,7 @@ public static class Collisions
                 if (h is not Wreck wreck || !Overlaps(a, wreck.Distance, wreck.Lateral, wreck.Length, wreck.Width)) continue;
                 if (a is BossCar boss)
                 {
-                    if (wreck == boss.LastWreck) continue;   // already paid for: it no longer hurts
+                    if (!boss.HazardsMet.Add(wreck)) continue;   // already paid for: it no longer hurts
                     w.BossHitWreck(boss, wreck);
                 }
                 else w.Destroy(a, KillCause.WreckCollision);
@@ -54,7 +54,11 @@ public static class Collisions
                         && Math.Abs(a.Distance - slick.Distance) < OilSlick.Radius + a.Stats.Length / 2
                         && Math.Abs(a.Lateral - slick.Lateral) < OilSlick.Radius + a.Stats.Width / 2)
                     {
-                        if (a is BossCar boss) w.SpinBoss(boss);
+                        if (a is BossCar boss)
+                        {
+                            if (!boss.HazardsMet.Add(slick)) continue;   // one spin per slick, or a slow boss is pinned on it
+                            w.SpinBoss(boss);
+                        }
                         else w.Spin(a, w.Rng.Next(2) == 0 ? -1 : 1, $"{KindName(a)} HIT THE OIL");
                         break;
                     }

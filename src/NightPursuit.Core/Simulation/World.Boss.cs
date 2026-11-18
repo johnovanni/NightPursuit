@@ -58,15 +58,22 @@ public sealed partial class World
         (b.ArmorOpen ? BossDamage.OpenArmorGunFactor : 1)
         * (b.Phase.Behaviour == AgentKind.Armored ? BossDamage.ArmoredPhaseGunFactor : 1);
 
-    /// <summary>The first touch of a wreck (not <see cref="BossCar.LastWreck"/>): 10% of its health, a swerve and a slowdown; the wreck never destroys it by itself.</summary>
+    /// <summary>
+    /// The first touch of a wreck (each wreck once, ever: see <see cref="BossCar.HazardsMet"/>): 10% of its health, a
+    /// swerve and a slowdown; the wreck never destroys it by itself.
+    /// </summary>
     internal void BossHitWreck(BossCar b, Wreck wreck)
     {
         b.LastWreck = wreck;
         b.PushVel = RoomierSide(b, wreck) * BossDamage.MaxPush;
         b.Speed *= BossDamage.WreckSpeedFactor;
-        Publish(new Message(Time, "BOSS HIT A WRECK", Tone.Good));
+        PublishBossHit(b, "BOSS HIT A WRECK");
         DamageBoss(b, BossDamage.WreckFraction * b.MaxHealth, KillCause.WreckCollision, "HIT A WRECK");
     }
+
+    /// <summary>Says a missile or wreck hit the boss, or that its phase shield took the blow. Call before <see cref="DamageBoss"/>.</summary>
+    void PublishBossHit(BossCar b, string text) =>
+        Publish(b.Shield > 0 ? new Message(Time, $"{text} - SHIELDED", Tone.Info) : new Message(Time, text, Tone.Good));
 
     /// <summary>
     /// +1 or -1: the side of the wreck with more road beside it; a wreck on the centre line sends it to the side it is
@@ -78,7 +85,7 @@ public sealed partial class World
         return b.Lateral >= wreck.Lateral ? 1 : -1;
     }
 
-    /// <summary>Caltrops never puncture the boss: each set slows it once for 4 s from first contact, and engages it.</summary>
+    /// <summary>Caltrops never puncture the boss: each set slows it once, ever, for 4 s from first contact, and engages it.</summary>
     internal void SlowBoss(BossCar b, Caltrops c)
     {
         b.LastCaltrops = c;
@@ -97,10 +104,13 @@ public sealed partial class World
         if (b.PushVel * side > 0) b.PushVel = 0;   // an outward shove stops at the edge
     }
 
-    /// <summary>The boss's own countdowns: the phase shield and the caltrops slow.</summary>
+    /// <summary>The boss's own countdowns: the phase shield and the caltrops slow; also forgets hazards that are gone.</summary>
     static void CountDownBoss(BossCar b)
     {
         b.Shield = DriverHelpers.Countdown(b.Shield, Step);
         b.SlowLeft = DriverHelpers.Countdown(b.SlowLeft, Step);
+        if (b.HazardsMet.Count > 0) b.HazardsMet.RemoveWhere(IsExpired);
     }
+
+    static bool IsExpired(Hazard h) => h.Expired;
 }
