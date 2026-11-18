@@ -46,26 +46,45 @@ public sealed class MissionRun
         switch (State)
         {
             case RunState.Playing:
-                World.Advance(input, frameSeconds);
-                Director.Update(World);
-                if (Director.Completed) State = RunState.Completed;   // crossing the finish beats a wreck in the same frame
-                else if (World.Events.Any(e => e is PlayerWrecked)) OnWrecked();
+                World.Advance(input, frameSeconds, AfterPlayingStep);
                 break;
 
             case RunState.Respawning:
-                World.Advance(ControlFrame.Empty, frameSeconds);   // the world keeps moving while the wreck coasts
-                StateTimer -= frameSeconds;
-                if (StateTimer <= 0) Respawn();
+                World.Advance(ControlFrame.Empty, frameSeconds, AfterRespawningStep);   // the world keeps moving while the wreck coasts
                 break;
         }
     }
+
+    // The rules below run once per fixed step (not once per frame), so a mission plays out the same however
+    // frames are split. A step that changes the run state ends the frame, because the next state takes different input.
+
+    bool AfterPlayingStep()
+    {
+        Director.Update(World);
+        if (Director.Completed) { State = RunState.Completed; return true; }   // crossing the finish beats a wreck in the same step
+        if (World.Player.State != VehicleState.Wrecked) return false;
+        OnWrecked();
+        return true;
+    }
+
+    bool AfterRespawningStep()
+    {
+        StateTimer -= World.Step;
+        if (StateTimer > 0) return false;
+        Respawn();
+        return true;
+    }
+
+    /// <summary>R restarts only when the run is paused or over, so one stray key can't throw a run away (decision D13).</summary>
+    public bool CanRestart => State is RunState.Paused or RunState.Completed or RunState.GameOver;
 
     public void Handle(GameAction a)
     {
         switch (a.Kind)
         {
             case ActionKind.Restart:
-                Rebuild();
+                if (CanRestart) Rebuild();
+                else World.Publish(new Message(World.Time, "PRESS P TO PAUSE, THEN R TO RESTART", Tone.Info));
                 break;
             case ActionKind.Pause:
                 if (State == RunState.Playing) State = RunState.Paused;

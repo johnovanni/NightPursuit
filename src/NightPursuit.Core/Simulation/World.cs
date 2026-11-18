@@ -60,8 +60,12 @@ public sealed class World
         View.Build(Track, Player.Distance);
     }
 
-    /// <summary>Runs whole fixed steps for <paramref name="frameSeconds"/> (capped at 0.25 s); returns the step count.</summary>
-    public int Advance(ControlFrame input, double frameSeconds)
+    /// <summary>
+    /// Runs whole fixed steps for <paramref name="frameSeconds"/> (capped at 0.25 s); returns the step count.
+    /// <paramref name="afterStep"/> runs after every step, so rules that must not depend on how frames are split can
+    /// run once per step; if it returns true the frame stops there and the unused time is kept for the next call.
+    /// </summary>
+    public int Advance(ControlFrame input, double frameSeconds, Func<bool>? afterStep = null)
     {
         _events.Clear();
         _accumulator += Math.Clamp(frameSeconds, 0, MaxFrameSeconds);
@@ -71,6 +75,7 @@ public sealed class World
             StepOnce(input);
             _accumulator -= Step;
             steps++;
+            if (afterStep is not null && afterStep()) break;
         }
         if (_accumulator < 0) _accumulator = 0;
         View.Build(Track, Player.Distance);

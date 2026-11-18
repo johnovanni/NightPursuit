@@ -227,11 +227,12 @@ public class MissionTests
     }
 
     [Fact]
-    public void Restart_rebuilds_everything_in_any_state()
+    public void Restart_rebuilds_everything_when_the_run_is_over()
     {
         var run = Run(Def(6000, new WaveDefinition(0, AgentKind.Runner, 1, 400)));
         run.Update(new ControlFrame { Gas = true }, 0.25);
         Wreck(run);
+        run.ForceStateForDiagnostics(RunState.GameOver);
         var oldWorld = run.World;
         run.Handle(new GameAction(ActionKind.Restart));
         Assert.NotSame(oldWorld, run.World);
@@ -313,5 +314,64 @@ public class MissionTests
     {
         var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(null!, "m.json"));
         Assert.StartsWith("m.json:", ex.Message);
+    }
+
+    // ---- determinism and restart rules
+
+    static (ulong Hash, RunState State, double Time, int Score, int Spares) RunMission01(IEnumerable<double> frames, int steer = 0)
+    {
+        var run = new MissionRun(MissionLoader.LoadFile(Mission01Path), new FeelSettings(), 5);
+        var input = new ControlFrame { Gas = true, Fire = true, SteerDir = steer };
+        foreach (var dt in frames) run.Update(input, dt);
+        return (run.World.StateHash(), run.State, run.World.Time, run.World.Score, run.World.Player.SpareCars);
+    }
+
+    [Fact]
+    public void Mission_run_is_the_same_however_the_frames_are_split()
+    {
+        var at120 = RunMission01(Enumerable.Repeat(1 / 120.0, 120 * 60));
+        var at60 = RunMission01(Enumerable.Repeat(1 / 60.0, 60 * 60));
+        var uneven = RunMission01(Enumerable.Range(0, 120 * 60).Select(i => i % 2 == 0 ? 1 / 240.0 : 3 / 240.0));
+        Assert.Equal(at120, at60);
+        Assert.Equal(at120, uneven);
+    }
+
+    [Fact]
+    public void Mission_run_with_wrecks_and_respawns_is_the_same_however_the_frames_are_split()
+    {
+        // Holding right drives into the rail, so the player is wrecked and respawns several times.
+        var at120 = RunMission01(Enumerable.Repeat(1 / 120.0, 120 * 60), steer: 1);
+        var at60 = RunMission01(Enumerable.Repeat(1 / 60.0, 60 * 60), steer: 1);
+        var uneven = RunMission01(Enumerable.Range(0, 120 * 60).Select(i => i % 2 == 0 ? 1 / 240.0 : 3 / 240.0), steer: 1);
+        Assert.True(at120.Spares < 3, "expected at least one wreck");
+        Assert.Equal(at120, at60);
+        Assert.Equal(at120, uneven);
+    }
+
+    [Fact]
+    public void Restart_does_nothing_while_playing_except_say_how()
+    {
+        var run = Run();
+        run.World.Player.Distance = 50;
+        run.Handle(new GameAction(ActionKind.Restart));
+        Assert.Equal(50, run.World.Player.Distance);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Contains(run.World.RecentMessages, m => m is Message { Text: "PRESS P TO PAUSE, THEN R TO RESTART" });
+    }
+
+    [Fact]
+    public void Restart_works_when_paused_or_finished()
+    {
+        var run = Run();
+        run.World.Player.Distance = 50;
+        run.Handle(new GameAction(ActionKind.Pause));
+        run.Handle(new GameAction(ActionKind.Restart));
+        Assert.Equal(0, run.World.Player.Distance);
+        Assert.Equal(RunState.Playing, run.State);
+
+        run.ForceStateForDiagnostics(RunState.GameOver);
+        run.World.Player.Distance = 50;
+        run.Handle(new GameAction(ActionKind.Restart));
+        Assert.Equal(0, run.World.Player.Distance);
     }
 }
