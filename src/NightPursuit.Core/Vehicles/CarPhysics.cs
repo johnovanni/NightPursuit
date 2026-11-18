@@ -1,3 +1,4 @@
+using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Road;
 
@@ -44,5 +45,45 @@ public static class CarPhysics
         if (car.OffRoad) car.Shake = Math.Max(car.Shake, 0.12);
         car.Shake = Math.Max(0, car.Shake - dt);
         car.Distance += v * Math.Cos(car.Heading) * dt;
+    }
+
+    /// <summary>Moves an agent toward its intent along the road; sideways shoves in PushVel add to its steering.</summary>
+    public static void StepAgent(Vehicle car, DriveIntent intent, double dt)
+    {
+        double target = Math.Min(intent.TargetSpeed, car.Stats.TopSpeed);
+        car.Speed = MathX.MoveToward(car.Speed, target, (car.Speed < target ? car.Stats.Accel : 10) * dt);
+        double steer = Math.Clamp((intent.TargetLateral - car.Lateral) * 1.8, -car.Stats.SideSpeed, car.Stats.SideSpeed);
+        car.LateralVel = steer + car.PushVel;
+        car.PushVel *= Math.Exp(-1.2 * dt);
+        car.Lateral += car.LateralVel * dt;
+        car.Heading = Math.Atan2(car.LateralVel, Math.Max(car.Speed, 1));
+        car.Distance += car.Speed * dt;
+    }
+
+    /// <summary>A spun-out car: it turns, slides along its shove and loses speed, then drives again.</summary>
+    public static void StepSpinning(Vehicle car, double dt)
+    {
+        car.StateTimer -= dt;
+        car.SpinAngle += car.SpinRate * dt;
+        car.Speed *= Math.Exp(-0.9 * dt);
+        car.LateralVel = car.PushVel;
+        car.Lateral += car.PushVel * dt;
+        car.Distance += car.Speed * dt;
+        if (car.StateTimer <= 0)
+        {
+            car.State = VehicleState.Driving;
+            car.SpinAngle = 0;
+            car.PushVel = 0;
+        }
+    }
+
+    /// <summary>A wrecked car rolls to a stop at 25 m/s² while its shove fades.</summary>
+    public static void StepWrecked(Vehicle car, double dt)
+    {
+        car.StateTimer -= dt;
+        car.Speed = Math.Max(0, car.Speed - 25 * dt);
+        car.Distance += car.Speed * dt;
+        car.Lateral += car.PushVel * dt;
+        car.PushVel *= Math.Exp(-2 * dt);
     }
 }
