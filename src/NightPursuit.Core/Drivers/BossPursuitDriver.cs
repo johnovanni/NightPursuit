@@ -48,7 +48,7 @@ public sealed class BossPursuitDriver : IDriver
                 if (self.ContactCooldown > 0 || (s.Alongside && s.Timer <= 0))
                 {
                     s.Phase = BossPursuitPhase.Overtake;
-                    s.Target = DriverHelpers.PassingLane(self, p.Lateral);
+                    s.Target = DriverHelpers.PassingLane(self, p);
                 }
                 break;
             case BossPursuitPhase.Overtake:
@@ -74,7 +74,7 @@ public sealed class BossPursuitDriver : IDriver
                 break;
             case BossPursuitPhase.Overtake:
                 speed = Math.Min(OvertakeTopSpeed, p.Speed + OvertakeExtra);
-                s.Target = DriverHelpers.PassingLane(self, p.Lateral, s.Target);
+                s.Target = DriverHelpers.PassingLane(self, p, s.Target);
                 break;
             case BossPursuitPhase.HoldAhead:
                 speed = DriverHelpers.HoldGap(p.Speed, dD, HoldGapWanted, HoldGain, -HoldRange, HoldRange);
@@ -98,8 +98,7 @@ public sealed class BossPursuitDriver : IDriver
         s.Phase = BossPursuitPhase.Attack;
         s.Alongside = false;
         s.Timer = 0;
-        double offset = self.Lateral - p.Lateral;
-        if (offset != 0) self.Side = Math.Sign(offset);
+        self.Side = DriverHelpers.SideOf(self, p.Lateral);
         UseSideWithRoom(self, p);
     }
 
@@ -110,11 +109,15 @@ public sealed class BossPursuitDriver : IDriver
     }
 
     /// <summary>
-    /// With the player in an outer lane, 2.7 m off on the outer side is past the road edge, and the clamp would park the
-    /// car almost straight behind or ahead of them; so it attacks and drops back on the side that has room.
+    /// Attacks and drops back on the side of the player that has room. It switches sides when 2.7 m off on its side is
+    /// past the road edge (the clamp would park it almost straight behind or ahead of the player), or when its side has
+    /// no lane at least 2.5 m from the player to pass in afterwards while the other side has one.
     /// </summary>
     static void UseSideWithRoom(AgentCar self, PlayerCar p)
     {
-        if (Math.Abs(p.Lateral + self.Side * DriverHelpers.AttackOffset) > DriverHelpers.OnRoadLimit(self)) self.Side = -self.Side;
+        bool offRoad = Math.Abs(p.Lateral + self.Side * DriverHelpers.AttackOffset) > DriverHelpers.OnRoadLimit(self);
+        bool noPassingLane = DriverHelpers.ClearLaneOnSide(p.Lateral, self.Side) is null
+            && DriverHelpers.ClearLaneOnSide(p.Lateral, -self.Side) is not null;
+        if (offRoad || noPassingLane) self.Side = -self.Side;
     }
 }

@@ -363,14 +363,18 @@ public class BossTests
     static BossPursuitDriver.State Pursuit(BossCar b) => Assert.IsType<BossPursuitDriver.State>(b.DriverState);
 
     [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(-1)]
-    [InlineData(1.5)]
-    public void Pursuit_boss_rams_then_pulls_ahead_into_gun_range(double playerLateral)
+    [InlineData(0, 2.7)]
+    [InlineData(1, 2.7)]
+    [InlineData(-1, 2.7)]
+    [InlineData(1.5, 2.7)]
+    [InlineData(3, 5.7)]                                        // starts on the outer side, where no lane is 2.5 m from you
+    [InlineData(3.5, 6.2)]
+    [InlineData(-3, -5.7)]
+    [InlineData(-3.5, -6.2)]
+    public void Pursuit_boss_rams_then_pulls_ahead_into_gun_range(double playerLateral, double bossLateral)
     {
         var w = Straight();
-        var b = Spawn(w, First(AgentKind.Pursuer), -30, lateral: 2.7, speed: 40);   // Side +1
+        var b = Spawn(w, First(AgentKind.Pursuer), -30, lateral: bossLateral, speed: 40);
         int Swipes() => w.Events.OfType<PlayerDamaged>().Count(e => e.Reason == "SIDESWIPED");
         int Hits() => w.Events.OfType<PlayerDamaged>().Count();
 
@@ -383,7 +387,7 @@ public class BossTests
         Assert.True(swipe is not null, "no sideswipe within 15 s");
         int hitsAtRam = Hits();
         double halfWidths = (VehicleStats.Boss.Width + VehicleStats.Player.Width) / 2;
-        double contactLength = (VehicleStats.Boss.Length + VehicleStats.Player.Length) / 2;
+        double lengths = VehicleStats.Boss.Length + VehicleStats.Player.Length;
 
         // It pulls 60 m ahead within 10 s, clear of your lane while it passes, and never touches you on the way.
         double? ahead60 = null;
@@ -401,7 +405,8 @@ public class BossTests
                 if (dD >= 60) ahead60 = w.Time;
                 else if (w.Time > swipe + 0.5)
                     Assert.True(off >= 2.5, $"{phase} {b.Lateral - w.Player.Lateral:F2} m off at ΔD {dD:F1}, {w.Time - swipe:F2} s after the ram");
-                else if (w.Time > swipe + 0.25 && Math.Abs(dD) < contactLength)
+                // From the end of the ram's contact cooldown (Hold puts you back where you were, undoing the push apart).
+                if (w.Time > swipe + 0.25 && Math.Abs(dD) < lengths)
                     Assert.True(off >= halfWidths, $"alongside {off:F2} m off at ΔD {dD:F1}");
             }
             if (dD >= 10) aheadSeconds += Dt;
@@ -411,6 +416,53 @@ public class BossTests
         Assert.True(ahead60 is not null && ahead60 - swipe <= 10, $"60 m ahead at {ahead60 - swipe} s after the ram");
         Assert.True(backInAttack, "never came back to attack");
         Assert.True(aheadSeconds >= 6, $"only {aheadSeconds:F1} s at least 10 m ahead in one cycle");
+    }
+
+    [Theory]
+    [InlineData(3)]
+    [InlineData(3.5)]
+    [InlineData(-3)]
+    [InlineData(-3.5)]
+    public void Overtaking_boss_with_no_lane_on_its_side_holds_its_line_until_ahead(double playerLateral)
+    {
+        var w = Straight();
+        int side = Math.Sign(playerLateral);                    // alongside you on the outer side
+        var b = Spawn(w, First(AgentKind.Pursuer), 0, lateral: Math.Clamp(playerLateral + side * 2.7, -6.3, 6.3), speed: 40);
+        b.Side = side;
+        b.DriverState = new BossPursuitDriver.State { Phase = BossPursuitPhase.Overtake, Target = b.Lateral };
+        double halfWidths = (VehicleStats.Boss.Width + VehicleStats.Player.Width) / 2;
+        double lengths = VehicleStats.Boss.Length + VehicleStats.Player.Length;
+        bool crossedOver = false;
+        for (int i = 0; i < 15 * 120 && Gap(w, b) < 60; i++)
+        {
+            Hold(w, 40, playerLateral);
+            double dD = Gap(w, b), off = Math.Abs(b.Lateral - w.Player.Lateral);
+            // Until it is ahead (its rear 2 m past your front), when it may cross in front of you.
+            if (Math.Abs(dD) < lengths && dD < lengths / 2 + 2) Assert.True(off >= halfWidths, $"alongside {off:F2} m off at ΔD {dD:F1}");
+            if (Math.Sign(b.Lateral - w.Player.Lateral) != side) crossedOver = true;
+        }
+        Assert.True(Gap(w, b) >= 60, $"only {Gap(w, b):F1} m ahead");
+        Assert.True(crossedOver, "never moved to the far lane once ahead");
+        Assert.DoesNotContain(w.Events, e => e is PlayerDamaged);
+    }
+
+    [Fact]
+    public void Passing_lane_holds_the_line_until_the_rear_is_2_m_past_your_front()
+    {
+        var w = Straight();
+        w.Player.Lateral = 3;
+        var b = Spawn(w, First(AgentKind.Pursuer), 0, lateral: 5);
+        Assert.Equal(5.45, DriverHelpers.PassingLane(b, w.Player), 9);           // pushed to half widths + 0.3 off you
+        b.Lateral = 6;
+        Assert.Equal(6, DriverHelpers.PassingLane(b, w.Player), 9);              // already clear: holds its line
+        b.Distance = (5.6 + 4.4) / 2 + 2 - 0.01;
+        Assert.Equal(6, DriverHelpers.PassingLane(b, w.Player), 9);
+        b.Distance = (5.6 + 4.4) / 2 + 2;
+        Assert.Equal(-5, DriverHelpers.PassingLane(b, w.Player), 9);             // rear 2 m past your front: farthest lane
+        Assert.Equal(-5, DriverHelpers.PassingLane(b, w.Player, current: -5), 9);
+        w.Player.Lateral = 1;
+        b.Distance = 0;
+        Assert.Equal(5, DriverHelpers.PassingLane(b, w.Player, current: 6), 9);   // a held line is not kept as a lane
     }
 
     [Theory]

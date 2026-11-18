@@ -65,7 +65,7 @@ public sealed class BossDriver : IDriver
         }
 
         var p = view.Player;
-        b.PassLane = DriverHelpers.PassingLane(b, p.Lateral, b.PassLane);
+        b.PassLane = DriverHelpers.PassingLane(b, p, b.PassLane);
         double lateral = DriverHelpers.SteerAroundWrecks(b, view, b.PassLane.Value, b.PassAvoid, delay, dt);
         return intent with
         {

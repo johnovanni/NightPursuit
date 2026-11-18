@@ -152,27 +152,60 @@ public static class DriverHelpers
     /// <summary>The least sideways distance from the player's centre to a lane a passing car may use.</summary>
     public const double PassClearance = 2.5;
 
+    /// <summary>How far the passing car's rear must be past the player's front before it may cross in front of them, metres.</summary>
+    const double CrossAhead = 2;
+    /// <summary>Room kept beyond the two cars' half widths while holding a line alongside, metres.</summary>
+    const double HoldLineMargin = 0.3;
+
     /// <summary>
-    /// The lane to pass the player in, so the car never swerves across the player's path while alongside.
-    /// <paramref name="current"/> is kept while it is at least <see cref="PassClearance"/> from the player. Otherwise it is
-    /// the lane farthest from the player on the car's own side of them (its <see cref="AgentCar.Side"/> when level) that
-    /// is at least <see cref="PassClearance"/> away; only when that side has none, the lane farthest from the player.
+    /// Where to pass the player, so the car never swerves across the player's path while alongside.
+    /// <paramref name="current"/> is kept while it is a lane centre at least <see cref="PassClearance"/> from the player.
+    /// Otherwise it is the lane farthest from the player on the car's own side of them (see <see cref="SideOf"/>) that is
+    /// at least <see cref="PassClearance"/> away. When that side has none, the car holds its line (kept the two half widths
+    /// + 0.3 m off the player, on the road) until its rear is 2 m past the player's front, and only then takes the lane
+    /// farthest from the player.
     /// </summary>
-    public static double PassingLane(AgentCar self, double playerLateral, double? current = null)
+    public static double PassingLane(AgentCar self, PlayerCar p, double? current = null)
     {
-        if (current is double lane && Math.Abs(lane - playerLateral) >= PassClearance) return lane;
+        if (current is double lane && Array.IndexOf(Track.LaneCentres, lane) >= 0 && Math.Abs(lane - p.Lateral) >= PassClearance)
+            return lane;
+        int side = SideOf(self, p.Lateral);
+        if (ClearLaneOnSide(p.Lateral, side) is double own) return own;
+
+        bool clearAhead = self.Distance - self.Stats.Length / 2 >= p.Distance + p.Stats.Length / 2 + CrossAhead;
+        if (clearAhead)
+        {
+            double farthest = Track.LaneCentres[0];
+            foreach (double l in Track.LaneCentres)
+                if (Math.Abs(l - p.Lateral) > Math.Abs(farthest - p.Lateral) + Same) farthest = l;
+            return farthest;
+        }
+
+        double keepOff = (self.Stats.Width + p.Stats.Width) / 2 + HoldLineMargin;
+        double line = self.Lateral;
+        if ((line - p.Lateral) * side < keepOff) line = p.Lateral + side * keepOff;
+        double limit = OnRoadLimit(self);
+        return Math.Clamp(line, -limit, limit);
+    }
+
+    /// <summary>Which side of the player the car is on: -1 left, +1 right, its own <see cref="AgentCar.Side"/> when level.</summary>
+    public static int SideOf(AgentCar self, double playerLateral)
+    {
         double offset = self.Lateral - playerLateral;
-        int side = offset < 0 ? -1 : offset > 0 ? 1 : self.Side;
-        double? ownSide = null;
-        double farthest = Track.LaneCentres[0];
+        return offset < 0 ? -1 : offset > 0 ? 1 : self.Side;
+    }
+
+    /// <summary>The lane centre on <paramref name="side"/> of the player farthest from them and at least <see cref="PassClearance"/> away; null if none.</summary>
+    public static double? ClearLaneOnSide(double playerLateral, int side)
+    {
+        double? best = null;
         foreach (double l in Track.LaneCentres)
         {
             double fromPlayer = l - playerLateral;
-            if (Math.Abs(fromPlayer) > Math.Abs(farthest - playerLateral) + Same) farthest = l;
             if (Math.Sign(fromPlayer) != side || Math.Abs(fromPlayer) < PassClearance) continue;
-            if (ownSide is null || Math.Abs(fromPlayer) > Math.Abs(ownSide.Value - playerLateral)) ownSide = l;
+            if (best is null || Math.Abs(fromPlayer) > Math.Abs(best.Value - playerLateral)) best = l;
         }
-        return ownSide ?? farthest;
+        return best;
     }
 
     const double BandMargin = 0.3;
