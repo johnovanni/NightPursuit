@@ -33,6 +33,7 @@ public static class MissionLoader
 
     const double MinAllowedRadius = 50;
     const double CarSpacing = 40;   // matches MissionDirector
+    const double MinBossHealth = 20, MaxBossHealth = 1000;
     const double BehindNear = -30, BehindFar = -450, AheadNear = 30, AheadFar = 1400;
 
     sealed class Reader(string source)
@@ -59,7 +60,7 @@ public static class MissionLoader
             if (wavesEl.ValueKind != JsonValueKind.Array) throw Fail("waves must be an array");
             var waves = new List<WaveDefinition>();
             foreach (var el in wavesEl.EnumerateArray())
-                waves.Add(ReadWave(el, waves.Count, waves.Count > 0 ? waves[^1].AtDistance : double.NegativeInfinity));
+                waves.Add(ReadWave(el, waves.Count, waves.Count > 0 ? waves[^1].AtDistance : double.NegativeInfinity, approach));
 
             var crates = new List<CrateDefinition>();
             if (root.TryGetProperty("crates", out var cratesEl))
@@ -69,7 +70,64 @@ public static class MissionLoader
                     crates.Add(ReadCrate(el, crates.Count, crates.Count > 0 ? crates[^1].AtDistance : 0));
             }
 
-            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates);
+            BossDefinition? boss = root.TryGetProperty("boss", out var bossEl) ? ReadBoss(bossEl) : null;
+
+            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss);
+        }
+
+        BossDefinition ReadBoss(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) throw Fail("boss must be an object");
+            foreach (var prop in el.EnumerateObject())
+                if (prop.Name is not ("name" or "health" or "phases"))
+                    throw Fail($"boss.{prop.Name} is not a known field (name, health, phases)");
+
+            string name = Str(el, "name", "boss.name");
+            if (string.IsNullOrWhiteSpace(name)) throw Fail("boss.name must not be empty");
+            double health = Num(el, "health", "boss.health");
+            if (health is < MinBossHealth or > MaxBossHealth)
+                throw Fail($"boss.health must be from {MinBossHealth} to {MaxBossHealth} (got {health})");
+
+            var phasesEl = Required(el, "phases", "boss.phases");
+            if (phasesEl.ValueKind != JsonValueKind.Array) throw Fail("boss.phases must be an array");
+            int count = phasesEl.GetArrayLength();
+            if (count is < 2 or > 3) throw Fail($"boss.phases must have 2 or 3 phases (got {count})");
+            var phases = new List<BossPhaseDefinition>();
+            foreach (var phaseEl in phasesEl.EnumerateArray())
+                phases.Add(ReadPhase(phaseEl, phases.Count, count, phases.Count > 0 ? phases[^1].EndsBelow : null));
+            return new BossDefinition(name, health, phases);
+        }
+
+        /// <summary>
+        /// One phase: any behaviour but Boss; endsBelow in [0, 1), above 0 for every phase but the last, exactly 0 for
+        /// the last, and strictly below the phase before it.
+        /// </summary>
+        BossPhaseDefinition ReadPhase(JsonElement el, int index, int count, double? previous)
+        {
+            string p = $"boss.phases[{index}]";
+            if (el.ValueKind != JsonValueKind.Object) throw Fail($"{p} must be an object");
+            foreach (var prop in el.EnumerateObject())
+                if (prop.Name is not ("behaviour" or "endsBelow" or "missiles"))
+                    throw Fail($"{p}.{prop.Name} is not a known field (behaviour, endsBelow, missiles)");
+
+            var behaviour = Kind(el, "behaviour", $"{p}.behaviour");
+            if (behaviour == AgentKind.Boss) throw Fail($"{p}.behaviour 'Boss' is not a behaviour");
+
+            double endsBelow = Num(el, "endsBelow", $"{p}.endsBelow");
+            if (endsBelow is < 0 or >= 1) throw Fail($"{p}.endsBelow must be at least 0 and below 1 (got {endsBelow})");
+            bool last = index == count - 1;
+            if (!last && endsBelow <= 0) throw Fail($"{p}.endsBelow must be above 0 (only the last phase ends at 0)");
+            if (previous is double before && endsBelow >= before)
+                throw Fail($"{p}.endsBelow must be below boss.phases[{index - 1}].endsBelow");
+            if (last && endsBelow != 0) throw Fail($"{p}.endsBelow must be 0 for the last phase");
+
+            bool missiles = false;
+            if (el.TryGetProperty("missiles", out var missilesEl))
+            {
+                if (missilesEl.ValueKind is not (JsonValueKind.True or JsonValueKind.False)) throw Fail($"{p}.missiles must be true or false");
+                missiles = missilesEl.GetBoolean();
+            }
+            return new BossPhaseDefinition(behaviour, endsBelow, missiles);
         }
 
         LoadoutDefinition ReadLoadout(JsonElement el)
@@ -139,7 +197,7 @@ public static class MissionLoader
             return new TrackProfile(seed, min, max, hill, segments);
         }
 
-        WaveDefinition ReadWave(JsonElement el, int index, double previousAt)
+        WaveDefinition ReadWave(JsonElement el, int index, double previousAt, double approach)
         {
             string p = $"waves[{index}]";
             if (el.ValueKind != JsonValueKind.Object) throw Fail($"{p} must be an object");
@@ -147,13 +205,9 @@ public static class MissionLoader
             double at = Num(el, "atDistance", $"{p}.atDistance");
             if (at < 0) throw Fail($"{p}.atDistance must not be negative");
             if (at < previousAt) throw Fail($"{p}.atDistance {at} comes before the previous wave ({previousAt}); waves must be in ascending order");
+            if (at >= approach) throw Fail($"{p}.atDistance {at} must be less than approachLength {approach}");
 
-            var kindEl = Required(el, "kind", $"{p}.kind");
-            if (kindEl.ValueKind != JsonValueKind.String) throw Fail($"{p}.kind must be a string");
-            string kindText = kindEl.GetString() ?? "";
-            if (!Enum.TryParse<AgentKind>(kindText, ignoreCase: true, out var kind)
-                || !Enum.IsDefined(kind) || kindText.Length == 0 || char.IsDigit(kindText[0]))
-                throw Fail($"{p}.kind '{kindText}' is not a known enemy type");
+            var kind = Kind(el, "kind", $"{p}.kind");
             if (kind == AgentKind.Boss) throw Fail($"{p}.kind 'Boss' cannot be a wave (set the boss in \"boss\")");
 
             int count = Int(el, "count", $"{p}.count");
@@ -172,6 +226,18 @@ public static class MissionLoader
             if (!ahead && !behind)
                 throw Fail($"{p}.spawnOffset {offset} with count {count} puts cars from {offset} to {last} m; " +
                            $"all must be between {BehindFar} and {BehindNear} (behind) or between {AheadNear} and {AheadFar} (ahead)");
+        }
+
+        /// <summary>An enemy type by name (any case); numbers and unknown names are rejected.</summary>
+        AgentKind Kind(JsonElement obj, string name, string path)
+        {
+            var v = Required(obj, name, path);
+            if (v.ValueKind != JsonValueKind.String) throw Fail($"{path} must be a string");
+            string text = v.GetString() ?? "";
+            if (!Enum.TryParse<AgentKind>(text, ignoreCase: true, out var kind)
+                || !Enum.IsDefined(kind) || text.Length == 0 || char.IsDigit(text[0]))
+                throw Fail($"{path} '{text}' is not a known enemy type");
+            return kind;
         }
 
         JsonElement Required(JsonElement obj, string name, string path) =>

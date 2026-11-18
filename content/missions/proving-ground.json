@@ -1,0 +1,36 @@
+{
+  "id": "proving-ground",
+  "title": "Proving Ground",
+  "briefing": "A closed test course with every kind of enemy car and supply crate on it, so you can try each weapon before the real thing.",
+  "road": { "seed": 21 },
+  "approachLength": 4500,
+  "loadout": { "oil": 5, "smoke": 3, "caltrops": 3, "missiles": 2, "strikes": 1 },
+  "waves": [
+    { "atDistance": 200,  "kind": "Runner",  "count": 2, "spawnOffset": 400 },
+    { "atDistance": 600,  "kind": "Gunner",  "count": 1, "spawnOffset": 300 },
+    { "atDistance": 1200, "kind": "Dropper", "count": 1, "spawnOffset": 500 },
+    { "atDistance": 1800, "kind": "Armored", "count": 1, "spawnOffset": -200 },
+    { "atDistance": 2400, "kind": "Pursuer", "count": 2, "spawnOffset": -250 },
+    { "atDistance": 3000, "kind": "Blocker", "count": 2, "spawnOffset": 500 },
+    { "atDistance": 3600, "kind": "Gunner",  "count": 1, "spawnOffset": 400 },
+    { "atDistance": 4000, "kind": "Armored", "count": 1, "spawnOffset": 450 }
+  ],
+  "crates": [
+    { "atDistance": 500,  "lane": 1,  "item": "Smoke",    "amount": 1 },
+    { "atDistance": 1000, "lane": -1, "item": "Caltrops", "amount": 1 },
+    { "atDistance": 1600, "lane": 0,  "item": "Missile",  "amount": 1 },
+    { "atDistance": 2200, "lane": 1,  "item": "Oil",      "amount": 2 },
+    { "atDistance": 2800, "lane": -1, "item": "Strike",   "amount": 1 },
+    { "atDistance": 3400, "lane": 0,  "item": "Armor",    "amount": 1 },
+    { "atDistance": 4300, "lane": 1,  "item": "Missile",  "amount": 2 }
+  ],
+  "boss": {
+    "name": "Glass Wasp",
+    "health": 160,
+    "phases": [
+      { "behaviour": "Gunner",  "endsBelow": 0.66 },
+      { "behaviour": "Dropper", "endsBelow": 0.33 },
+      { "behaviour": "Pursuer", "endsBelow": 0, "missiles": true }
+    ]
+  }
+}

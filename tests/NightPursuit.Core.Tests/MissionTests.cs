@@ -291,6 +291,21 @@ public class MissionTests
     }
 
     [Fact]
+    public void Respawn_clears_grip_loss_and_puncture()
+    {
+        // Both only count down while the car is not wrecked, so without a reset they would carry into the new car.
+        var run = Run();
+        run.World.Player.GripLoss = 2.5;
+        run.World.Player.PunctureLeft = 6;
+        Wreck(run);
+        Assert.True(run.World.Player.GripLoss > 0 && run.World.Player.PunctureLeft > 0);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(0, run.World.Player.GripLoss);
+        Assert.Equal(0, run.World.Player.PunctureLeft);
+    }
+
+    [Fact]
     public void Respawn_resets_steering_and_throttle_scheme()
     {
         var run = Run();

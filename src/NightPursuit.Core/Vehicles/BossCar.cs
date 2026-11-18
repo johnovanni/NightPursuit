@@ -49,6 +49,33 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
     /// <summary>Wreck avoidance while passing.</summary>
     public AvoidMemory PassAvoid { get; } = new();
 
+    /// <summary>
+    /// Puts it back on the road at <paramref name="distance"/> in the centre lane, driving straight at
+    /// <paramref name="speed"/> and easing in again (not engaged; its drivers start fresh). Used when the player
+    /// respawns: its health, phase and phase shield are kept (MSN-3), and any spin or caltrops slow ends.
+    /// </summary>
+    public void ReturnTo(double distance, double speed)
+    {
+        Distance = distance;
+        Lateral = 0;
+        Heading = 0;
+        Speed = speed;
+        PushVel = 0;
+        LateralVel = 0;
+        if (State == VehicleState.Spinning) State = VehicleState.Driving;
+        StateTimer = 0;
+        SpinAngle = 0;
+        SpinRate = 0;
+        SlowLeft = 0;          // a slow left over would engage it again at once
+        Engaged = false;
+        DriverState = null;
+        PassLane = null;
+        ArrivalAvoid.Active = false;
+        PassAvoid.Active = false;
+        AheadMemory.Active = false;
+        SnapPrev();            // a teleport: not drawn sweeping in
+    }
+
     public static BossCar Create(int id, BossDefinition def, double distance, double lateral, double speed)
     {
         var b = new BossCar(def)

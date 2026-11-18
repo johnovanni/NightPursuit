@@ -377,7 +377,8 @@ public sealed partial class World
         int points = car.Stats.Points;
         Score += points;
         Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points));
-        Publish(new Message(Time, $"{car.Kind.ToString().ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
+        string name = car is BossCar boss ? boss.Definition.Name : car.Kind.ToString();
+        Publish(new Message(Time, $"{name.ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
         if (cause.LeavesWreck())
         {
             Hazards.Add(new Wreck

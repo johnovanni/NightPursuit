@@ -5,25 +5,43 @@ using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Missions;
 
-/// <summary>Spawns each of a mission's enemy waves once, when the player first passes its distance.</summary>
+/// <summary>The approach (waves, up to <see cref="MissionDefinition.ApproachLength"/>), then the boss fight if the mission has a boss.</summary>
+public enum MissionStage { Approach, Boss }
+
+/// <summary>
+/// Spawns each of a mission's enemy waves once, when the player first passes its distance. At the end of the approach
+/// the mission is complete, or, if it has a boss, the boss appears and the mission is complete once it is destroyed.
+/// </summary>
 public sealed class MissionDirector(MissionDefinition def)
 {
     const double WaveSpacing = 40;
 
     const double CrateLeadDistance = 800;
 
+    /// <summary>How far ahead of the player the boss appears, metres (also where a respawn puts it back).</summary>
+    public const double BossAheadDistance = 300;
+    /// <summary>The boss appears this much slower than the player, m/s, so it eases in (call 21).</summary>
+    public const double BossArrivalSlower = 10;
+
     int _nextWave;
     int _nextCrate;
 
     public bool Completed { get; private set; }
+    public MissionStage Stage { get; private set; }
+    /// <summary>The boss, once it has appeared; it stays here after it is destroyed.</summary>
+    public BossCar? Boss { get; private set; }
 
-    public double DistanceRemaining(World w) => Math.Max(0, def.ApproachLength - w.Player.Distance);
+    /// <summary>Metres left of the approach; 0 once the boss stage has begun.</summary>
+    public double DistanceRemaining(World w) =>
+        Stage == MissionStage.Boss ? 0 : Math.Max(0, def.ApproachLength - w.Player.Distance);
 
     public void Update(World w)
     {
+        if (Completed) return;
         double at = w.Player.Distance;
-        while (_nextWave < def.Waves.Count && at >= def.Waves[_nextWave].AtDistance)
-            Spawn(w, def.Waves[_nextWave++]);
+        if (Stage == MissionStage.Approach)
+            while (_nextWave < def.Waves.Count && at >= def.Waves[_nextWave].AtDistance)
+                Spawn(w, def.Waves[_nextWave++]);
         var crates = def.Crates;
         while (crates is not null && _nextCrate < crates.Count && at >= crates[_nextCrate].AtDistance - CrateLeadDistance)
         {
@@ -33,7 +51,27 @@ public sealed class MissionDirector(MissionDefinition def)
                 Distance = c.AtDistance, PrevDistance = c.AtDistance, Lateral = Track.LaneCentres[c.Lane + 1],
             });
         }
-        if (at >= def.ApproachLength) Completed = true;
+
+        if (Stage == MissionStage.Boss)
+        {
+            if (Boss!.State == VehicleState.Wrecked) Completed = true;
+        }
+        else if (at >= def.ApproachLength)
+        {
+            if (def.Boss is null) Completed = true;
+            else SpawnBoss(w, def.Boss);
+        }
+    }
+
+    /// <summary>The boss appears once, 300 m ahead in the centre lane at your speed - 10 m/s, not yet engaged.</summary>
+    void SpawnBoss(World w, BossDefinition bossDef)
+    {
+        var p = w.Player;
+        Boss = BossCar.Create(w.NextId(), bossDef, p.Distance + BossAheadDistance, 0, Math.Max(0, p.Speed - BossArrivalSlower));
+        w.Agents.Add(Boss);
+        Stage = MissionStage.Boss;
+        w.Publish(new BossAppeared(w.Time, bossDef.Name));
+        w.Publish(new Message(w.Time, $"BOSS AHEAD: {bossDef.Name.ToUpperInvariant()}", Tone.Bad));
     }
 
     static void Spawn(World w, WaveDefinition wave)

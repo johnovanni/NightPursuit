@@ -129,10 +129,16 @@ public sealed class MissionRun
         p.PushVel = 0;
         p.State = VehicleState.Driving;
         p.StateTimer = 0;
+        p.GripLoss = 0;       // both only count down while driving, so they would carry into the new car
+        p.PunctureLeft = 0;
         p.SnapPrev();   // a teleport: do not draw the car sweeping back to the start
         World.Steering.Reset();
         World.Scheme.Reset(0);
-        World.Agents.RemoveAll(a => Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);
+        // The boss is never cleared (Review Focus 1): it goes back 300 m ahead and eases in again.
+        World.Agents.RemoveAll(a => a is not BossCar && Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);
+        foreach (var a in World.Agents)
+            if (a is BossCar boss && boss.State != VehicleState.Wrecked)
+                boss.ReturnTo(p.Distance + MissionDirector.BossAheadDistance, Math.Max(0, p.Speed - MissionDirector.BossArrivalSlower));
         World.Hazards.RemoveAll(h => Math.Abs(h.Distance - p.Distance) < RespawnClearRadius);
         State = RunState.Playing;
         StateTimer = 0;
