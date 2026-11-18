@@ -48,8 +48,8 @@ public sealed class MissionRun
             case RunState.Playing:
                 World.Advance(input, frameSeconds);
                 Director.Update(World);
-                if (World.Events.Any(e => e is PlayerWrecked)) OnWrecked();
-                else if (Director.Completed) State = RunState.Completed;
+                if (Director.Completed) State = RunState.Completed;   // crossing the finish beats a wreck in the same frame
+                else if (World.Events.Any(e => e is PlayerWrecked)) OnWrecked();
                 break;
 
             case RunState.Respawning:
@@ -102,6 +102,7 @@ public sealed class MissionRun
         World.Steering.Reset();
         World.Scheme.Reset(0);
         World.Agents.RemoveAll(a => Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);
+        World.Hazards.RemoveAll(h => Math.Abs(h.Distance - p.Distance) < RespawnClearRadius);
         State = RunState.Playing;
         StateTimer = 0;
     }

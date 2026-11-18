@@ -21,6 +21,7 @@ public static class MissionLoader
 
     public static MissionDefinition Load(string json, string sourceName)
     {
+        if (json is null) throw new MissionFormatException($"{sourceName}: mission text is missing");
         JsonDocument doc;
         try { doc = JsonDocument.Parse(json, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip }); }
         catch (JsonException e) { throw new MissionFormatException($"{sourceName}: not valid JSON ({e.Message})"); }
@@ -67,7 +68,7 @@ public static class MissionLoader
             if (min <= 0) throw Fail("road.minRadius must be greater than 0");
             if (max < min) throw Fail("road.maxRadius must not be less than road.minRadius");
             if (hill < 0) throw Fail("road.hillAmplitude must not be negative");
-            if (segments <= 0) throw Fail("road.segments must be greater than 0");
+            if (segments is < 100 or > 20000) throw Fail($"road.segments must be from 100 to 20000 (got {segments})");
             return new TrackProfile(seed, min, max, hill, segments);
         }
 

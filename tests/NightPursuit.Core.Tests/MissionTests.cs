@@ -1,5 +1,6 @@
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
@@ -256,5 +257,61 @@ public class MissionTests
         run.Handle(new GameAction(ActionKind.Pause));
         run.Handle(new GameAction(ActionKind.SelectScheme, 0));
         Assert.Equal(1, run.World.SchemeIndex);
+    }
+
+    [Fact]
+    public void Crossing_the_finish_while_wrecking_completes_and_keeps_the_spare()
+    {
+        var run = Run(Def(500));
+        run.World.Player.Distance = 500;
+        run.World.Player.Armor = 0;
+        run.Update(ControlFrame.Empty, 1 / 60.0);
+        Assert.Equal(RunState.Completed, run.State);
+        Assert.Equal(3, run.World.Player.SpareCars);
+    }
+
+    [Fact]
+    public void Respawn_removes_hazards_within_200_m_only()
+    {
+        var run = Run();
+        foreach (var d in new[] { 40.0, -120.0, 600.0 })
+            run.World.Hazards.Add(new OilSlick { Distance = d, Lateral = 0 });
+        Wreck(run);
+        WaitForRespawn(run);
+        Assert.Equal(new[] { 600.0 }, run.World.Hazards.Select(h => h.Distance).ToArray());
+    }
+
+    [Fact]
+    public void Respawn_resets_steering_and_throttle_scheme()
+    {
+        var run = Run();
+        run.Handle(new GameAction(ActionKind.SelectScheme, 1));
+        run.Update(new ControlFrame { Gas = true, SteerDir = 1 }, 0.25);
+        run.World.Player.Speed = 30;
+        run.Handle(new GameAction(ActionKind.LeverPreset, 3));
+        Assert.NotEqual(0, run.World.Steering.Value);
+        Wreck(run);
+        Assert.NotEqual(0, run.World.Steering.Value);
+        WaitForRespawn(run);
+        Assert.Equal(0, run.World.Steering.Value);
+        Assert.Equal(0, run.World.Scheme.TargetSpeed!.Value);
+    }
+
+    [Theory]
+    [InlineData(99)]
+    [InlineData(20001)]
+    [InlineData(2000000000)]
+    public void Road_segments_out_of_range_are_rejected(int segments)
+    {
+        var json = Valid.Replace("\"seed\": 7", $"\"seed\": 7, \"segments\": {segments}");
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(json, "m.json"));
+        Assert.StartsWith("m.json: road.segments", ex.Message);
+    }
+
+    [Fact]
+    public void Null_json_is_a_format_exception()
+    {
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(null!, "m.json"));
+        Assert.StartsWith("m.json:", ex.Message);
     }
 }
