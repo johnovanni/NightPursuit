@@ -177,9 +177,9 @@ public static class DriverHelpers
     /// still clears the player by that much;</item>
     /// <item>while its front is at least 2 m short of the player's rear, the lane farthest from the player (it crosses
     /// behind);</item>
-    /// <item>otherwise it keeps that line without pushing into the player. While its rear has not yet passed the
-    /// player's front it waits at the player's speed - 3 m/s until it has dropped 2 m behind, then crosses behind; once
-    /// its rear is past their front it drives on uncapped until it is 2 m clear, then crosses in front.</item>
+    /// <item>otherwise it keeps that line without pushing into the player. While its centre is behind the player's it
+    /// waits at the player's speed - 3 m/s until it has dropped 2 m behind, then crosses behind; once its centre is
+    /// level or ahead it drives on uncapped until it is 2 m clear, then crosses in front.</item>
     /// </list>
     /// Whatever the line, a car behind the player (its front short of their rear) and still less than the two half
     /// widths + 0.3 m off them sideways drives no faster than the player's speed - 3 m/s, so it never closes on them
@@ -209,8 +209,9 @@ public static class DriverHelpers
         if (Math.Abs(line - p.Lateral) >= keepOff - Same) return new PassingLine(line, cap);
         if (self.Distance + selfHalf <= p.Distance - playerHalf - CrossGap)
             return new PassingLine(FarthestLane(p.Lateral), cap);
-        bool rearPastFront = self.Distance - selfHalf >= p.Distance + playerHalf;
-        return new PassingLine(line, rearPastFront ? double.PositiveInfinity : yield);
+        // Wait or go by centres, not bumpers: you move before agents decide, so a bumper test is off by your speed · dt.
+        bool aheadOfYou = self.Distance >= p.Distance;
+        return new PassingLine(line, aheadOfYou ? double.PositiveInfinity : yield);
     }
 
     /// <summary>The lane centre farthest from the player (5 m or more away).</summary>
