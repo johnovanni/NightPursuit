@@ -26,6 +26,7 @@ public sealed partial class World
     readonly List<GameEvent> _events = new();
     readonly List<AgentCar> _removals = new();
     readonly IThrottleScheme[] _schemes = { new RampPedalScheme(), new SpeedLeverScheme() };
+    const double ArmoredBulletDamage = 0.15;
     readonly WorldView _view;
     readonly Dictionary<string, double> _lastDamageMessage = new();
     double _accumulator;
@@ -319,8 +320,13 @@ public sealed partial class World
             }
             if (hit is null) continue;
             t.Dead = true;
-            hit.Armor -= 1;
+            hit.Armor -= hit.Kind == AgentKind.Armored ? ArmoredBulletDamage : 1;
             hit.HitFlash = 0.08;
+            if (hit.Kind == AgentKind.Armored && !hit.HintShown)
+            {
+                hit.HintShown = true;
+                Publish(new Message(Time, "ARMORED: USE A MISSILE, A RAM OR A HAZARD", Tone.Info));
+            }
             if (hit.Armor <= 0) Destroy(hit, KillCause.Gunfire);
         }
         Tracers.RemoveAll(t => t.Dead);

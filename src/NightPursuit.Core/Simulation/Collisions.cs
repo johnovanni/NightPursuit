@@ -16,6 +16,7 @@ public static class Collisions
     const double AgentReach = 6.5;              // longer than any two cars' half lengths added together
     const double AgentRearEndDamage = 0.5;
     const double AgentSpinClosing = 4;
+    const double ArmoredSpinInto = 8;           // every other kind spins at > 5
 
     public static void Resolve(World w)
     {
@@ -111,7 +112,7 @@ public static class Collisions
             a.Lateral += side * overlapX * 0.5;
             p.Lateral -= side * overlapX * 0.5;
             w.DamagePlayer(2 + agentInto * 1.2, "SIDESWIPED");
-            if (playerInto > 5 && a.State == VehicleState.Driving)
+            if (playerInto > (a.Kind == AgentKind.Armored ? ArmoredSpinInto : 5) && a.State == VehicleState.Driving)
                 w.Spin(a, side, $"{KindName(a)} KNOCKED INTO A SPIN");
         }
 

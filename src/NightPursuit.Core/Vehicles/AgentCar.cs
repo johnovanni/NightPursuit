@@ -3,7 +3,7 @@ using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Vehicles;
 
-public enum AgentKind { Runner, Blocker, Pursuer, Gunner }
+public enum AgentKind { Runner, Blocker, Pursuer, Gunner, Dropper, Armored }
 
 /// <summary>An enemy car. Its driver (AI) is attached separately through <see cref="DriverState"/>.</summary>
 public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
@@ -31,6 +31,9 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
     /// <summary>Seconds since the puncture (counts up while the car is on the road).</summary>
     public double PunctureSeconds { get; set; }
 
+    /// <summary>The "use a missile, a ram or a hazard" hint has been shown for this armored car.</summary>
+    public bool HintShown { get; set; }
+
     /// <summary>What this car carries: guns and droppers.</summary>
     public AgentArms Arms { get; init; } = new();
 
@@ -38,6 +41,8 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
     static readonly IDriver BlockerDriver = new Drivers.BlockerDriver();
     static readonly IDriver PursuerDriver = new Drivers.PursuerDriver();
     static readonly IDriver GunnerDriver = new Drivers.GunnerDriver();
+    static readonly IDriver DropperDriver = new Drivers.DropperDriver();
+    static readonly IDriver ArmoredDriver = new Drivers.ArmoredDriver();
 
     public static AgentCar Create(int id, AgentKind kind, double distance, double lateral, double speed)
     {
@@ -46,14 +51,22 @@ public class AgentCar(AgentKind kind, VehicleStats stats) : Vehicle(stats)
             AgentKind.Runner => VehicleStats.Runner,
             AgentKind.Blocker => VehicleStats.Blocker,
             AgentKind.Gunner => VehicleStats.Gunner,
+            AgentKind.Dropper => VehicleStats.Dropper,
+            AgentKind.Armored => VehicleStats.Armored,
             _ => VehicleStats.Pursuer,
         };
         var car = new AgentCar(kind, stats)
         {
             Id = id, Distance = distance, Lateral = lateral, Speed = speed, CruiseSpeed = speed,
             Driver = kind switch { AgentKind.Runner => RunnerDriver, AgentKind.Blocker => BlockerDriver,
-                AgentKind.Gunner => GunnerDriver, _ => PursuerDriver },
-            Arms = kind == AgentKind.Gunner ? new AgentArms { RearGuns = new MachineGuns() } : new AgentArms(),
+                AgentKind.Gunner => GunnerDriver, AgentKind.Dropper => DropperDriver,
+                AgentKind.Armored => ArmoredDriver, _ => PursuerDriver },
+            Arms = kind switch
+            {
+                AgentKind.Gunner => new AgentArms { RearGuns = new MachineGuns() },
+                AgentKind.Dropper => new AgentArms { Oil = new OilDropper(5), Caltrops = new CaltropDropper(3) },
+                _ => new AgentArms(),
+            },
             Armor = stats.Armor, State = VehicleState.Driving, Side = 1,
         };
         car.SnapPrev();   // a new car must not be drawn sweeping in from where its Prev fields start

@@ -9,4 +9,6 @@ public sealed record VehicleStats(double Width, double Length, double Height, do
     public static VehicleStats Blocker { get; } = new(2.4, 6.0, 2.1, 40, 4, 2.8, 14, 300);
     public static VehicleStats Pursuer { get; } = new(1.9, 4.4, 1.15, 85, 8, 6, 10, 500);
     public static VehicleStats Gunner { get; } = new(1.9, 4.6, 1.3, 80, 7, 4.5, 9, 600);
+    public static VehicleStats Dropper { get; } = new(2.0, 4.8, 1.8, 75, 6.5, 4.0, 9, 600);
+    public static VehicleStats Armored { get; } = new(2.3, 5.2, 1.6, 64, 5.0, 3.0, 12, 900);
 }

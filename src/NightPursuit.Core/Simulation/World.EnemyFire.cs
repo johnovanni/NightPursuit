@@ -1,3 +1,5 @@
+using NightPursuit.Core.Drivers;
+using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
@@ -23,6 +25,33 @@ public sealed partial class World
                 OwnerId = a.Id, Hostile = true,
             });
         }
+        if (intent.DropRear) DropFromAgent(a);
+    }
+
+    /// <summary>
+    /// Drops the hazard the car's <see cref="AgentArms.NextDropIsOil"/> asks for, or the other one if that cannot be used.
+    /// Nothing drops (and nothing is published) when neither can, or when the player would have too little time to react.
+    /// </summary>
+    void DropFromAgent(AgentCar a)
+    {
+        if (DropperDriver.NextDrop(a.Arms) is not bool oil) return;
+        if (DropperDriver.ReactionGap(a, Player, oil) < DropperDriver.RequiredGap(Player)) return;   // a switched drop is rechecked here
+        double d = DropperDriver.CentreBehind(a, oil);
+        if (oil)
+        {
+            a.Arms.Oil!.TryDrop();
+            Hazards.Add(new OilSlick { Distance = d, Lateral = a.Lateral, Hostile = true });
+            Publish(new WeaponUsed(Time, WeaponKind.Oil, a.Id));
+            Publish(new Message(Time, "DROPPER: OIL AHEAD", Tone.Bad));
+        }
+        else
+        {
+            a.Arms.Caltrops!.TryUse();
+            Hazards.Add(new Caltrops { Distance = d, Lateral = NearestLane(a.Lateral), Hostile = true });
+            Publish(new WeaponUsed(Time, WeaponKind.Caltrops, a.Id));
+            Publish(new Message(Time, "DROPPER: CALTROPS AHEAD", Tone.Bad));
+        }
+        a.Arms.NextDropIsOil = !oil;
     }
 
     /// <summary>An enemy bullet only ever tests the player; it passes through other cars.</summary>

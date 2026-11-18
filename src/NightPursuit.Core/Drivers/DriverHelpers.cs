@@ -107,6 +107,8 @@ public static class DriverHelpers
         AgentKind.Blocker => 0.8,
         AgentKind.Pursuer => 0.3,
         AgentKind.Gunner => 0.4,
+        AgentKind.Dropper => 0.5,
+        AgentKind.Armored => 0.6,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no reaction delay for this kind"),
     };
 
