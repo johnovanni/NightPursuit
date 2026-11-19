@@ -25,7 +25,7 @@ internal static class Overlays
         "NIGHT PURSUIT  -  CONTROLS",
         "",
         "DRIVE      W / Up gas     S / Down brake     A D / Left Right steer",
-        "WEAPONS    Space guns (hold)   X / Ctrl drop rear weapon   Z / Shift next rear weapon",
+        "WEAPONS    Space guns (hold)   X / Ctrl drop rear weapon   Tab / Shift next rear weapon",
         "           F missile (locks on ahead)   V satellite strike",
         "           Steer into a car's side to knock it into a spin",
         "SPEED      C cruise     F2 ramp pedal     F3 speed lever",

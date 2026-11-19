@@ -23,7 +23,8 @@ public sealed class InputHub
             Key.F3 => new GameAction(ActionKind.SelectScheme, 1),
             Key.C => new GameAction(ActionKind.Cruise),
             Key.X or Key.LeftCtrl or Key.RightCtrl => new GameAction(ActionKind.DropRear),
-            Key.Z or Key.LeftShift or Key.RightShift => new GameAction(ActionKind.CycleRear),
+            // Tab (not Z, which sits next to the X drop key and was easy to mis-hit). Handled here, so it never moves WPF focus.
+            Key.Tab or Key.LeftShift or Key.RightShift => new GameAction(ActionKind.CycleRear),
             Key.F => new GameAction(ActionKind.FireMissile),
             Key.V => new GameAction(ActionKind.FireStrike),
             >= Key.D1 and <= Key.D9 => new GameAction(ActionKind.LeverPreset, key - Key.D0),

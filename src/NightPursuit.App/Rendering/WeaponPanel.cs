@@ -44,7 +44,7 @@ internal static class WeaponPanel
 
         // REAR: one row per weapon.
         l.Text(dc, "REAR", x, y, 13, Neon.TextCyan, bold: true);
-        l.Text(dc, "X drop   Z next", right, y, 12, Neon.TextGray, TextAlignment.Right);
+        l.Text(dc, "X drop   Tab next", right, y, 12, Neon.TextGray, TextAlignment.Right);
         y += 18 * k;
         DrawRearRow(dc, l, "OIL", lo.Oil, lo.SelectedRear == RearWeapon.Oil, Neon.OilFull, Neon.Oil.Core, x, right, y, showRecharge: true);
         y += 28 * k;

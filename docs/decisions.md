@@ -204,7 +204,7 @@ The design left these open, so I picked a default for each before building Plan 
 bosses), and the game follows them. I checked every entry below against the finished code; where the build ended
 up a little different from the plan, the entry says what the game really does.
 
-**D23. Weapon keys.** Z or Shift picks the next rear weapon, X or Ctrl drops it, F fires a missile and V calls
+**D23. Weapon keys.** Tab or Shift picks the next rear weapon (Z at first; see D68), X or Ctrl drops it, F fires a missile and V calls
 the satellite strike. On the gamepad: X picks the next rear weapon, B drops it, RB fires a missile and LB calls the
 strike. Your left hand does all the weapons, and the arrow keys stay under your right. F1 shows the full list.
 *Cost to change:* a few lines in the key table and the help text.
@@ -498,6 +498,14 @@ supplies; and enemy bullets still in the air are cleared, as enemy missiles alre
 new car.
 *Cost to change:* a few lines.
 
+## After your third playtest (2026-11-19)
+
+**D68. Tab picks the next rear weapon, not Z.** You found Z hard to reach and sometimes hit X (drop) instead. Tab
+now picks the next rear weapon; Shift still does too, and Z no longer does anything. The F1 help and the weapon
+panel's caption ("X drop   Tab next") say Tab. The game takes Tab for itself, so it never moves the window's focus.
+Alt+Tab still switches windows as usual, and the game pauses itself (D12). The gamepad is unchanged (X button).
+*Cost to change:* one line in the key table and two captions.
+
 ## Open items after Plan 2
 
 From Plan 1's "not urgent" list, these are now done: enemy cars collide with each other (D28), the oil recharge
@@ -508,7 +516,7 @@ cars over 6 km), which is worth judging when you play it.
 New, all small:
 - A boss swerving off a wreck can be drawn passing through it for a moment. It makes no difference to play.
 - Shift is one of the "next rear weapon" keys (D23). Pressing Shift five times quickly makes Windows offer Sticky
-  Keys, which takes the focus away, so the game pauses (D12). Z does the same job, so Shift could be dropped.
+  Keys, which takes the focus away, so the game pauses (D12). Tab does the same job (D68), so Shift could be dropped.
 - If you move to an outer lane while a boss in a Pursuer phase is dropping back toward you, it can cross in front of
   you about 8 m ahead.
 - An ordinary pursuer (Plan 1) still has the flaw the boss had when you're in an outer lane: with no room beside you
