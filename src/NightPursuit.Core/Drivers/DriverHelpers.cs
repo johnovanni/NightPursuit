@@ -273,11 +273,51 @@ public static class DriverHelpers
     /// wrecks, then keep clear of the player when the player is ahead.
     /// </summary>
     internal static DriveIntent DriveInLane(AgentCar self, WorldView view, double lane, AvoidMemory avoid,
-        CarAheadMemory playerAhead, double dt)
+        CarAheadMemory playerAhead, double dt, double speedFactor = 1)
     {
         double delay = ReactionDelay(self.Kind);
         double lateral = SteerAroundWrecks(self, view, lane, avoid, delay, dt);
-        return KeepClearOfPlayerAhead(self, view, new DriveIntent(self.CruiseSpeed, lateral), playerAhead, delay, dt);
+        return KeepClearOfPlayerAhead(self, view, new DriveIntent(self.CruiseSpeed * speedFactor, lateral), playerAhead, delay, dt);
+    }
+
+    /// <summary>
+    /// The neighbouring lane centre (5 m either side of the car's nearest lane) with no car (the player included, wrecked
+    /// cars too) and no wreck from <paramref name="behind"/> metres behind to <paramref name="ahead"/> metres ahead of
+    /// <paramref name="self"/>. When both are free the one on <paramref name="preferSide"/> (-1 or +1) wins; null when
+    /// neither is free. (Roadblocks join the check in Task 6.)
+    /// </summary>
+    public static double? FreeNeighbourLane(AgentCar self, WorldView view, double behind, double ahead, int preferSide)
+    {
+        double home = NearestLane(self.Lateral);
+        double? best = null;
+        foreach (double lane in Track.LaneCentres)
+        {
+            if (Math.Abs(Math.Abs(lane - home) - LaneSpacing) > Same) continue;
+            if (!IsLaneFree(self, view, lane, behind, ahead)) continue;
+            if (best is null || Math.Sign(lane - home) == preferSide) best = lane;
+        }
+        return best;
+    }
+
+    static bool IsLaneFree(AgentCar self, WorldView view, double lane, double behind, double ahead)
+    {
+        bool Overlaps(Vehicle other)
+        {
+            if (Math.Abs(other.Lateral - lane) >= Band(self, other)) return false;
+            double d = other.Distance - self.Distance, half = (self.Stats.Length + other.Stats.Length) / 2;
+            return d > -(behind + half) && d < ahead + half;
+        }
+        if (Overlaps(view.Player)) return false;
+        foreach (var other in view.Agents)
+            if (!ReferenceEquals(other, self) && Overlaps(other)) return false;
+        foreach (var h in view.Hazards)
+        {
+            if (h is not Wreck wreck) continue;
+            double d = wreck.Distance - self.Distance;
+            if (d <= -behind || d >= ahead) continue;
+            if (Math.Abs(wreck.Lateral - lane) < (wreck.Width + self.Stats.Width) / 2 + Margin) return false;
+        }
+        return true;
     }
 
     /// <summary>How far under the player's speed a car follows a player it cannot pass, m/s.</summary>

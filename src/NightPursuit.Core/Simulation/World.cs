@@ -53,6 +53,8 @@ public sealed partial class World
     public Loadout Loadout { get; set; } = new();
     public SteeringInput Steering { get; } = new();
     public double Time { get; private set; }
+    /// <summary>True when the player's guns fired a tracer during the current step; cleared at the start of each step.</summary>
+    public bool PlayerFiredThisStep { get; private set; }
     /// <summary>
     /// How far the clock has run into the next fixed step, 0..1 (leftover accumulator time over <see cref="Step"/>).
     /// The App draws each frame at Prev + (Current - Prev) * Alpha; the simulation itself never reads it.
@@ -113,6 +115,7 @@ public sealed partial class World
 
     public void StepOnce(ControlFrame input)
     {
+        PlayerFiredThisStep = false;
         CapturePrev();
         if (Player.State == VehicleState.Wrecked)
         {
@@ -259,7 +262,7 @@ public sealed partial class World
     void UpdateBlindness(AgentCar a)
     {
         bool covered = false;
-        if (a.State == VehicleState.Driving)
+        if (a.State == VehicleState.Driving && a.Faction != Faction.Civilian)   // civilians slow in smoke but are never blinded
             foreach (var h in Hazards)
                 if (h is SmokeCloud c && c.Covers(a)) { covered = true; break; }
         if (covered)
@@ -338,6 +341,7 @@ public sealed partial class World
         {
             // Guns sit 2 m ahead of the driver and 0.7 m either side of the car's centre line.
             double side = guns.LeftGun ? -0.7 : 0.7, c = Math.Cos(Player.Heading), s = Math.Sin(Player.Heading);
+            PlayerFiredThisStep = true;
             Tracers.Add(new Tracer
             {
                 Pose = new RoadPose(Player.Distance + 2 * c - side * s, Player.Lateral + 2 * s + side * c, Player.Heading),
