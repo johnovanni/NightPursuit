@@ -17,7 +17,7 @@ New Core folders:
 - `Traffic/`: `TrafficDirector`.
 
 The new drivers go under `Drivers/`, and two roadside hazards (`SpeedTrap`, `Roadblock`) under `Hazards/`. Offences go
-through one `World.Heat.cs` partial, so there is one place where heat, blame and score penalties meet. Spawning uses a
+through one `World.Heat.cs` partial, so there is one place where heat and blame meet. Spawning uses a
 separate `TrafficRng`, so missions without traffic give exactly the same seeded results as before. The App gets new
 car shapes and light bars, roadside drawing, a heat meter and a busted countdown, plus new `--scene` snapshots.
 
@@ -89,22 +89,19 @@ cancel, roadblock gap guarantee, police escalation). Also read `docs/decisions.m
    - the number around you stays near the mission's density.
 
    *(Task 4: `Traffic_spawns_out_of_sight_and_spaced`, `Traffic_density_stays_near_the_target`.)*
-5. **A civilian destroyed by an enemy counts against you.** Expected: penalties and heat apply only when you hurt that car in the last 5 s (your ram, bullets, oil or caltrops). Crashes that enemies cause are never your fault. *(Task 3: `Enemy_caused_civilian_crash_costs_nothing`, `Your_oil_crash_counts_against_you`.)*
+5. **A civilian destroyed by an enemy counts against you.** Expected: heat applies only when you hurt that car in the last 5 s (your ram, bullets, oil or caltrops). Crashes that enemies cause are never your fault. *(Task 3: `Enemy_caused_civilian_crash_costs_nothing`, `Your_oil_crash_counts_against_you`.)*
 
 ## Calls made in this plan
 
 The spec leaves these open. Each one is logged as a decision for the owner in Task 16 (from D69).
 
 1. **Civilians and police are `AgentCar` kinds, not new classes.** `AgentKind` gains `Civilian, PolicePatrol, PoliceCruiser, Interceptor, ArmoredSuv`, appended after `Boss`. `Faction` gains `Civilian` and `Police`, and `AgentCar.Faction` comes from the kind. This reuses all the car rules, and spec §13 leaves class detail to the builder.
-2. **Civilian penalties:**
-   - hitting a civilian costs **−50 points**;
-   - destroying one costs **−500**;
-   - the score never goes below 0.
+2. **No point penalties for civilians** (the owner's ruling, 2026-11-19). Hurting a civilian costs you armor (the normal contact damage) and raises heat, but never costs points. Civilians and police are worth no points either. The owner will judge the police in play and may retune the heat levels.
 3. **Blame window.** A civilian or police car counts against you only if **you** hurt it in the last **5 s**: your ram, your bullets, or your own oil or caltrops. A crash caused by an enemy or by another car is not your fault.
    - A contact is **your** fault only when **you** run into the other car: you rear-end it, or you hit its side while moving into it faster than it moves into you (`playerInto > agentInto`).
    - A civilian or police car that rear-ends you, swerves into you or rams you costs you nothing. An interceptor ramming you gives no heat.
 4. **How often a "hit" counts.**
-   - **Civilians:** a hit (bullet or contact) costs **+10 heat and −50 points at most once per car per second**.
+   - **Civilians:** a hit (bullet or contact) costs **+10 heat at most once per car per second**.
    - **Police contact** (+15 heat) counts at most once per car per second.
    - **Police bullets** cost **+5 heat per hit**, as the spec says.
 5. **Smoke:**
@@ -181,7 +178,7 @@ The spec leaves these open. Each one is logged as a decision for the owner in Ta
     - It flashes for 1 s whenever heat rises, blinking at 2 Hz.
     - Each level rise shows a banner: "POLICE PATROLS" / "POLICE PURSUIT" / "MANHUNT", each with a one-line hint. Every level change **also** publishes a Message, because a banner can be held back while the boss's urgent banner is showing.
     - Level colours: Calm green `#39FF88`, Watched yellow `#FFE14D`, Patrol amber `#FFC13B`, Pursuit orange `#FF8A1F`, Manhunt red `#FF3B3B`.
-20. **Every offence shows a message with its cost**, for example "CIVILIAN HIT  -50  +10 HEAT", "POLICE CAR HIT  +15 HEAT" or "SPEED TRAP 112 IN A 70  +8 HEAT".
+20. **Every offence shows a message with its cost**, for example "CIVILIAN HIT  +10 HEAT", "POLICE CAR HIT  +15 HEAT" or "SPEED TRAP 112 IN A 70  +8 HEAT".
 21. **A test mission, `content/missions/patrol-ground.json`:**
     - heavy traffic (carsPerKm 6), police presence 1.5, starting heat 75;
     - two runner waves, a crate of each weapon, and a 2-phase boss.
@@ -295,7 +292,6 @@ docs/decisions.md                              (modified: D69 onward, open items
     - `CivilianHit = 10, CivilianDestroyed = 25, PoliceHit = 15, SpeedTrap = 8, RoadblockHit = 15, PoliceDestroyed = 40, PoliceShot = 5`;
     - `DecayDelay = 5, Decay = 2, DecayNoPolice = 4, NoPoliceRadius = 300, BlameSeconds = 5, HitCooldown = 1`;
     - `LevelHysteresis = 5, MinPoliceLevelSeconds = 20` (call 9);
-    - `CivilianHitPoints = 50, CivilianDestroyedPoints = 500`;
     - `static HeatLevel LevelOf(double heat)`;
     - `static string LevelName(HeatLevel)`: "CALM", "WATCHED", "PATROL", "PURSUIT", "MANHUNT".
   - `sealed class HeatMeter`:
@@ -344,7 +340,7 @@ public void Levels_follow_the_table(double heat, HeatLevel level) { }
 - [ ] **Step 4: Run the whole suite.** Expected: all pass. With no police, heat is 0, so nothing is published and the old hashes only gain constant terms.
 - [ ] **Step 5: Commit** `feat: heat meter with levels, decay and announcements`.
 
-### Task 3: Offences: blame, penalties and heat from your actions
+### Task 3: Offences: blame and heat from your actions
 
 **Files:**
 - Create: `Simulation/World.Heat.cs`
@@ -362,7 +358,7 @@ public void Levels_follow_the_table(double heat, HeatLevel level) { }
   - `World.OffenceHit(AgentCar a, bool bullet)`, called on the same occasions as blame (not for oil or caltrops). The two kinds of occasion stay apart:
     - **your fault:** your tracer hit, your rear-end, your side contact;
     - **not your fault:** a contact the other car made.
-    - **Civilian, when `HitHeatCooldown ≤ 0`:** Score −50, floored at 0; `AddHeat(10, "CIVILIAN HIT")`; Message "CIVILIAN HIT  -50  +10 HEAT" (Bad); `HitHeatCooldown = 1`.
+    - **Civilian, when `HitHeatCooldown ≤ 0`:** `AddHeat(10, "CIVILIAN HIT")`; Message "CIVILIAN HIT  +10 HEAT" (Bad); no change to the score; `HitHeatCooldown = 1`.
     - **Police, bullet:** `AddHeat(5, "SHOT A POLICE CAR")`, every hit. Message "POLICE CAR SHOT  +5 HEAT" (Bad) at most once per second.
     - **Police, contact, when `HitHeatCooldown ≤ 0`:** `AddHeat(15, "HIT A POLICE CAR")`; Message "POLICE CAR HIT  +15 HEAT" (Bad); `HitHeatCooldown = 1`.
     - **Hostile:** nothing.
@@ -370,7 +366,7 @@ public void Levels_follow_the_table(double heat, HeatLevel level) { }
   - `World.Destroy` scoring by faction:
     - **Hostile:** as now (D54).
     - **Civilian:**
-      - when `PlayerBlameUntil > Time`: Score −500 (floor 0), `AddHeat(25, "CIVILIAN DESTROYED")`, Message "CIVILIAN DESTROYED  -500  +25 HEAT" (Bad), `VehicleDestroyed(..., Points: −500, Faction.Civilian)`;
+      - when `PlayerBlameUntil > Time`: `AddHeat(25, "CIVILIAN DESTROYED")`, Message "CIVILIAN DESTROYED  +25 HEAT" (Bad), `VehicleDestroyed(..., Points: 0, Faction.Civilian)`, no change to the score;
       - otherwise: Message "CIVILIAN CRASHED" (Info) and Points 0.
     - **Police:**
       - when blamed: `AddHeat(40, "DESTROYED A POLICE CAR")`, Message "POLICE CAR DESTROYED  +40 HEAT" (Bad), Points 0;
@@ -382,22 +378,22 @@ public void Levels_follow_the_table(double heat, HeatLevel level) { }
 - [ ] **Step 1: Write failing tests**
 
 ```csharp
-[Fact] public void Three_civilian_hits_reach_patrol_level() { /* spec §11 with a start of 25 (call 9): ram three different civilians (you rear-end them, via Collisions.Resolve) → Heat.Level Patrol; Score floor 0 holds */ }
+[Fact] public void Three_civilian_hits_reach_patrol_level() { /* spec §11 with a start of 25 (call 9): ram three different civilians (you rear-end them, via Collisions.Resolve) → Heat.Level Patrol; Score unchanged */ }
 [Fact] public void Three_civilian_hits_from_zero_reach_watched() { /* the same from 0 → Level Watched, heat 30 (the spec example's gap, logged for the owner) */ }
 [Fact] public void Holding_fire_on_a_civilian_adds_at_most_10_per_second() { /* civilian with a StillDriver (so it can't swerve) and armor 1000, 40 m ahead in the gun line; 3 s of Fire → Heat ≤ 30 + 1e-9 and ≥ 20; "CIVILIAN HIT" messages ≤ 3 */ }
-[Fact] public void Shooting_a_civilian_dead_costs_500_and_leaves_a_wreck() { /* civilian with a StillDriver and armor 4 in the gun line → VehicleDestroyed(Faction.Civilian, Points −500), a Wreck in its lane, heat ≥ 25 */ }
-[Fact] public void A_car_hitting_you_costs_you_nothing() { /* a civilian rear-ends you (HIT FROM BEHIND), and a PoliceCruiser moves into your side (agentInto > playerInto) → no heat, no penalty, PlayerBlameUntil unchanged */ }
+[Fact] public void Shooting_a_civilian_dead_raises_heat_and_leaves_a_wreck() { /* civilian with a StillDriver and armor 4 in the gun line → VehicleDestroyed(Faction.Civilian, Points 0), a Wreck in its lane, heat ≥ 25, Score unchanged */ }
+[Fact] public void A_car_hitting_you_costs_you_nothing() { /* a civilian rear-ends you (HIT FROM BEHIND), and a PoliceCruiser moves into your side (agentInto > playerInto) → no heat, PlayerBlameUntil unchanged (your armor still takes the normal contact damage) */ }
 [Fact] public void Interceptor_ram_costs_you_no_heat() { /* heat 95 held; an Interceptor sideswipes you → Heat unchanged apart from decay, SinceOffence not reset */ }
 [Fact] public void Police_bullets_cost_5_heat_each() { /* PolicePatrol armor 1000, 10 tracer hits → heat +50 ± 1e-9 */ }
 [Fact] public void Ramming_a_police_car_costs_15_once_per_second() { /* two contacts 0.5 s apart → +15; another 1.1 s later → +30 */ }
 [Fact] public void Enemy_caused_civilian_crash_costs_nothing() { /* Runner sideswipes a civilian into a spin and off the road (AgentVsAgent) → VehicleDestroyed(Faction.Civilian, Points 0), Message "CIVILIAN CRASHED", Score and Heat unchanged */ }
-[Fact] public void Your_oil_crash_counts_against_you() { /* your OilSlick spins a civilian that then runs off the road within 5 s → −500 and +25 heat */ }
-[Fact] public void Blame_wears_off_after_5_s() { /* bump a civilian, wait 5.1 s, a Runner rams it off the road → no penalty */ }
-[Fact] public void Score_never_goes_below_zero() { /* Score 100, destroy a blamed civilian → Score 0 */ }
+[Fact] public void Your_oil_crash_counts_against_you() { /* your OilSlick spins a civilian that then runs off the road within 5 s → +25 heat and Message "CIVILIAN DESTROYED  +25 HEAT"; Score unchanged */ }
+[Fact] public void Blame_wears_off_after_5_s() { /* bump a civilian, wait 5.1 s, a Runner rams it off the road → no heat */ }
+[Fact] public void Civilians_and_police_never_change_the_score() { /* blamed civilian destroyed, civilian hit, police shot, police destroyed → Score unchanged throughout; heat rises */ }
 [Fact] public void Hostile_scoring_is_unchanged() { /* Runner shot dead → +100 as before; D54 AI-vs-AI kill still scores */ }
 ```
 - [ ] **Step 2: Run** `--filter FullyQualifiedName~OffenceTests`. Expected: FAIL.
-- [ ] **Step 3: Implement.** Keep every penalty and heat number in `HeatRules`.
+- [ ] **Step 3: Implement.** Keep every heat number in `HeatRules`.
 - [ ] **Step 4: Run the whole suite.** Expected: all pass.
 - [ ] **Step 5: Commit** `feat: offences raise heat and cost points only when you caused them`.
 
@@ -914,7 +910,7 @@ public void Police_never_fill_all_three_lanes_around_you(double playerLane) { /*
 |---|---|
 | CIV-1 traffic speeds, lanes, reactions | 4, 5 |
 | CIV-2 neutral colour, hostiles stand out | 12 |
-| CIV-3 penalties and heat | 3 |
+| CIV-3 heat (and armor damage) for hurting civilians; the owner ruled out point penalties | 3 |
 | HT-1 meter, five levels, name, colour, flash | 2, 14 |
 | HT-2 every heat source and decay | 2, 3, 6 |
 | HT-3 police never targets, no points, behaviour by level | 1, 3, 7, 8, 9 |
