@@ -53,8 +53,9 @@ static class HazardContacts
                     break;
                 }
                 a.Punctured = true;
+                if (!c.Hostile) w.BlamePlayer(a);                      // your own caltrops
                 w.Publish(new VehiclePunctured(w.Time, a.Id));
-                w.Publish(new Message(w.Time, $"{a.Kind.ToString().ToUpperInvariant()} PUNCTURED", Tone.Good));
+                w.Publish(new Message(w.Time, $"{KindRules.DisplayName(a.Kind)} PUNCTURED", a.Faction == Faction.Hostile ? Tone.Good : Tone.Info));
                 break;
             }
         }

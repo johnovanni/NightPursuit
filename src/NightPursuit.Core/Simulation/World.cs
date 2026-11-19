@@ -237,6 +237,7 @@ public sealed partial class World
             if (a.State != VehicleState.Wrecked) a.Arms.Update(Step);
             a.HitFlash = Math.Max(0, a.HitFlash - Step);
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
+            a.HitHeatCooldown = Math.Max(0, a.HitHeatCooldown - Step);
             a.AgentContactCooldown = Math.Max(0, a.AgentContactCooldown - Step);
         }
     }
@@ -290,7 +291,7 @@ public sealed partial class World
     /// With <paramref name="announce"/> false only the <see cref="VehicleSpun"/> event goes out, for a second car spun
     /// by the same collision, so one collision shows one message.
     /// </summary>
-    public void Spin(Vehicle v, int dir, string reason, bool announce = true)
+    public void Spin(Vehicle v, int dir, string reason, bool announce = true, Tone? tone = null)
     {
         v.State = VehicleState.Spinning;
         v.StateTimer = 1.8;
@@ -298,7 +299,7 @@ public sealed partial class World
         v.PushVel = dir * (4 + Rng.NextDouble() * 3);
         v.Speed *= 0.8;
         Publish(new VehicleSpun(Time, v.Id, reason));
-        if (announce) Publish(new Message(Time, reason, Tone.Good));
+        if (announce) Publish(new Message(Time, reason, tone ?? (v.Faction is Faction.Civilian or Faction.Police ? Tone.Info : Tone.Good)));
     }
 
     /// <summary>Hurts the player. The Message is skipped when the same reason was messaged less than <paramref name="messageGap"/> seconds ago.</summary>
@@ -365,6 +366,8 @@ public sealed partial class World
             if (hit is null) continue;
             t.Dead = true;
             hit.HitFlash = 0.08;
+            BlamePlayer(hit);
+            OffenceHit(hit, bullet: true);
             if (hit is BossCar boss)
             {
                 DamageBoss(boss, BossGunfireDamage(boss), KillCause.Gunfire, "GUNFIRE");
@@ -412,11 +415,16 @@ public sealed partial class World
         if (car.State == VehicleState.Wrecked || _removals.Contains(car)) return;
         car.State = VehicleState.Wrecked;
         car.StateTimer = 1.5;
-        int points = car.Stats.Points;
+        var faction = car.Faction;
+        int points = faction == Faction.Hostile ? car.Stats.Points : 0;   // civilians and police never change the score
         Score += points;
-        Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points));
-        string name = car is BossCar boss ? boss.Definition.Name : car.Kind.ToString();
-        Publish(new Message(Time, $"{name.ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
+        Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points, faction));
+        if (faction == Faction.Hostile)
+        {
+            string name = car is BossCar boss ? boss.Definition.Name : car.Kind.ToString();
+            Publish(new Message(Time, $"{name.ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
+        }
+        else PublishNonHostileDestroyed(car, faction);
         if (cause.LeavesWreck())
         {
             Hazards.Add(new Wreck
@@ -473,7 +481,7 @@ public sealed partial class World
 
     /// <summary>
     /// FNV-1a 64-bit, in a fixed order, over (numbers to 1e-6): the player's Distance, Lateral, Speed, Armor, GripLoss
-    /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its oil and caltrops
+    /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its player-blame time and hit-heat cooldown, its oil and caltrops
     /// droppers' charges and timers, its missile rack's cooldown and, for a boss, its phase, shield, caltrops slow and
     /// whether it is engaged; every missile's and enemy missile's Distance and Lateral; each hazard's type, Distance and
     /// Lateral, and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat's value and the time since the last offence.
@@ -487,6 +495,7 @@ public sealed partial class World
         {
             Mix(ref h, a);
             Add(ref h, a.Blinded);
+            Add(ref h, a.PlayerBlameUntil); Add(ref h, a.HitHeatCooldown);
             Charged(ref h, a.Arms.Oil);
             Charged(ref h, a.Arms.Caltrops);
             Add(ref h, a.Arms.Missiles?.CooldownLeft ?? -1);

@@ -59,7 +59,11 @@ public static class Collisions
                             if (!boss.HazardsMet.Add(slick)) continue;   // one spin per slick, or a slow boss is pinned on it
                             w.SpinBoss(boss);
                         }
-                        else w.Spin(a, w.Rng.Next(2) == 0 ? -1 : 1, $"{KindName(a)} HIT THE OIL");
+                        else
+                        {
+                            if (!slick.Hostile) w.BlamePlayer(a);        // your own oil
+                            w.Spin(a, w.Rng.Next(2) == 0 ? -1 : 1, $"{KindName(a)} HIT THE OIL");
+                        }
                         break;
                     }
                 }
@@ -96,6 +100,7 @@ public static class Collisions
             if (dz > 0)
             {
                 // The player rear-ended the agent.
+                if (PlayerAtFault(a, rearEnd: true, 0, 0)) Offend(w, a);
                 p.Distance = a.Distance - contactZ;
                 double pv = p.Speed;
                 p.Speed = Math.Max(0, Math.Min(p.Speed, a.Speed) - 1.5);
@@ -122,6 +127,7 @@ public static class Collisions
             int side = dx >= 0 ? 1 : -1;                          // +1: the agent is on the player's right
             double playerInto = Math.Max(0, p.LateralVel * side);
             double agentInto = Math.Max(0, -a.LateralVel * side);
+            if (PlayerAtFault(a, rearEnd: false, playerInto, agentInto)) Offend(w, a);
             Shove(a, side * (3 + 1.3 * playerInto));
             p.PushVel = -side * (2.5 + 1.0 * agentInto);
             a.Lateral += side * overlapX * 0.5;
@@ -132,6 +138,24 @@ public static class Collisions
         }
 
         if (RammedToDeath(a)) w.Destroy(a, KillCause.Rammed);
+    }
+
+    /// <summary>
+    /// Whose fault a contact between the player and <paramref name="a"/> is. The player is at fault for rear-ending a car,
+    /// except a police car that is going slower than its cruise speed (F9: it was held back, e.g. to box you in), and for a
+    /// side contact where it moved into the car more than the car moved into it.
+    /// </summary>
+    static bool PlayerAtFault(AgentCar a, bool rearEnd, double playerInto, double agentInto)
+    {
+        if (rearEnd) return !(a.Faction == Faction.Police && a.Speed < a.CruiseSpeed);
+        return playerInto > agentInto;
+    }
+
+    /// <summary>The player caused this contact: the car blames you for 5 s and a civilian or police car adds heat.</summary>
+    static void Offend(World w, AgentCar a)
+    {
+        w.BlamePlayer(a);
+        w.OffenceHit(a, bullet: false);
     }
 
     // Ramming and car contact never hurt, spin or destroy a boss, and shove it at most 4 m/s (call 19, ENM-3).
@@ -211,9 +235,10 @@ public static class Collisions
             if (closing > AgentSpinClosing)
             {
                 string reason = $"{KindName(a)} AND {KindName(b)} COLLIDED";
+                var tone = a.Faction == Faction.Hostile && b.Faction == Faction.Hostile ? Tone.Good : Tone.Info;
                 bool aSpins = CanBeSpunByContact(a);
-                if (aSpins) w.Spin(a, -side, reason);
-                if (CanBeSpunByContact(b)) w.Spin(b, side, reason, announce: !aSpins);   // one collision, one message
+                if (aSpins) w.Spin(a, -side, reason, tone: tone);
+                if (CanBeSpunByContact(b)) w.Spin(b, side, reason, announce: !aSpins, tone: tone);   // one collision, one message
             }
         }
 

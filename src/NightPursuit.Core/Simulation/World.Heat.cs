@@ -21,6 +21,54 @@ public sealed partial class World
         if (change is { } to) PublishLevelChange(from, to);
     }
 
+    double _lastPoliceShotMessage = double.NegativeInfinity;
+
+    /// <summary>Marks <paramref name="a"/> as hurt by the player: for the next <see cref="HeatRules.BlameSeconds"/> its destruction counts against you.</summary>
+    public void BlamePlayer(AgentCar a) => a.PlayerBlameUntil = Time + HeatRules.BlameSeconds;
+
+    /// <summary>
+    /// The player hit <paramref name="a"/> (a bullet, or a contact that was the player's fault): heat for a civilian or police car, nothing for an enemy.
+    /// Civilians and police never change the score.
+    /// </summary>
+    public void OffenceHit(AgentCar a, bool bullet)
+    {
+        switch (a.Faction)
+        {
+            case Faction.Civilian when a.HitHeatCooldown <= 0:
+                a.HitHeatCooldown = HeatRules.HitCooldown;
+                AddHeat(HeatRules.CivilianHit, "CIVILIAN HIT");
+                Publish(new Message(Time, "CIVILIAN HIT  +10 HEAT", Tone.Bad));
+                break;
+            case Faction.Police when bullet:
+                AddHeat(HeatRules.PoliceShot, "SHOT A POLICE CAR");
+                if (Time - _lastPoliceShotMessage >= HeatRules.HitCooldown)
+                {
+                    _lastPoliceShotMessage = Time;
+                    Publish(new Message(Time, "POLICE CAR SHOT  +5 HEAT", Tone.Bad));
+                }
+                break;
+            case Faction.Police when a.HitHeatCooldown <= 0:
+                a.HitHeatCooldown = HeatRules.HitCooldown;
+                AddHeat(HeatRules.PoliceHit, "HIT A POLICE CAR");
+                Publish(new Message(Time, "POLICE CAR HIT  +15 HEAT", Tone.Bad));
+                break;
+        }
+    }
+
+    /// <summary>A civilian or police car died: heat and a Bad message if you hurt it in the last 5 s, otherwise an Info "crashed" message.</summary>
+    void PublishNonHostileDestroyed(AgentCar car, Faction faction)
+    {
+        bool civilian = faction == Faction.Civilian;
+        string name = civilian ? "CIVILIAN" : "POLICE CAR";
+        if (car.PlayerBlameUntil > Time)
+        {
+            double heat = civilian ? HeatRules.CivilianDestroyed : HeatRules.PoliceDestroyed;
+            AddHeat(heat, civilian ? "CIVILIAN DESTROYED" : "DESTROYED A POLICE CAR");
+            Publish(new Message(Time, $"{name} DESTROYED  +{heat:0} HEAT", Tone.Bad));
+        }
+        else Publish(new Message(Time, $"{name} CRASHED", Tone.Info));
+    }
+
     /// <summary>Runs the meter's decay for this step, publishing a level change if there is one. Runs in StepOnce after the collisions.</summary>
     void StepHeat()
     {

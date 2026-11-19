@@ -21,7 +21,8 @@ public abstract record GameEvent(double Time);
 
 public sealed record Message(double Time, string Text, Tone Tone) : GameEvent(Time);
 
-public sealed record VehicleDestroyed(double Time, int VehicleId, AgentKind Kind, KillCause Cause, int Points) : GameEvent(Time);
+/// <summary><paramref name="Points"/> is 0 for civilians and police, which never change the score.</summary>
+public sealed record VehicleDestroyed(double Time, int VehicleId, AgentKind Kind, KillCause Cause, int Points, Faction Faction = Faction.Hostile) : GameEvent(Time);
 
 public sealed record PlayerDamaged(double Time, double Amount, string Reason) : GameEvent(Time);
 
