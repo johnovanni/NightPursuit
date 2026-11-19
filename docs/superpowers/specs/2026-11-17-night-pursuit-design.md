@@ -376,7 +376,7 @@ invalidate `GameView`. It skips duplicate Rendering calls within one frame, as t
 ### 8.3 Input
 `KeyboardReader` and `XInputPad` produce a `ControlFrame` (held controls) and `GameAction`s (one-off presses).
 Default keys are the prototype's: arrows or WASD to drive, Space for guns, X or Ctrl for the
-selected rear weapon, Tab or Shift to cycle rear weapons (D68), F for missile, V for satellite strike,
+selected rear weapon, Tab to cycle rear weapons (D68), F for missile, V for satellite strike,
 C for cruise, P or Esc to pause. The gamepad mapping is in the help screen.
 
 ### 8.4 Diagnostics (for checking without screen capture)
