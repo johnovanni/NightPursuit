@@ -39,6 +39,8 @@ public sealed partial class World
     public RoadView View { get; } = new();
     public FeelSettings Feel { get; }
     public IRng Rng { get; }
+    /// <summary>Randomness for spawning civilians and police only; never drawn in a mission without them.</summary>
+    public IRng TrafficRng { get; set; } = new SeededRng(7919);
     public PlayerCar Player { get; } = new() { Id = 0 };
     public List<AgentCar> Agents { get; } = new();
     public List<Tracer> Tracers { get; } = new();

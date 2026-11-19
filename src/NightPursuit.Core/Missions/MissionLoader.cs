@@ -32,6 +32,7 @@ public static class MissionLoader
     }
 
     const double MinAllowedRadius = 50;
+    const double MaxCarsPerKm = 12, MaxPresence = 2;
     const double CarSpacing = 40;   // matches MissionDirector
     const double MinBossHealth = 20, MaxBossHealth = 1000;
     const double BehindNear = -30, BehindFar = -450, AheadNear = 30, AheadFar = 1400;
@@ -72,7 +73,44 @@ public static class MissionLoader
 
             BossDefinition? boss = root.TryGetProperty("boss", out var bossEl) ? ReadBoss(bossEl) : null;
 
-            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss);
+            TrafficDefinition? traffic = root.TryGetProperty("traffic", out var trafficEl) ? ReadTraffic(trafficEl) : null;
+            PoliceDefinition? police = root.TryGetProperty("police", out var policeEl) ? ReadPolice(policeEl) : null;
+
+            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss, traffic, police);
+        }
+
+        TrafficDefinition ReadTraffic(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) throw Fail("traffic must be an object");
+            foreach (var prop in el.EnumerateObject())
+                if (prop.Name is not "carsPerKm") throw Fail($"traffic.{prop.Name} is not a known field (carsPerKm)");
+            return new TrafficDefinition(Ranged(el, "carsPerKm", "traffic.carsPerKm", 0, MaxCarsPerKm));
+        }
+
+        /// <summary>No section means no police; a section without presence means presence 1, without startingHeat means 0.</summary>
+        PoliceDefinition ReadPolice(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) throw Fail("police must be an object");
+            foreach (var prop in el.EnumerateObject())
+                if (prop.Name is not ("presence" or "startingHeat"))
+                    throw Fail($"police.{prop.Name} is not a known field (presence, startingHeat)");
+            double presence = el.TryGetProperty("presence", out _) ? Ranged(el, "presence", "police.presence", 0, MaxPresence) : 1;
+            double heat = el.TryGetProperty("startingHeat", out _) ? Ranged(el, "startingHeat", "police.startingHeat", 0, 100) : 0;
+            return new PoliceDefinition(presence, heat);
+        }
+
+        double Ranged(JsonElement obj, string name, string path, double min, double max)
+        {
+            double v = Num(obj, name, path);
+            if (v < min || v > max) throw Fail($"{path} must be from {min} to {max} (got {v})");
+            return v;
+        }
+
+        /// <summary>Waves and boss behaviours are enemy types only, never a civilian or police car.</summary>
+        void RequireEnemyType(AgentKind kind, string path)
+        {
+            if (kind is AgentKind.Runner or AgentKind.Blocker or AgentKind.Pursuer or AgentKind.Gunner or AgentKind.Dropper or AgentKind.Armored) return;
+            throw Fail($"{path} '{kind}' is not an enemy type (Runner, Blocker, Pursuer, Gunner, Dropper, Armored)");
         }
 
         BossDefinition ReadBoss(JsonElement el)
@@ -112,6 +150,7 @@ public static class MissionLoader
 
             var behaviour = Kind(el, "behaviour", $"{p}.behaviour");
             if (behaviour == AgentKind.Boss) throw Fail($"{p}.behaviour 'Boss' is not a behaviour");
+            RequireEnemyType(behaviour, $"{p}.behaviour");
 
             double endsBelow = Num(el, "endsBelow", $"{p}.endsBelow");
             if (endsBelow is < 0 or >= 1) throw Fail($"{p}.endsBelow must be at least 0 and below 1 (got {endsBelow})");
@@ -209,6 +248,7 @@ public static class MissionLoader
 
             var kind = Kind(el, "kind", $"{p}.kind");
             if (kind == AgentKind.Boss) throw Fail($"{p}.kind 'Boss' cannot be a wave (set the boss in \"boss\")");
+            RequireEnemyType(kind, $"{p}.kind");
 
             int count = Int(el, "count", $"{p}.count");
             if (count is < 1 or > 10) throw Fail($"{p}.count must be from 1 to 10 (got {count})");

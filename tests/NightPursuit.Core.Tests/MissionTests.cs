@@ -496,4 +496,66 @@ public class MissionTests
         var json = Valid.Replace("\"count\": 2, \"spawnOffset\": 400", $"\"count\": {count}, \"spawnOffset\": {offset}");
         Assert.Equal(offset, MissionLoader.Load(json, "m.json").Waves[0].SpawnOffset);
     }
+
+    // ---- traffic and police settings
+
+    static string WithSection(string section) => Valid.TrimEnd().TrimEnd('}') + ", " + section + " }";
+
+    const string NotEnemy = " is not an enemy type (Runner, Blocker, Pursuer, Gunner, Dropper, Armored)";
+
+    [Theory]
+    [InlineData("Civilian", "waves[0].kind 'Civilian'")]
+    [InlineData("PolicePatrol", "waves[0].kind 'PolicePatrol'")]
+    public void Only_enemy_types_can_be_waves(string kind, string expected)
+    {
+        var json = Valid.Replace("\"Runner\"", $"\"{kind}\"");
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(json, "m.json"));
+        Assert.Equal("m.json: " + expected + NotEnemy, ex.Message);
+    }
+
+    [Fact]
+    public void Only_enemy_types_can_be_boss_behaviours()
+    {
+        var boss = "\"boss\": { \"name\": \"Test\", \"health\": 100, \"phases\": [ { \"behaviour\": \"Interceptor\", \"endsBelow\": 0.5 }, { \"behaviour\": \"Pursuer\", \"endsBelow\": 0 } ] }";
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(WithSection(boss), "m.json"));
+        Assert.Equal("m.json: boss.phases[0].behaviour 'Interceptor'" + NotEnemy, ex.Message);
+    }
+
+    [Theory]
+    [InlineData("\"traffic\": { \"carsPerKm\": 13 }", "traffic.carsPerKm must be from 0 to 12 (got 13)")]
+    [InlineData("\"traffic\": { \"carsPerKm\": -1 }", "traffic.carsPerKm must be from 0 to 12 (got -1)")]
+    [InlineData("\"traffic\": { \"density\": 3 }", "traffic.density is not a known field (carsPerKm)")]
+    [InlineData("\"traffic\": { }", "traffic.carsPerKm is missing")]
+    [InlineData("\"police\": { \"presence\": 3 }", "police.presence must be from 0 to 2 (got 3)")]
+    [InlineData("\"police\": { \"startingHeat\": -1 }", "police.startingHeat must be from 0 to 100 (got -1)")]
+    [InlineData("\"police\": { \"startingHeat\": 101 }", "police.startingHeat must be from 0 to 100 (got 101)")]
+    [InlineData("\"police\": { \"heat\": 5 }", "police.heat is not a known field (presence, startingHeat)")]
+    public void Bad_traffic_and_police_name_the_field(string section, string expected)
+    {
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(WithSection(section), "m.json"));
+        Assert.Equal("m.json: " + expected, ex.Message);
+    }
+
+    [Fact]
+    public void Traffic_and_police_sections_load_with_their_defaults()
+    {
+        var none = MissionLoader.Load(Valid, "m.json");
+        Assert.Null(none.Traffic);
+        Assert.Null(none.Police);   // no police section: presence 0, no police
+
+        var def = MissionLoader.Load(WithSection("\"traffic\": { \"carsPerKm\": 6.5 }, \"police\": { }"), "m.json");
+        Assert.Equal(6.5, def.Traffic!.CarsPerKm);
+        Assert.Equal(new PoliceDefinition(1, 0), def.Police);   // a section without presence: presence 1
+
+        var full = MissionLoader.Load(WithSection("\"police\": { \"presence\": 2, \"startingHeat\": 55 }"), "m.json");
+        Assert.Equal(new PoliceDefinition(2, 55), full.Police);
+    }
+
+    [Fact]
+    public void Starting_heat_is_applied()
+    {
+        var run = Run(Def() with { Police = new PoliceDefinition(1, 55) });
+        Assert.Equal(55, run.World.Heat.Value);
+        Assert.Equal(NightPursuit.Core.Police.HeatLevel.Patrol, run.World.Heat.Level);
+    }
 }

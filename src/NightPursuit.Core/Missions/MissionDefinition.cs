@@ -15,7 +15,9 @@ public sealed record MissionDefinition(
     IReadOnlyList<WaveDefinition> Waves,
     LoadoutDefinition? StartingLoadout = null,
     IReadOnlyList<CrateDefinition>? Crates = null,
-    BossDefinition? Boss = null)
+    BossDefinition? Boss = null,
+    TrafficDefinition? Traffic = null,
+    PoliceDefinition? Police = null)
 {
     /// <summary>What the player starts with; oil always follows <see cref="StartingOil"/>.</summary>
     public LoadoutDefinition Loadout => (StartingLoadout ?? LoadoutDefinition.Default) with { Oil = StartingOil };
