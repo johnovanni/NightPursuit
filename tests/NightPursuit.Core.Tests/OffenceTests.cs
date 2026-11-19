@@ -141,9 +141,9 @@ public class OffenceTests
         Collisions.Resolve(w);
         Assert.Contains(w.Events, e => e is PlayerDamaged { Reason: "SIDESWIPED" });
         Assert.Equal(95, w.Heat.Value);
-        Assert.Equal(0, w.Heat.SinceOffence);   // set() starts at 0 and nothing reset it; also below
-        Run(w, 10);
-        Assert.Equal(10 * World.Step, w.Heat.SinceOffence, 1e-9);   // not reset by the ram
+        Run(w, 60);
+        Assert.Equal(60 * World.Step, w.Heat.SinceOffence, 1e-9);   // it kept growing through the ram: not reset
+        Assert.Equal(95, w.Heat.Value);
         Assert.Equal(0, interceptor.PlayerBlameUntil);
     }
 
@@ -203,7 +203,48 @@ public class OffenceTests
         Collisions.Resolve(w);
         Assert.Contains(w.Events, e => e is PlayerDamaged { Reason: "RAMMED" });
         Assert.Equal(0, w.Heat.Value);
-        Assert.Equal(0, police.PlayerBlameUntil);
+        Assert.True(police.PlayerBlameUntil > w.Time);   // no heat for the touch, but a death within 5 s is yours
+    }
+
+    [Fact]
+    public void Killing_a_slow_police_car_by_rear_ending_it_counts_against_you()
+    {
+        var w = Straight();
+        w.Player.Speed = 25;
+        var police = Car(w, AgentKind.PoliceCruiser, 0, 0, speed: 30, armor: 0.5);
+        police.Speed = 20;
+        PlaceRearEnded(w, police);
+        Collisions.Resolve(w);
+        Assert.Contains(w.Events, e => e is Message { Text: "POLICE CAR DESTROYED  +40 HEAT", Tone: Tone.Bad });
+        Assert.Equal(40, w.Heat.Value, 1e-9);
+        Assert.Equal(0, w.Score);
+    }
+
+    [Theory]
+    [InlineData(AgentKind.Civilian, 10)]
+    [InlineData(AgentKind.PolicePatrol, 15)]
+    public void Steering_into_a_car_beside_you_is_your_fault(AgentKind kind, double heat)
+    {
+        var w = Straight();
+        w.Player.LateralVel = 2;                       // your own steering, no shove
+        var car = Car(w, kind, 0, 1.5, armor: 1000);
+        Collisions.Resolve(w);
+        Assert.Contains(w.Events, e => e is PlayerDamaged { Reason: "SIDESWIPED" });
+        Assert.Equal(heat, w.Heat.Value, 1e-9);
+        Assert.True(car.PlayerBlameUntil > w.Time);
+    }
+
+    [Fact]
+    public void Being_shoved_into_a_car_by_an_enemy_is_not_your_fault()
+    {
+        var w = Straight();
+        var civilian = Car(w, AgentKind.Civilian, 0, 1.5);         // on your right
+        w.Player.PushVel = 3;                                      // an earlier Runner sideswipe (or enemy oil) shoved you toward it; LateralVel includes the shove
+        w.Player.LateralVel = 3;
+        Collisions.Resolve(w);
+        Assert.Equal(0, w.Heat.Value);
+        Assert.Equal(0, civilian.PlayerBlameUntil);
+        Assert.DoesNotContain(w.Events, e => e is HeatChanged);
     }
 
     [Fact]

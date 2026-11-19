@@ -24,7 +24,10 @@ public sealed partial class World
     double _lastPoliceShotMessage = double.NegativeInfinity;
 
     /// <summary>Marks <paramref name="a"/> as hurt by the player: for the next <see cref="HeatRules.BlameSeconds"/> its destruction counts against you.</summary>
-    public void BlamePlayer(AgentCar a) => a.PlayerBlameUntil = Time + HeatRules.BlameSeconds;
+    public void BlamePlayer(AgentCar a)
+    {
+        if (a.Faction != Faction.Hostile) a.PlayerBlameUntil = Time + HeatRules.BlameSeconds;   // hostiles are never blamed, so their hash terms stay constant
+    }
 
     /// <summary>
     /// The player hit <paramref name="a"/> (a bullet, or a contact that was the player's fault): heat for a civilian or police car, nothing for an enemy.
@@ -37,20 +40,20 @@ public sealed partial class World
             case Faction.Civilian when a.HitHeatCooldown <= 0:
                 a.HitHeatCooldown = HeatRules.HitCooldown;
                 AddHeat(HeatRules.CivilianHit, "CIVILIAN HIT");
-                Publish(new Message(Time, "CIVILIAN HIT  +10 HEAT", Tone.Bad));
+                Publish(new Message(Time, $"CIVILIAN HIT  +{HeatRules.CivilianHit:0} HEAT", Tone.Bad));
                 break;
             case Faction.Police when bullet:
                 AddHeat(HeatRules.PoliceShot, "SHOT A POLICE CAR");
                 if (Time - _lastPoliceShotMessage >= HeatRules.HitCooldown)
                 {
                     _lastPoliceShotMessage = Time;
-                    Publish(new Message(Time, "POLICE CAR SHOT  +5 HEAT", Tone.Bad));
+                    Publish(new Message(Time, $"POLICE CAR SHOT  +{HeatRules.PoliceShot:0} HEAT", Tone.Bad));
                 }
                 break;
             case Faction.Police when a.HitHeatCooldown <= 0:
                 a.HitHeatCooldown = HeatRules.HitCooldown;
                 AddHeat(HeatRules.PoliceHit, "HIT A POLICE CAR");
-                Publish(new Message(Time, "POLICE CAR HIT  +15 HEAT", Tone.Bad));
+                Publish(new Message(Time, $"POLICE CAR HIT  +{HeatRules.PoliceHit:0} HEAT", Tone.Bad));
                 break;
         }
     }

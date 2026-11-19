@@ -100,7 +100,9 @@ public static class Collisions
             if (dz > 0)
             {
                 // The player rear-ended the agent.
-                if (PlayerAtFault(a, rearEnd: true, 0, 0)) Offend(w, a);
+                // A rear-end always blames the car (a death within 5 s is yours), but it only costs heat when it was your fault.
+                w.BlamePlayer(a);
+                if (PlayerAtFault(a, rearEnd: true, 0, 0)) w.OffenceHit(a, bullet: false);
                 p.Distance = a.Distance - contactZ;
                 double pv = p.Speed;
                 p.Speed = Math.Max(0, Math.Min(p.Speed, a.Speed) - 1.5);
@@ -127,7 +129,9 @@ public static class Collisions
             int side = dx >= 0 ? 1 : -1;                          // +1: the agent is on the player's right
             double playerInto = Math.Max(0, p.LateralVel * side);
             double agentInto = Math.Max(0, -a.LateralVel * side);
-            if (PlayerAtFault(a, rearEnd: false, playerInto, agentInto)) Offend(w, a);
+            // Fault counts only the player's own steering: a shove from an enemy or from enemy oil (PushVel) is not the player's doing.
+            double ownInto = Math.Max(0, (p.LateralVel - p.PushVel) * side);
+            if (PlayerAtFault(a, rearEnd: false, ownInto, agentInto)) Offend(w, a);
             Shove(a, side * (3 + 1.3 * playerInto));
             p.PushVel = -side * (2.5 + 1.0 * agentInto);
             a.Lateral += side * overlapX * 0.5;
