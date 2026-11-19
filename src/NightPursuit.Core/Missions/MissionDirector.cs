@@ -1,4 +1,5 @@
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Traffic;
@@ -16,6 +17,8 @@ public enum MissionStage { Approach, Boss }
 public sealed class MissionDirector(MissionDefinition def)
 {
     readonly TrafficDirector? _traffic = def.Traffic is { } t ? new TrafficDirector(t) : null;
+
+    readonly PoliceDispatcher? _police = def.Police is { Presence: > 0 } p ? new PoliceDispatcher(p) : null;
 
     const double WaveSpacing = 40;
 
@@ -63,7 +66,8 @@ public sealed class MissionDirector(MissionDefinition def)
             else SpawnBoss(w, def.Boss);
         }
 
-        _traffic?.Update(w);   // last, so traffic sees this step's boss stage
+        _traffic?.Update(w);   // last, so traffic and police see this step's boss stage
+        _police?.Update(w, Stage);
     }
 
     /// <summary>DIAGNOSTICS ONLY: puts the director in the boss stage with this boss, so the HUD draws the boss bar. The game never calls this.</summary>

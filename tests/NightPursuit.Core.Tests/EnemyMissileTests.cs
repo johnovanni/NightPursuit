@@ -470,7 +470,7 @@ public class EnemyMissileTests
 
     /// <summary>
     /// Steers as the App's diagnostics autopilot does (follows the bend and drifts toward a lane), but heads for the
-    /// nearest lane with no wreck or car just ahead, and when nearly stopped (no turning power) crabs toward it, so a
+    /// nearest lane with no wreck, roadblock barrier or car just ahead, and when nearly stopped (no turning power) crabs toward it, so a
     /// wreck in its lane can't hold it up for the rest of the run.
     /// </summary>
     internal static double AutopilotSteer(World w, double lookAhead = 0)
@@ -490,11 +490,12 @@ public class EnemyMissileTests
     /// A lane with no wreck within 90 m ahead and no car within 60 m ahead: the boss's lane when it is 60-400 m ahead
     /// (to keep it in front of the guns), otherwise the lane nearest the player (the centre one on a tie).
     /// </summary>
-    static double ClearLane(World w)
+    internal static double ClearLane(World w)
     {
         var p = w.Player;
         bool Clear(double lane) =>
             !w.Hazards.Any(h => h is Wreck && h.Distance - p.Distance is > -3 and < 90 && Math.Abs(h.Lateral - lane) < 3)
+            && !w.Hazards.Any(h => h is Roadblock rb && rb.Distance - p.Distance is > -3 and < 150 && rb.Blocks(lane, 1.0))
             && !w.Agents.Any(a => a.Distance - p.Distance is > -3 and < 60 && Math.Abs(a.Lateral - lane) < 3);
         var boss = w.Agents.OfType<BossCar>().FirstOrDefault(b => b.Distance - p.Distance is > 60 and < 400);
         double? bossLane = boss is null ? null : DriverHelpers.NearestLane(boss.Lateral);
