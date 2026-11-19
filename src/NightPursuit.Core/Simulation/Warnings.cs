@@ -70,7 +70,7 @@ public static class Warnings
                     && (blocker is null || dz < blocker.Distance - p.Distance)) blocker = e;
                 if (drivesLike == AgentKind.Gunner && GunnerDriver.IsAiming(e) && dz > 0 && dz <= GunnerRange
                     && Math.Abs(e.Lateral - p.Lateral) < GunnerLane && (gunner is null || dz < gunner.Distance - p.Distance)) gunner = e;
-                if (bossCar is null && dz <= -HostileMinGap && dz >= -HostileRange && e.Speed - p.Speed > HostileClosing
+                if (bossCar is null && e.Faction == Faction.Hostile && dz <= -HostileMinGap && dz >= -HostileRange && e.Speed - p.Speed > HostileClosing
                     && (hostile is null || dz > hostile.Distance - p.Distance)) hostile = e;
             }
         }

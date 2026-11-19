@@ -73,7 +73,7 @@ public static class Collisions
         HazardContacts.Resolve(w);
     }
 
-    static string KindName(AgentCar a) => a.Kind.ToString().ToUpperInvariant();
+    static string KindName(AgentCar a) => KindRules.DisplayName(a.Kind);
 
     static bool Overlaps(Vehicle v, double distance, double lateral, double length, double width) =>
         Math.Abs(distance - v.Distance) < (length + v.Stats.Length) / 2

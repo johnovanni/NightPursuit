@@ -110,6 +110,11 @@ public static class DriverHelpers
         AgentKind.Dropper => 0.5,
         AgentKind.Armored => 0.6,
         AgentKind.Boss => 0.3,
+        AgentKind.Civilian => 0.7,
+        AgentKind.PolicePatrol => 0.5,
+        AgentKind.PoliceCruiser => 0.4,
+        AgentKind.Interceptor => 0.3,
+        AgentKind.ArmoredSuv => 0.5,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no reaction delay for this kind"),
     };
 
@@ -260,6 +265,48 @@ public static class DriverHelpers
         CarAheadMemory memory, double reactionDelay, double dt)
     {
         var ahead = FindCarAhead(self, view, wish.TargetLateral, reactionDelay, out double gap);
+        return Resolve(self, view, wish, memory, reactionDelay, dt, ahead, gap, 0);
+    }
+
+    /// <summary>
+    /// Plain lane driving for civilians and police: hold <paramref name="lane"/> at the car's cruise speed, steer round
+    /// wrecks, then keep clear of the player when the player is ahead.
+    /// </summary>
+    internal static DriveIntent DriveInLane(AgentCar self, WorldView view, double lane, AvoidMemory avoid,
+        CarAheadMemory playerAhead, double dt)
+    {
+        double delay = ReactionDelay(self.Kind);
+        double lateral = SteerAroundWrecks(self, view, lane, avoid, delay, dt);
+        return KeepClearOfPlayerAhead(self, view, new DriveIntent(self.CruiseSpeed, lateral), playerAhead, delay, dt);
+    }
+
+    /// <summary>How far under the player's speed a car follows a player it cannot pass, m/s.</summary>
+    const double PlayerFollowSlower = 2;
+
+    /// <summary>
+    /// <see cref="KeepClearOfCarAhead"/> with the player as the only car ahead, for civilians and police on plain lane
+    /// driving. It changes to a clear neighbouring lane, or with none clear follows at the player's speed - 2 m/s (never
+    /// below 0, so a stopped player is never reversed into). Keep a separate <paramref name="memory"/> for it: the World's
+    /// own <see cref="KeepClearOfCarAhead"/> pass uses <see cref="AgentCar.AheadMemory"/>.
+    /// </summary>
+    public static DriveIntent KeepClearOfPlayerAhead(AgentCar self, WorldView view, DriveIntent wish,
+        CarAheadMemory memory, double reactionDelay, double dt)
+    {
+        var player = view.Player;
+        Vehicle? ahead = null;
+        double gap = 0;
+        if (player.IsOnRoadDriving && IsAhead(self, player, wish.TargetLateral, reactionDelay, out double g))
+        {
+            ahead = player;
+            gap = g;
+        }
+        return Resolve(self, view, wish, memory, reactionDelay, dt, ahead, gap, PlayerFollowSlower);
+    }
+
+    /// <summary>The shared half of the two rules: reacts to <paramref name="ahead"/> (null: nothing in the way) after the reaction delay.</summary>
+    static DriveIntent Resolve(AgentCar self, WorldView view, DriveIntent wish, CarAheadMemory memory,
+        double reactionDelay, double dt, Vehicle? ahead, double gap, double followSlower)
+    {
         bool active = ahead is not null && Math.Abs(wish.TargetLateral - ahead.Lateral) < Band(self, ahead);
         bool follow = false;
         double lateral = 0;
@@ -282,12 +329,12 @@ public static class DriverHelpers
                 memory.Active = active;
                 memory.Follow = follow;
                 memory.Lateral = lateral;
-                memory.Speed = ahead?.Speed ?? 0;
+                memory.Speed = ahead is null ? 0 : Math.Max(0, ahead.Speed - followSlower);
                 memory.Timer = 0;
             }
         }
         // While following, track the leader's current speed, even while a change of answer is pending.
-        if (memory.Follow && ahead is not null) memory.Speed = ahead.Speed;
+        if (memory.Follow && ahead is not null) memory.Speed = Math.Max(0, ahead.Speed - followSlower);
 
         if (!memory.Active) return wish;
         return memory.Follow
@@ -317,17 +364,7 @@ public static class DriverHelpers
         foreach (var other in view.Agents)
         {
             if (ReferenceEquals(other, self) || !other.IsOnRoadDriving) continue;
-            double band = Band(self, other);
-            bool inOwnBand = Math.Abs(other.Lateral - self.Lateral) < band;
-            if (!inOwnBand && Math.Abs(other.Lateral - wishLateral) >= band) continue;
-            double closing = self.Speed - other.Speed;
-            if (closing <= -ClosingSlack) continue;
-            double lengths = self.Stats.Length + other.Stats.Length;
-            double g = other.Distance - self.Distance - lengths / 2;
-            // A car this one is passing (out of its own band, in its wish's band) still counts while alongside,
-            // until this car's rear has cleared its front, so the passer doesn't steer back into its side.
-            double nearest = inOwnBand ? 0 : -lengths;
-            if (g < nearest || g > LookAhead(closing, reactionDelay)) continue;
+            if (!IsAhead(self, other, wishLateral, reactionDelay, out double g)) continue;
             if (best is null || g < gap)
             {
                 best = other;
@@ -338,10 +375,32 @@ public static class DriverHelpers
     }
 
     /// <summary>
+    /// Whether <paramref name="other"/> is a car ahead of <paramref name="self"/> in the sense of <see cref="FindCarAhead"/>
+    /// (in its band or its wish's band, closing, and within the look-ahead); <paramref name="gap"/> is the bumper-to-bumper distance.
+    /// </summary>
+    static bool IsAhead(AgentCar self, Vehicle other, double wishLateral, double reactionDelay, out double gap)
+    {
+        gap = 0;
+        double band = Band(self, other);
+        bool inOwnBand = Math.Abs(other.Lateral - self.Lateral) < band;
+        if (!inOwnBand && Math.Abs(other.Lateral - wishLateral) >= band) return false;
+        double closing = self.Speed - other.Speed;
+        if (closing <= -ClosingSlack) return false;
+        double lengths = self.Stats.Length + other.Stats.Length;
+        double g = other.Distance - self.Distance - lengths / 2;
+        // A car this one is passing (out of its own band, in its wish's band) still counts while alongside,
+        // until this car's rear has cleared its front, so the passer doesn't steer back into its side.
+        double nearest = inOwnBand ? 0 : -lengths;
+        if (g < nearest || g > LookAhead(closing, reactionDelay)) return false;
+        gap = g;
+        return true;
+    }
+
+    /// <summary>
     /// The clear lane 5 m either side of the car's nearest lane that is nearest its wish (ties: nearest the car); null if none.
     /// The car's nearest lane itself also counts once it is out of the car ahead's band (the car is already moving out to pass).
     /// </summary>
-    static double? ClearNeighbourLane(AgentCar self, WorldView view, AgentCar ahead, double wishLateral, double gapAhead)
+    static double? ClearNeighbourLane(AgentCar self, WorldView view, Vehicle ahead, double wishLateral, double gapAhead)
     {
         double home = NearestLane(self.Lateral);
         double? best = null;

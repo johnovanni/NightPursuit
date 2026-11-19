@@ -262,7 +262,7 @@ public sealed partial class World
         {
             if (a.Blinded <= 0)
             {
-                Publish(new Message(Time, $"{a.Kind.ToString().ToUpperInvariant()} LOST YOU IN THE SMOKE", Tone.Good));
+                Publish(new Message(Time, $"{KindRules.DisplayName(a.Kind)} LOST YOU IN THE SMOKE", Tone.Good));
                 a.WanderTimer = 0;                                 // pick a fresh wander target, not one left from an earlier cloud
             }
             a.Blinded = BlindSeconds;

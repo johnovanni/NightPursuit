@@ -2,7 +2,7 @@ namespace NightPursuit.Core.Vehicles;
 
 public enum VehicleState { Driving, Spinning, Crashed, Wrecked }
 
-public enum Faction { Player, Hostile }
+public enum Faction { Player, Hostile, Civilian, Police }
 
 /// <summary>Common state for every car on the road. Positions are in road coordinates (metres along, metres across).</summary>
 public abstract class Vehicle(VehicleStats stats)
