@@ -46,3 +46,7 @@ public sealed record BossPhaseChanged(double Time, int Phase, int PhaseCount, Ag
 public sealed record EnemyMissileLaunched(double Time, int MissileId) : GameEvent(Time);
 /// <summary>Enemy missile <paramref name="MissileId"/> is gone: it hit you, was dodged, or was shot down.</summary>
 public sealed record EnemyMissileEnded(double Time, int MissileId, MissileResult Result) : GameEvent(Time);
+/// <summary>Heat changed by <paramref name="Amount"/> (as asked, before clamping) for <paramref name="Reason"/>; <paramref name="Value"/> is the heat now.</summary>
+public sealed record HeatChanged(double Time, double Amount, double Value, string Reason) : GameEvent(Time);
+/// <summary>The heat level went from <paramref name="From"/> to <paramref name="To"/>.</summary>
+public sealed record HeatLevelChanged(double Time, Police.HeatLevel From, Police.HeatLevel To) : GameEvent(Time);
