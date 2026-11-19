@@ -60,7 +60,7 @@ public sealed class CivilianDriver : IDriver
             s.ModeTimer = DriverHelpers.Countdown(s.ModeTimer, dt);
             if (s.ModeTimer <= 0) s.Mode = Mode.Cruise;
         }
-        if (s.Mode == Mode.Shaken) return new DriveIntent(self.CruiseSpeed * ShakenSpeed, s.ShoulderSide * Shoulder);
+        if (s.Mode == Mode.Shaken) return ToShoulder(self, view, s, ShakenSpeed, dt);
 
         // 2. Pull over: a pursuit nearby sends it to the shoulder; it stays until 3 s without one.
         bool pursuit = PursuitNearby(self, view);
@@ -73,7 +73,7 @@ public sealed class CivilianDriver : IDriver
         {
             s.ModeTimer = pursuit ? 0 : s.ModeTimer + dt;
             if (s.ModeTimer < PullOverReturnSeconds - 1e-9)
-                return new DriveIntent(Math.Min(self.CruiseSpeed, PullOverSpeed), s.ShoulderSide * Shoulder);
+                return ToShoulder(self, view, s, Math.Min(1, PullOverSpeed / Math.Max(self.CruiseSpeed, 1e-9)), dt);
             s.Mode = Mode.Cruise;
         }
 
@@ -91,6 +91,40 @@ public sealed class CivilianDriver : IDriver
         return DriverHelpers.DriveInLane(self, view, s.Lane, s.Avoid, s.PlayerAhead, dt, InSmoke(self, view) ? SmokeSpeed : 1);
     }
 
+    /// <summary>
+    /// Heads for the shoulder on a side whose path is clear (the remembered side first, then the other); with neither
+    /// clear it holds its lane. Either way it still steers round wrecks and keeps clear of a player ahead.
+    /// </summary>
+    static DriveIntent ToShoulder(AgentCar self, WorldView view, State s, double speedFactor, double dt)
+    {
+        int side = s.ShoulderSide;
+        if (!PathClear(self, view, side))
+        {
+            side = -side;
+            if (PathClear(self, view, side)) s.ShoulderSide = side;
+            else side = 0;
+        }
+        double target = side == 0 ? s.Lane : side * Shoulder;
+        return DriverHelpers.DriveInLane(self, view, target, s.Avoid, s.PlayerAhead, dt, speedFactor);
+    }
+
+    const double PathBehind = 15, PathAhead = 40, PathMargin = 0.5;
+
+    /// <summary>No car (the player included) in the lanes between this car and the shoulder on <paramref name="side"/>, from 15 m behind to 40 m ahead.</summary>
+    static bool PathClear(AgentCar self, WorldView view, int side)
+    {
+        bool Blocks(Vehicle other)
+        {
+            if ((other.Lateral - self.Lateral) * side <= PathMargin || other.Lateral * side >= Shoulder + 1) return false;
+            double d = other.Distance - self.Distance, half = (self.Stats.Length + other.Stats.Length) / 2;
+            return d > -(PathBehind + half) && d < PathAhead + half;
+        }
+        if (Blocks(view.Player)) return false;
+        foreach (var other in view.Agents)
+            if (!ReferenceEquals(other, self) && Blocks(other)) return false;
+        return true;
+    }
+
     static int NearerSide(AgentCar self) => self.Lateral < 0 ? -1 : self.Lateral > 0 ? 1 : self.Side;
 
     static bool InSmoke(AgentCar self, WorldView view)
@@ -106,7 +140,7 @@ public sealed class CivilianDriver : IDriver
         if (view.HeatLevel < HeatLevel.Pursuit) return false;
         if (Math.Abs(view.Player.Distance - self.Distance) <= PullOverRange) return true;
         foreach (var other in view.Agents)
-            if (other.Faction == Faction.Police && other.Driver is not PatrolDriver
+            if (other.Faction == Faction.Police && other.State == VehicleState.Driving && other.Driver is not PatrolDriver
                 && Math.Abs(other.Distance - self.Distance) <= PullOverRange) return true;
         return false;
     }

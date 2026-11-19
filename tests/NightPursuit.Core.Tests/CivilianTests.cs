@@ -90,8 +90,10 @@ public class CivilianTests
         Still(w, AgentKind.PoliceCruiser, -100, 5, 30);
         w.Player.Distance = -300;
         int steps = 5 * 120;
-        Run(w, steps, 0, 0, each: () => w.Heat.Set(75));
+        double widest = 0;
+        Run(w, steps, 0, 0, each: () => { w.Heat.Set(75); widest = Math.Max(widest, Math.Abs(civ.Lateral)); });
         Assert.Equal(VehicleState.Driving, civ.State);
+        Assert.True(widest <= 8.5, $"overshot to {widest}");
         Assert.True(Math.Abs(civ.Lateral) >= 7.5, $"lateral {civ.Lateral}");
         Assert.True(civ.Speed <= 12.5, $"speed {civ.Speed}");
     }
@@ -144,10 +146,32 @@ public class CivilianTests
         Still(w, AgentKind.Runner, 100, -5, 30);
         Still(w, AgentKind.Runner, 100, 5, 30);
         w.Player.Distance = 71;
-        Run(w, 60, 40, 0);
+        Run(w, 1, 40, 0);                 // the threat starts the swerve, then drops back so nothing rear-ends the slowed car
+        Run(w, 239, 20, 0);
         Assert.True(Math.Abs(civ.Lateral) < 0.3, $"lateral {civ.Lateral}");
-        Assert.True(civ.Speed < 26, $"speed {civ.Speed}");
+        Assert.True(civ.Speed <= 0.6 * 30 + 0.3, $"speed {civ.Speed}");
         Assert.True(((CivilianDriver.State)civ.DriverState!).SwerveHeld);
+    }
+
+    [Theory]
+    [InlineData(0)]     // alongside in the lane the civilian would cross
+    [InlineData(-10)]   // just behind in it, closing fast
+    public void A_civilian_never_pulls_over_across_the_player(double playerOffset)
+    {
+        var w = Straight();
+        var civ = Civilian(w, 100, 0, 30);          // lane 0, Side +1: it would prefer the +side shoulder
+        Still(w, AgentKind.PoliceCruiser, 0, 5, 30);
+        w.Player.Distance = 100 + playerOffset;
+        bool contact = false;
+        double widest = 0;
+        Run(w, 3 * 120, playerOffset == 0 ? 30 : 50, 5, each: () =>
+        {
+            w.Heat.Set(75);
+            contact |= Touching(w.Player, civ);
+            widest = Math.Max(widest, civ.Lateral);
+        });
+        Assert.False(contact);
+        Assert.True(widest <= 1.0, $"crossed toward the player: {widest}");
     }
 
     [Fact]
