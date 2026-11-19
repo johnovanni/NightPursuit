@@ -8,19 +8,21 @@ namespace NightPursuit.Core.Police;
 /// </summary>
 public sealed class HeatMeter
 {
-    const double RiseFlashSeconds = 0.8;
+    const double RiseFlashSeconds = 1.0;
+    static readonly int FlashSteps = (int)Math.Round(RiseFlashSeconds / World.Step);
     static readonly int DelaySteps = (int)Math.Round(HeatRules.DecayDelay / World.Step);
     static readonly int HoldSteps = (int)Math.Round(HeatRules.MinPoliceLevelSeconds / World.Step);
 
     int _sinceSteps;
     int _levelSteps;
+    int _flashSteps = FlashSteps;   // steps since the last rise; FlashSteps means no flash
 
     public double Value { get; private set; }
     public HeatLevel Level { get; private set; }
     /// <summary>Seconds since the last offence.</summary>
     public double SinceOffence => _sinceSteps * World.Step;
     /// <summary>1 when heat has just risen, counting down to 0 (for the HUD flash).</summary>
-    public double RiseFlash { get; private set; }
+    public double RiseFlash => Math.Max(0, 1 - (double)_flashSteps / FlashSteps);
     /// <summary>Seconds since the level was entered.</summary>
     public double LevelTime => _levelSteps * World.Step;
 
@@ -41,7 +43,7 @@ public sealed class HeatMeter
         double before = Value;
         Value = Math.Clamp(Value + amount, 0, HeatRules.Max);
         _sinceSteps = 0;
-        if (Value > before) RiseFlash = 1;
+        if (Value > before) _flashSteps = 0;
         return Reevaluate();
     }
 
@@ -57,7 +59,7 @@ public sealed class HeatMeter
                 Value = Math.Max(0, Value - (policeNear ? HeatRules.Decay : HeatRules.DecayNoPolice) * World.Step);
             _sinceSteps++;
             _levelSteps++;
-            RiseFlash = Math.Max(0, RiseFlash - World.Step / RiseFlashSeconds);
+            if (_flashSteps < FlashSteps) _flashSteps++;
             if (Reevaluate() is { } c) change = c;
         }
         return change;

@@ -104,7 +104,9 @@ public class HeatTests
         var m = new HeatMeter();
         m.Add(10);
         Assert.Equal(1, m.RiseFlash);
-        UpdateSteps(m, 240, policeNear: true);
+        UpdateSteps(m, 119, policeNear: true);
+        Assert.True(m.RiseFlash > 0);
+        UpdateSteps(m, 1, policeNear: true);   // 120 steps = 1 s
         Assert.Equal(0, m.RiseFlash);
     }
 

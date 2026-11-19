@@ -17,7 +17,7 @@ public sealed partial class World
     {
         var from = Heat.Level;
         var change = Heat.Add(amount);
-        Publish(new HeatChanged(Time, amount, Heat.Value, reason));
+        if (amount != 0) Publish(new HeatChanged(Time, amount, Heat.Value, reason));
         if (change is { } to) PublishLevelChange(from, to);
     }
 
