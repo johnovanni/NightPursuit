@@ -136,13 +136,14 @@ public class OffenceTests
     {
         var w = Straight();
         w.Heat.Set(95);
+        Run(w, 60);
         var interceptor = Car(w, AgentKind.Interceptor, 0, 1.5);
         interceptor.LateralVel = -1.5;
         Collisions.Resolve(w);
         Assert.Contains(w.Events, e => e is PlayerDamaged { Reason: "SIDESWIPED" });
         Assert.Equal(95, w.Heat.Value);
         Run(w, 60);
-        Assert.Equal(60 * World.Step, w.Heat.SinceOffence, 1e-9);   // it kept growing through the ram: not reset
+        Assert.Equal(120 * World.Step, w.Heat.SinceOffence, 1e-9);   // 60 steps before the ram and 60 after: a reset would fail this
         Assert.Equal(95, w.Heat.Value);
         Assert.Equal(0, interceptor.PlayerBlameUntil);
     }
@@ -226,8 +227,9 @@ public class OffenceTests
     public void Steering_into_a_car_beside_you_is_your_fault(AgentKind kind, double heat)
     {
         var w = Straight();
-        w.Player.LateralVel = 2;                       // your own steering, no shove
-        var car = Car(w, kind, 0, 1.5, armor: 1000);
+        w.Player.Speed = 20;
+        w.Player.Heading = Math.Asin(2.0 / 20);        // your own steering: 2 m/s sideways, no shove
+        var car = Car(w, kind, 0, 1.5, speed: 20, armor: 1000);
         Collisions.Resolve(w);
         Assert.Contains(w.Events, e => e is PlayerDamaged { Reason: "SIDESWIPED" });
         Assert.Equal(heat, w.Heat.Value, 1e-9);
@@ -238,13 +240,15 @@ public class OffenceTests
     public void Being_shoved_into_a_car_by_an_enemy_is_not_your_fault()
     {
         var w = Straight();
-        var civilian = Car(w, AgentKind.Civilian, 0, 1.5);         // on your right
-        w.Player.PushVel = 3;                                      // an earlier Runner sideswipe (or enemy oil) shoved you toward it; LateralVel includes the shove
-        w.Player.LateralVel = 3;
-        Collisions.Resolve(w);
+        w.Player.Speed = 20;
+        w.Player.PushVel = 3;                          // an earlier Runner sideswipe (or enemy oil) shoved you to the right
+        double halfW = (VehicleStats.Civilian.Width + w.Player.Stats.Width) / 2;
+        var civilian = Car(w, AgentKind.Civilian, 0, halfW + 0.3, speed: 20);   // about 0.3 m outside side contact
+        var events = Collect(w, 120);
+        Assert.Contains(events, e => e is PlayerDamaged { Reason: "SIDESWIPED" });   // they did touch
         Assert.Equal(0, w.Heat.Value);
         Assert.Equal(0, civilian.PlayerBlameUntil);
-        Assert.DoesNotContain(w.Events, e => e is HeatChanged);
+        Assert.DoesNotContain(events, e => e is HeatChanged);
     }
 
     [Fact]

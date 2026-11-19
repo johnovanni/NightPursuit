@@ -129,8 +129,9 @@ public static class Collisions
             int side = dx >= 0 ? 1 : -1;                          // +1: the agent is on the player's right
             double playerInto = Math.Max(0, p.LateralVel * side);
             double agentInto = Math.Max(0, -a.LateralVel * side);
-            // Fault counts only the player's own steering: a shove from an enemy or from enemy oil (PushVel) is not the player's doing.
-            double ownInto = Math.Max(0, (p.LateralVel - p.PushVel) * side);
+            // Fault counts only the player's own steering, read from its source (speed and heading): LateralVel also holds the
+            // decaying push from an enemy or from enemy oil, which is not the player's doing.
+            double ownInto = Math.Max(0, p.Speed * Math.Sin(p.Heading) * side);
             if (PlayerAtFault(a, rearEnd: false, ownInto, agentInto)) Offend(w, a);
             Shove(a, side * (3 + 1.3 * playerInto));
             p.PushVel = -side * (2.5 + 1.0 * agentInto);
@@ -149,10 +150,13 @@ public static class Collisions
     /// except a police car that is going slower than its cruise speed (F9: it was held back, e.g. to box you in), and for a
     /// side contact where it moved into the car more than the car moved into it.
     /// </summary>
+    /// <summary>Sideways speed (m/s) of the player's own steering below which a side contact is not blamed on it (lane-keeping corrections).</summary>
+    const double OwnSteeringDeadBand = 0.5;
+
     static bool PlayerAtFault(AgentCar a, bool rearEnd, double playerInto, double agentInto)
     {
         if (rearEnd) return !(a.Faction == Faction.Police && a.Speed < a.CruiseSpeed);
-        return playerInto > agentInto;
+        return playerInto > OwnSteeringDeadBand && playerInto > agentInto;
     }
 
     /// <summary>The player caused this contact: the car blames you for 5 s and a civilian or police car adds heat.</summary>
