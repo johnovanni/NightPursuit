@@ -51,3 +51,7 @@ public sealed record EnemyMissileEnded(double Time, int MissileId, MissileResult
 public sealed record HeatChanged(double Time, double Amount, double Value, string Reason) : GameEvent(Time);
 /// <summary>The heat level went from <paramref name="From"/> to <paramref name="To"/>.</summary>
 public sealed record HeatLevelChanged(double Time, Police.HeatLevel From, Police.HeatLevel To) : GameEvent(Time);
+/// <summary>The player passed a speed trap over its limit, at <paramref name="Mph"/> in a <paramref name="LimitMph"/> zone.</summary>
+public sealed record SpeedTrapPassed(double Time, double Mph, double LimitMph) : GameEvent(Time);
+/// <summary>The player drove into a roadblock for the first time.</summary>
+public sealed record RoadblockHit(double Time) : GameEvent(Time);

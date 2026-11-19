@@ -1,4 +1,5 @@
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 
@@ -16,6 +17,8 @@ public static class Collisions
     const double WreckHitSpeed = 5;
     const double FirstHitPushBack = 1;
     const double CrabSpeed = 3;
+    const double RoadblockCrabSpeed = 5;
+    const double RoadblockDamage = 25;
     const double OffRoadLimit = Track.RoadHalfWidth + 1.0;
     const double AgentReach = 6.5;              // longer than any two cars' half lengths added together
     const double AgentRearEndDamage = 0.5;
@@ -43,6 +46,15 @@ public static class Collisions
                 }
                 else w.Destroy(a, KillCause.WreckCollision);
                 break;
+            }
+            if (a.IsOnRoadDriving && a is not BossCar)       // a boss is never destroyed by a roadblock (they are cleared when its stage starts)
+            {
+                foreach (var h in w.Hazards)
+                {
+                    if (h is not Roadblock rb || !rb.Touches(a.Distance, a.Lateral, a.Stats.Length, a.Stats.Width)) continue;
+                    w.Destroy(a, KillCause.WreckCollision);
+                    break;
+                }
             }
             if (!a.IsOnRoadDriving) continue;
 
@@ -74,6 +86,7 @@ public static class Collisions
         }
 
         if (p.State != VehicleState.Wrecked) PlayerVsWrecks(w);
+        if (p.State != VehicleState.Wrecked) PlayerVsRoadblocks(w);
         HazardContacts.Resolve(w);
     }
 
@@ -145,18 +158,19 @@ public static class Collisions
         if (RammedToDeath(a)) w.Destroy(a, KillCause.Rammed);
     }
 
-    /// <summary>
-    /// Whose fault a contact between the player and <paramref name="a"/> is. The player is at fault for rear-ending a car,
-    /// except a police car that is going slower than its cruise speed (F9: it was held back, e.g. to box you in), and for a
-    /// side contact where it moved into the car more than the car moved into it.
-    /// </summary>
     /// <summary>Sideways speed (m/s) of the player's own steering below which a side contact is not blamed on it (lane-keeping corrections).</summary>
     const double OwnSteeringDeadBand = 0.5;
 
-    static bool PlayerAtFault(AgentCar a, bool rearEnd, double playerInto, double agentInto)
+    /// <summary>
+    /// Whose fault a contact between the player and <paramref name="a"/> is. The player is at fault for rear-ending a car,
+    /// except a police car that is going slower than its cruise speed (F9: it was held back, e.g. to box you in), and for a
+    /// side contact where its own steering moved it into the car (<paramref name="ownInto"/>, above the 0.5 m/s dead band)
+    /// more than the car moved into it (<paramref name="agentInto"/>).
+    /// </summary>
+    static bool PlayerAtFault(AgentCar a, bool rearEnd, double ownInto, double agentInto)
     {
         if (rearEnd) return !(a.Faction == Faction.Police && a.Speed < a.CruiseSpeed);
-        return playerInto > OwnSteeringDeadBand && playerInto > agentInto;
+        return ownInto > OwnSteeringDeadBand && ownInto > agentInto;
     }
 
     /// <summary>The player caused this contact: the car blames you for 5 s and a civilian or police car adds heat.</summary>
@@ -274,23 +288,65 @@ public static class Collisions
                 w.DamagePlayer(WreckDamage, "HIT A WRECK");
             }
 
-            double dz = wreck.Distance - p.Distance, dx = p.Lateral - wreck.Lateral;
-            double contactZ = (wreck.Length + p.Stats.Length) / 2, halfW = (wreck.Width + p.Stats.Width) / 2;
-            double overlapZ = contactZ - Math.Abs(dz), overlapX = halfW - Math.Abs(dx);
-            if (overlapX / halfW < overlapZ / contactZ)
+            HoldAtBox(p, wreck.Distance, wreck.Lateral, wreck.Length, wreck.Width, wreck.Speed, CrabSpeed, firstHit);
+        }
+    }
+
+    /// <summary>
+    /// Keeps the player out of a solid box (a wreck, or one blocked span of a roadblock). Hit from behind, the player is held back to the
+    /// box's rear edge, moving no faster than <paramref name="boxSpeed"/>, and crabs sideways at <paramref name="crab"/> m/s when steering;
+    /// hit from the side, it is pushed out sideways along the shallower overlap, so the box can never be driven through.
+    /// </summary>
+    static void HoldAtBox(PlayerCar p, double distance, double lateral, double length, double width, double boxSpeed, double crab, bool firstHit)
+    {
+        double dz = distance - p.Distance, dx = p.Lateral - lateral;
+        double contactZ = (length + p.Stats.Length) / 2, halfW = (width + p.Stats.Width) / 2;
+        double overlapZ = contactZ - Math.Abs(dz), overlapX = halfW - Math.Abs(dx);
+        if (overlapX / halfW < overlapZ / contactZ)
+        {
+            int side = dx > 0 || (dx == 0 && p.LateralVel >= 0) ? 1 : -1;     // which side of the box the player is on
+            p.Lateral = lateral + side * halfW;
+            if (p.LateralVel * side < 0) p.LateralVel = 0;
+            if (p.PushVel * side < 0) p.PushVel = 0;
+        }
+        else if (dz > 0)
+        {
+            // Held back at the box's rear edge (1 m further back on the first hit, so the car isn't nose-in).
+            p.Distance = distance - contactZ - (firstHit ? FirstHitPushBack : 0);
+            p.Speed = Math.Min(p.Speed, boxSpeed);
+            // Speed is now ~0, so steering has no turning power: crab sideways round the box instead.
+            if (Math.Abs(p.Steer) > 0.05) p.Lateral += Math.Sign(p.Steer) * crab * World.Step;
+        }
+    }
+
+    /// <summary>
+    /// The first touch of a roadblock costs 25 armor and 15 heat and nearly stops the car; after that its two blocked spans just block,
+    /// like a wreck, and steering crabs you along them at 5 m/s toward the gap.
+    /// </summary>
+    static void PlayerVsRoadblocks(World w)
+    {
+        var p = w.Player;
+        foreach (var h in w.Hazards)
+        {
+            if (h is not Roadblock rb || !rb.Touches(p.Distance, p.Lateral, p.Stats.Length, p.Stats.Width)) continue;
+
+            bool firstHit = !rb.HitPlayer;
+            if (firstHit)
             {
-                int side = dx > 0 || (dx == 0 && p.LateralVel >= 0) ? 1 : -1;     // which side of the wreck the player is on
-                p.Lateral = wreck.Lateral + side * halfW;
-                if (p.LateralVel * side < 0) p.LateralVel = 0;
-                if (p.PushVel * side < 0) p.PushVel = 0;
+                rb.HitPlayer = true;
+                p.Speed = Math.Min(p.Speed, WreckHitSpeed);
+                p.Shake = 0.5;
+                w.DamagePlayer(RoadblockDamage, "HIT A ROADBLOCK");
+                w.AddHeat(HeatRules.RoadblockHit, "ROADBLOCK");
+                w.Publish(new Message(w.Time, $"ROADBLOCK  +{HeatRules.RoadblockHit:0} HEAT", Tone.Bad));
+                w.Publish(new RoadblockHit(w.Time));
             }
-            else if (dz > 0)
+
+            for (int i = 0; i < Track.LaneCentres.Length; i++)
             {
-                // Held back at the wreck's rear edge (1 m further back on the first hit, so the car isn't nose-in).
-                p.Distance = wreck.Distance - contactZ - (firstHit ? FirstHitPushBack : 0);
-                p.Speed = Math.Min(p.Speed, wreck.Speed);
-                // Speed is now ~0, so steering has no turning power: crab sideways round the wreck instead.
-                if (Math.Abs(p.Steer) > 0.05) p.Lateral += Math.Sign(p.Steer) * CrabSpeed * World.Step;
+                if (i == rb.GapLane) continue;
+                if (!Overlaps(p, rb.Distance, Track.LaneCentres[i], Roadblock.Depth, 2 * Roadblock.BarrierHalfWidth)) continue;
+                HoldAtBox(p, rb.Distance, Track.LaneCentres[i], Roadblock.Depth, 2 * Roadblock.BarrierHalfWidth, 0, RoadblockCrabSpeed, firstHit);
             }
         }
     }

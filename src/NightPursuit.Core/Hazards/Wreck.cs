@@ -1,7 +1,7 @@
 namespace NightPursuit.Core.Hazards;
 
 /// <summary>A burning car left by gunfire. It slides to a stop in its lane (decision D4).</summary>
-public sealed class Wreck : Hazard
+public sealed class Wreck : Hazard, ILaneBlocker
 {
     public const double Friction = 25;
     public const double ClearBehind = 600;
@@ -16,6 +16,10 @@ public sealed class Wreck : Hazard
     /// <summary>Seconds burning; drives the flicker effect.</summary>
     public double Burn { get; set; }
     public bool HitPlayer { get; set; }
+
+    /// <summary>The avoidance test: a car with this half width centred at <paramref name="lateral"/> must steer round (0.3 m margin).</summary>
+    public bool Blocks(double lateral, double halfWidth) =>
+        Math.Abs(Lateral - lateral) < (Width + 2 * halfWidth) / 2 + 0.3;
 
     public override void Update(double dt, double playerDistance)
     {

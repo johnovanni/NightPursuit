@@ -31,7 +31,8 @@ public sealed class CarAheadMemory
 
 public static class DriverHelpers
 {
-    const double Margin = 0.3;
+    /// <summary>Seconds of travel a car looks ahead for a roadblock (at least the wreck look-ahead of 120 m).</summary>
+    const double RoadblockLookAheadSeconds = 5;
     const double Same = 1e-9;
 
     /// <summary>
@@ -67,10 +68,12 @@ public static class DriverHelpers
     {
         foreach (var h in view.Hazards)
         {
-            if (h is not Wreck wreck) continue;
-            double ahead = wreck.Distance - self.Distance;
-            if (ahead <= 0 || ahead >= lookAhead) continue;
-            if (Math.Abs(wreck.Lateral - lateral) < (wreck.Width + self.Stats.Width) / 2 + Margin) return true;
+            if (h is not ILaneBlocker blocker) continue;
+            double ahead = blocker.Distance - self.Distance;
+            // A car in the far lane needs time to cross to a roadblock's gap, so it looks further ahead at speed.
+            double reach = h is Roadblock ? Math.Max(lookAhead, self.Speed * RoadblockLookAheadSeconds) : lookAhead;
+            if (ahead <= 0 || ahead >= reach) continue;
+            if (blocker.Blocks(lateral, self.Stats.Width / 2)) return true;
         }
         return false;
     }
@@ -284,7 +287,7 @@ public static class DriverHelpers
     /// The neighbouring lane centre (5 m either side of the car's nearest lane) with no car (the player included, wrecked
     /// cars too) and no wreck from <paramref name="behind"/> metres behind to <paramref name="ahead"/> metres ahead of
     /// <paramref name="self"/>. When both are free the one on <paramref name="preferSide"/> (-1 or +1) wins; null when
-    /// neither is free. (Roadblocks join the check in Task 6.)
+    /// neither is free. A roadblock counts through its blocked lanes, as a wreck does.
     /// </summary>
     public static double? FreeNeighbourLane(AgentCar self, WorldView view, double behind, double ahead, int preferSide)
     {
@@ -312,10 +315,10 @@ public static class DriverHelpers
             if (!ReferenceEquals(other, self) && Overlaps(other)) return false;
         foreach (var h in view.Hazards)
         {
-            if (h is not Wreck wreck) continue;
-            double d = wreck.Distance - self.Distance;
+            if (h is not ILaneBlocker blocker) continue;
+            double d = blocker.Distance - self.Distance;
             if (d <= -behind || d >= ahead) continue;
-            if (Math.Abs(wreck.Lateral - lane) < (wreck.Width + self.Stats.Width) / 2 + Margin) return false;
+            if (blocker.Blocks(lane, self.Stats.Width / 2)) return false;
         }
         return true;
     }

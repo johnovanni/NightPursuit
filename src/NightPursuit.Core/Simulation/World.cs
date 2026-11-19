@@ -155,6 +155,7 @@ public sealed partial class World
             if (Player.Armor <= 0) WreckPlayer("SCRAPED TO PIECES");     // guard-rail scraping drains armor in StepPlayer
         }
 
+        if (Player.State != VehicleState.Wrecked) CheckSpeedTraps();
         StepWeapons(input);
         Loadout.Update(Step);
         StepMissiles();
@@ -162,6 +163,7 @@ public sealed partial class World
         StepHazards();
         StepAgents();
         Collisions.Resolve(this);
+        ClearBlockedRoadblocks();
         StepHeat();
         StepEnemyMissiles();            // after every move of the player this step, collisions too
 
@@ -490,7 +492,7 @@ public sealed partial class World
     /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its player-blame time and hit-heat cooldown, its oil and caltrops
     /// droppers' charges and timers, its missile rack's cooldown and, for a boss, its phase, shield, caltrops slow and
     /// whether it is engaged; every missile's and enemy missile's Distance and Lateral; each hazard's type, Distance and
-    /// Lateral, and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat's value and the time since the last offence.
+    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat's value and the time since the last offence.
     /// </summary>
     public ulong StateHash()
     {
@@ -516,6 +518,8 @@ public sealed partial class World
         {
             foreach (char c in z.GetType().Name) { h ^= c; h *= 1099511628211UL; }
             Add(ref h, z.Distance); Add(ref h, z.Lateral);
+            if (z is SpeedTrap trap) Add(ref h, (trap.Triggered ? 1 : 0) + (trap.Caught ? 2 : 0));
+            else if (z is Roadblock block) Add(ref h, block.HitPlayer ? 1 : 0);
         }
         Add(ref h, Hazards.Count);
         Charged(ref h, Loadout.Oil);

@@ -9,7 +9,7 @@ public static class SpawnSpots
 {
     /// <summary>Nearest another car may be in the same lane, metres.</summary>
     public const double CarGap = 40;
-    /// <summary>Nearest a wreck (in any lane) may be, metres. Task 6 adds roadblocks.</summary>
+    /// <summary>Nearest a wreck or roadblock (in any lane) may be, metres.</summary>
     public const double WreckGap = 60;
     /// <summary>Nearest a hazard in the same lane may be, metres.</summary>
     public const double HazardGap = 30;
@@ -24,7 +24,7 @@ public static class SpawnSpots
         foreach (var h in w.Hazards)
         {
             double gap = Math.Abs(h.Distance - distance);
-            if (h is Wreck) { if (gap < WreckGap) return false; }
+            if (h is ILaneBlocker) { if (gap < WreckGap) return false; }
             else if (Math.Abs(h.Lateral - lane) < LaneHalfWidth && gap < HazardGap) return false;
         }
         return true;
