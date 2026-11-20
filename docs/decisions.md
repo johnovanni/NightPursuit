@@ -616,7 +616,8 @@ traffic). The game keeps about twice that many cars in the 2 km around you. Miss
 **D76. Police settings in the mission file.** `"police": { "presence": p, "startingHeat": h }`.
 - `presence` runs from 0 to 2: 0 is no police, 1 is normal, 2 is twice as many. A mission with no police section has
   no police; a police section that leaves `presence` out gets 1.
-- `startingHeat` runs from 0 to 100, and is 0 if left out.
+- `startingHeat` runs from 0 to 100, and is 0 if left out. With presence 0 it must be 0, since no police would ever
+  come; a file that gives one is refused with "police.startingHeat must be 0 when police.presence is 0".
 - Mission 1 has presence 1 and starts at heat 0. The patrol ground starts at 85 (D89, D100).
 
 Police only come onto the road once your heat reaches Patrol (50). So in mission 1 you meet them only if you push your
@@ -631,7 +632,12 @@ heat that high, for example by hurting civilians.
   heat falls 5 below it (under 20, 45, 65 or 85). Patrol, Pursuit and Manhunt each last at least 20 s once reached.
   Heat comes down one level at a time.
 - Without the hold, a pursuit could end before the cruisers had even arrived. For example, on the patrol ground
-  (starting at 85, Pursuit), if you commit no offence at all, Pursuit lasts 20 s and then drops to Patrol.
+  (starting at 85, Pursuit), if you commit no offence at all, Pursuit lasts 20 s from when you move off and then drops
+  to Patrol.
+- At the start of a mission with police, nothing happens until you first drive faster than 5 mph: the heat doesn't
+  fall, the time in its level doesn't count, and no police, speed traps or roadblocks come. So you can read the start
+  help in peace. Offences still add heat. A respawn doesn't hold the heat again.
+- A mission that starts at Patrol or above says its level once at the start, for example "HEAT: PURSUIT" (D87).
 - A bust sets the heat straight to 50 instead (D84).
 
 The design's check "three civilian hits reach Patrol level" doesn't work from 0 (D97).
@@ -663,6 +669,11 @@ The design's check "three civilian hits reach Patrol level" doesn't work from 0 
   it at 5 m/s to get round, so you are past it well inside the 3 s busted countdown.
 - Other cars see it from 120 m, or from 5 s away at their speed if that is further, and steer for the gap. Any other car
   that touches a barrier is wrecked.
+- So that they have time to do that, a roadblock is never put down with a car in a lane it would block, from 150 m
+  before it (or 5 s at that car's speed, if further) up to the barrier itself. The gap goes in a lane where no car is
+  in the way: usually a car's own lane. If no lane clear of wrecks will do, it waits and tries again at the next
+  moment, still 800 m ahead of you. In 120 test starts on the patrol ground it never had to wait. (Before this, the
+  first roadblock on the patrol ground landed on a civilian in 12 of 20 test runs; now in none of 20.)
 - If a wreck lands in its gap lane, anywhere from 150 m before it to 30 m after it, the roadblock is removed at once:
   "ROADBLOCK CLEARED".
 - Within 150 m before a roadblock (or 5 s at your speed), chasing police drop back behind you, so none of them is
@@ -694,7 +705,10 @@ The design's check "three civilian hits reach Patrol level" doesn't work from 0 
   - **Side** holds level with you in the lane beside you, at your speed but never slower than 3 m/s, so it rolls on
     past you if you stop. It never steers within 2.7 m of your line.
 - The rest **Trail** you: in your lane about 20 m behind, more at speed (about 47 m at 100 mph) so it can stop if you
-  brake hard. When you're below 5 m/s (11 mph) it stops 6 m behind you, bumper to bumper.
+  brake hard. When you're below 5 m/s (11 mph) it stops 6 m behind you, bumper to bumper. A Trail car that is more
+  than 30 m ahead of you (it was the Front car, say) never goes slower than 8 m/s (18 mph) while it drops back, so it
+  drives on rather than stop dead in its lane ahead of you when you're slow (it still stops short of a wreck or
+  roadblock in its way).
 - They never ram at Pursuit level.
 
 D114 says how the box-in stays safe when you brake.
@@ -731,11 +745,17 @@ Pursuit level.
 
 **D84. Busted (HT-6).**
 - It can only happen at Pursuit or above.
-- You're below 5 mph with a police car within 15 m of you (in a straight line, centre to centre) for 3 s. A blinded
-  or spun police car doesn't count.
+- You're below 5 mph with a police car that is chasing you within 15 m of you (in a straight line, centre to centre)
+  for 3 s. Trail and Front cars, interceptors and SUVs count. These don't:
+  - the Side car: it rolls on past you at 3 m/s when you stop, so on its own it busted you whenever you braked to a
+    stop to get out of a box-in (in all 10 test runs that braked to a stop from 18 mph);
+  - a patrol car, or a chaser that has backed off (D83): they are just traffic, and aren't chasing you;
+  - a blinded or spun police car.
 - "BUSTED IN 3", then 2, then 1, shows large in red on a dark box from the very first moment, with "SPEED UP TO BREAK
   FREE" under it.
-- Going above 5 mph cancels it, and "BROKE FREE" shows.
+- The countdown stops when you go above 5 mph, when no chasing police car is within 15 m any more (it drove on, it
+  was blinded by smoke or spun out, or it became the Side car), or when the heat drops below Pursuit. Whichever it is,
+  "BROKE FREE" shows. (Being wrecked doesn't count as breaking free.)
 - Nothing counts while you're wrecked or respawning, or while the game is paused. It doesn't count until you've first
   driven faster than 5 mph (D101).
 - A bust costs a spare car, as a wreck does: a "BUSTED" banner and "BUSTED - YOU LOSE A SPARE CAR".
@@ -785,6 +805,8 @@ units tall to make room).
 - Every level change also gives exactly one message, such as "HEAT: PURSUIT", "HEAT: WATCHED - THE POLICE ARE TAKING
   NOTE" or "HEAT DOWN: PATROL". That's because a banner can be held back: by a boss banner or the BUSTED banner (D62),
   or when another banner went up less than 1 s before.
+- A mission that starts at Patrol or above gives that level's message once at the start ("HEAT: PURSUIT" on the
+  patrol ground), with no banner, since the level didn't change.
 
 *Cost to change:* drawing and text only.
 
@@ -801,8 +823,9 @@ HEAT". A roadblock also shows "HIT A ROADBLOCK", as other damage does. When it w
   boss, the Night Heron: 120 health, a Blocker phase, then a Runner phase. The approach is 5 km.
 - You start with 5 oil, 3 smoke, 3 caltrops, 2 missiles and 1 strike.
 - Right at the start, one bullet on a police car (+5) takes you to Manhunt.
-- The game runs while the start help is showing, so the heat starts falling 5 s after the mission opens, and if you
-  wait, Pursuit ends after 20 s (D77). Press the gas soon if you want to meet the pursuit at once.
+- The game runs while the start help is showing, but the heat and the police wait until you first drive faster than
+  5 mph (D77): the heat stays at 85 and the chasers arrive the moment you move off. Without an offence, Pursuit then
+  lasts 20 s.
 
 The real missions 2–6 come in Plan 4.
 *Cost to change:* none; it's a separate file.
@@ -863,14 +886,18 @@ and a car running into the back of you never counts.
 *Cost to change:* one number.
 
 **D99. Two police bumps that aren't your fault, and when they still cost you.**
-- Running into the back of a police car isn't your fault when it's going slower than its usual cruising speed (it was
-  put there, or held back, to slow you), or when it's the Front car boxing you in. Without this, holding the gas behind
+- Running into the back of a police car isn't your fault when it's going slower than its cruising speed (it was put
+  there, or held back, to slow you), or when it's the Front car boxing you in. Without this, holding the gas behind
   the Front car gave +15 every second, and Pursuit became Manhunt within about 2 s of touching it.
 - The bump still counts as yours for 5 s, though: if your ramming destroys that police car within 5 s, it costs +40.
   So ramming the Front car to death costs +40 heat (HT-7 says "ramming raises heat"). Braking and swerving stay free
   ways out.
 - Running into the back of a police car that has backed off and is still slowing down to 25 m/s is your fault: it's
   braking ahead of you, still faster than its cruising speed.
+- Every car chasing you (cruisers, interceptors, SUVs, and patrol cars once they chase) has the same cruising speed,
+  30 m/s (67 mph), whatever your speed when it came, so the first rule doesn't depend on that. A patrol car cruises at
+  its own 28–32 m/s, and one that has backed off at 25 m/s. Their chasing speeds come from their places in the chase
+  (D81, D82), not from this. A blinded chaser slows to 60% of it, 18 m/s (40 mph), as in D27.
 
 This bends HT-3's "ramming them always raises heat" in those two cases; say if you want it back.
 *Cost to change:* one rule.
@@ -878,13 +905,14 @@ This bends HT-3's "ramming them always raises heat" in those two cases; say if y
 **D100. The police arrive closer, and the patrol ground starts hotter.** Cruisers, interceptors and SUVs appear
 150–250 m behind you, not 350–450 m as planned. From 350–450 m a cruiser took about 27 s to reach you (about 44 s near
 top speed), longer than Pursuit's 20 s hold, so a pursuit could end before it arrived. 150–250 m is still beyond the
-120 m at which "POLICE BEHIND" shows. If a mission starts at Pursuit or above, all its chasers are there from the first
-moment. The patrol ground starts at heat 85, not 75. Both are tuning numbers for you to judge.
+120 m at which "POLICE BEHIND" shows. If a mission starts at Pursuit or above, all its chasers are there from the
+moment you first move off (D77). The patrol ground starts at heat 85, not 75. Both are tuning numbers for you to judge.
 *Cost to change:* two numbers.
 
 **D101. You can't be busted before you've moved.** The busted countdown doesn't start until you've first driven faster
 than 5 mph since the mission start or your last respawn. The game runs while the start help is up, so without this a
-police car could have stopped behind you and busted you while you were still reading.
+police car could have stopped behind you and busted you while you were still reading. At the mission start the heat and
+the police wait for that first move too (D77).
 *Cost to change:* one line.
 
 **D102. Going round a roadblock on the shoulder is allowed.** The barriers end 7.3 m from the middle of the road; the
@@ -914,7 +942,8 @@ it; here HT-7 means a way out ahead of you.
   way.
 - A formed pair breaks up when an SUV has sat in the gap for 2 s (pushed there, or stuck), when an SUV within 60 m of
   you has been off its lane for 3 s (after 4 s to settle in), when an SUV is wrecked, blinded or gone, or when a wreck
-  or roadblock blocks an SUV's lane within 120 m ahead of it. Both SUVs then chase you as Trail.
+  or roadblock blocks an SUV's lane, or the open lane, within 120 m ahead of an SUV (with the open lane blocked you'd
+  have no way past). Both SUVs then chase you as Trail.
 - After a pair breaks, a new one comes no sooner than 20 s later, and only once both old SUVs are gone (wrecked, left
   behind, or backed off). Never more than 2 SUVs chase you at once; SUVs that have backed off don't count, so more
   than 2 can be on the road.
@@ -985,8 +1014,9 @@ level name is always written beside the bar too.
   still stop if you brake as hard as you can.
 - Places in the box stick: a car keeps its place while it's chasing, and Front and Side swap only when Side gets more
   than 10 m ahead of Front.
-- Side never goes slower than 3 m/s, so it rolls past you if you stop. But if you stop right beside it, rolling at
-  3 m/s it stays within 15 m of you for up to about 5 s, so it can bust you.
+- Side never goes slower than 3 m/s, so it rolls past you if you stop. If you stop right beside it, rolling at 3 m/s it
+  stays within 15 m of you for up to about 5 s, but the Side car never counts toward a bust (D84), so braking to a stop
+  is a safe way out of a box-in. A Trail car that stops behind you still counts.
 
 *Cost to change:* a few numbers.
 
@@ -1031,6 +1061,10 @@ New from Plan 3:
 - Right after cars bump at Manhunt level, police can briefly cover all three lanes. The tests allow up to 3 s of this a
   minute, and one run came close to that. These and D104 are the known times the three-lane rule (D85) gives way.
 - Interceptors ram about twice a minute in the tests (D106).
+- On a mission that starts at Patrol or above, the police come onto the road the moment you first move off (D77), all
+  at once, from 400 m behind you to 1450 m ahead. So a patrol car can appear in sight ahead of you at that moment,
+  where other cars never pop into view (D75). Please judge whether it shows; if it does, they could be put on the road
+  at the start and held still until you move.
 - In a very small window (320×200) the BUSTED box sits over the weapon panel and a warning over the mirror's label.
   Tiny windows were already crowded before Plan 3.
 - The long stress run never happens to show a formed rolling roadblock (the test pictures do), and the automatic
@@ -1053,16 +1087,18 @@ Coming in later plans:
    - Civilians only pull over at Pursuit level and above, which is easiest to see on the patrol ground.
 2. Start the patrol ground: from `C:\repos\NightPursuit`, run
    `dotnet run -c Release --project src/NightPursuit.App -- --mission patrol-ground`.
-   It starts at heat 85 (Pursuit); one bullet on a police car (+5) takes you to Manhunt. Press the gas soon: the
-   game runs while the start help is up, and after 20 s without an offence Pursuit drops to Patrol (D89). Then:
-   - get boxed in, and break out by braking;
+   It starts at heat 85 (Pursuit); one bullet on a police car (+5) takes you to Manhunt. Take your time with the
+   start help: the heat and the police wait until you move off, and from then Pursuit lasts 20 s without an offence
+   (D77). Check that "HEAT: PURSUIT" shows at the start and that nothing changes until you drive off. Then:
+   - get boxed in, and break out by braking, right down to a stop beside the Side car (it must not bust you, D84);
    - shake the police with smoke;
-   - take the gap in a roadblock (the first one is 800 m ahead at the start), and try going round one on the shoulder
-     (D102);
+   - take the gap in a roadblock (the first one is 800 m ahead of where you move off), and try going round one on
+     the shoulder (D102);
    - pass a speed trap over its limit and another under it (the first is 700 m ahead, then one every 1500 m);
    - at Manhunt, meet a rolling roadblock and take its gap (D105), and see how often the interceptors ram (D106);
-   - get busted once on purpose: at Pursuit or above, after you've moved off, stop with a police car within 15 m and
-     wait 3 s. After the respawn, check that "HEAT SET TO 50: PATROL" shows.
+   - get busted once on purpose: at Pursuit or above, after you've moved off, stop with a chasing police car within
+     15 m behind or in front of you (not the Side car) and wait 3 s. After the respawn, check that "HEAT SET TO 50:
+     PATROL" shows.
 3. Check that everything reads without sound:
    - the heat meter, its level name and its flash when heat rises;
    - the POLICE PATROLS / POLICE PURSUIT / MANHUNT banners and their messages;
