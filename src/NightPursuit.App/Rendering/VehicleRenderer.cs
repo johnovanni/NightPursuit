@@ -236,7 +236,15 @@ public static class VehicleRenderer
             var shieldColour = LineArt.ColorOf(bright ? Neon.ShieldBright : Neon.ShieldDim);
             // Both shield pens are the same cyan; the pulse is carried by the strength (dim phase at 0.45).
             var shieldPen = LineArt.Outline(shieldColour, bright ? fade : fade * 0.45);
-            LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), shieldPen);
+            // The core is three times the outline's, drawn before the body fill: the fill hides the inner half, so a cyan
+            // band shows outside the white line in both phases.
+            var band = new Pen(shieldPen.Core.Brush, shieldPen.Core.Thickness * 3)
+            { StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
+            band.Freeze();
+            var shieldEdge = LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07));
+            dc.DrawGeometry(null, shieldPen.Halo, shieldEdge);
+            dc.DrawGeometry(null, shieldPen.Glow, shieldEdge);
+            dc.DrawGeometry(null, band, shieldEdge);
         }
         // Black fills hide what is behind; only the presenting edges are stroked. There is no line along the bottom of
         // the body (the road meets it there) and none along the base of a fin (the body hides it).
