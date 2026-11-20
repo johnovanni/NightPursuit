@@ -80,14 +80,14 @@ internal static class Mirror
                 {
                     var half = new LineBatch();
                     half.Line(new Point(side < 0 ? g.X - cw / 2 : g.X, topY), new Point(side < 0 ? g.X : g.X + cw / 2, topY));
-                    half.Draw(dc, LineArt.Detail(LineArt.ColorOf(Neon.LightPen(w.Time, side)), 1));
+                    half.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.LightPen(w.Time, side)), 1));
                 }
             }
             if (e.Kind == AgentKind.Boss)   // the gold-trimmed tail strip
             {
                 var strip = new Rect(g.X - cw * 0.46, g.Y - ch * 0.45, cw * 0.92, ch * 0.22);
                 dc.DrawRectangle(Neon.TailLight, null, strip);
-                LineArt.Draw(dc, new RectangleGeometry(strip), LineArt.Detail(LineArt.ColorOf(Neon.BossTrim), 1));
+                LineArt.Draw(dc, new RectangleGeometry(strip), LineArt.Outline(LineArt.ColorOf(Neon.BossTrim), 1));
             }
             double lw = Math.Max(2, 0.3 * s);
             foreach (int side in Projector.Sides)
