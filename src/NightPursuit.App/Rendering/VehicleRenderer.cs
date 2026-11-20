@@ -252,8 +252,8 @@ public static class VehicleRenderer
         {
             // SPIKE: a short bumper line, broken in the middle and stopping short of the sides, so the open bottom of the
             // body reads as a car standing on the road rather than an arch.
-            const double bumperY = 0.45;
-            double outer = HalfWidthAt(shape, bumperY) * 0.82, inner = 0.16;
+            const double bumperY = 0.30;   // just above the body's bottom edge (0.224 m)
+            double outer = HalfWidthAt(shape, bumperY) * 0.9, inner = 0.1;
             var bumper = new LineBatch();
             foreach (int side in Projector.Sides) bumper.Line(P(side * outer, bumperY), P(side * inner, bumperY));
             bumper.Draw(dc, outlinePen);
