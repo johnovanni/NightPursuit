@@ -21,6 +21,37 @@ public sealed partial class World
         if (change is { } to) PublishLevelChange(from, to);
     }
 
+    /// <summary>The countdown to being busted; runs in StepOnce after the heat update.</summary>
+    public BustedWatch Busted { get; } = new();
+    /// <summary>False until the player has moved above 5 mph since the mission start or the last respawn (F11); the watch counts nothing before.</summary>
+    public bool BustedArmed { get; set; }
+    /// <summary>True from a bust until the respawn, which then sets the heat to 50.</summary>
+    public bool BustedPending { get; set; }
+
+    /// <summary>Sets the heat outright (no decay rules), publishing the change and, if the level moved, the level event. The caller says why on screen.</summary>
+    public void SetHeat(double value, string reason)
+    {
+        double before = Heat.Value;
+        var from = Heat.Level;
+        var change = Heat.Set(value);
+        Publish(new HeatChanged(Time, Heat.Value - before, Heat.Value, reason));
+        if (change is { } to) Publish(new HeatLevelChanged(Time, from, to));
+    }
+
+    /// <summary>The police have held you: the car is lost like a wreck, and the respawn sets the heat to 50.</summary>
+    public void BustPlayer()
+    {
+        Player.Armor = 0;
+        Player.State = VehicleState.Wrecked;
+        Player.StateTimer = 3;
+        Busted.Reset();
+        BustedPending = true;
+        Publish(new PlayerBusted(Time));
+        Publish(new PlayerWrecked(Time, "BUSTED"));
+        Publish(new Message(Time, "BUSTED - YOU LOSE A SPARE CAR", Tone.Bad));
+        Announce("BUSTED", "YOU LOSE A SPARE CAR", 3, urgent: true);
+    }
+
     double _lastPoliceShotMessage = double.NegativeInfinity;
 
     /// <summary>Marks <paramref name="a"/> as hurt by the player: for the next <see cref="HeatRules.BlameSeconds"/> its destruction counts against you.</summary>

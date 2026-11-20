@@ -173,6 +173,7 @@ public sealed partial class World
         Collisions.Resolve(this);
         ClearBlockedRoadblocks();
         StepHeat();
+        if (Busted.Update(this, Step)) BustPlayer();
         StepEnemyMissiles();            // after every move of the player this step, collisions too
 
         // Cars leave the list only now, so nothing above sees the list change mid-step.
@@ -524,7 +525,7 @@ public sealed partial class World
     /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its player-blame time and hit-heat cooldown, its oil and caltrops
     /// droppers' charges and timers, its missile rack's cooldown and, for a boss, its phase, shield, caltrops slow and
     /// whether it is engaged; every missile's and enemy missile's Distance and Lateral; each hazard's type, Distance and
-    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat's value and the time since the last offence.
+    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat's value and the time since the last offence, and the busted timer and whether it is armed.
     /// </summary>
     public ulong StateHash()
     {
@@ -561,6 +562,7 @@ public sealed partial class World
         Charged(ref h, Loadout.Strike);
         Add(ref h, Loadout.Strike.Targeting ? 1 : 0); Add(ref h, Loadout.Strike.SweepLeft);
         Add(ref h, Heat.Value); Add(ref h, Heat.SinceOffence);
+        Add(ref h, Busted.Held); Add(ref h, BustedArmed ? 1 : 0);
         return h;
 
         static void Mix(ref ulong h, Vehicle v)

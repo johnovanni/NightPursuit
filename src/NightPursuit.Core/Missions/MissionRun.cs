@@ -134,6 +134,14 @@ public sealed class MissionRun
         p.StateTimer = 0;
         p.GripLoss = 0;       // both only count down while driving, so they would carry into the new car
         p.PunctureLeft = 0;
+        World.Busted.Reset();
+        World.BustedArmed = false;   // the new car must move before the police can bust it (F11)
+        if (World.BustedPending)
+        {
+            World.BustedPending = false;
+            World.SetHeat(50, "BUSTED");
+            World.Publish(new Message(World.Time, "HEAT SET TO 50: PATROL", Tone.Info));
+        }
         p.SnapPrev();   // a teleport: do not draw the car sweeping back to the start
         World.Steering.Reset();
         World.Scheme.Reset(0);
