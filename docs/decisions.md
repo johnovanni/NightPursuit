@@ -1227,5 +1227,5 @@ frame in 600 took about 10 ms, a one-off like D116's. As in D17, the graphics ca
 7. The Dropper's chute, armed against not armed. Arming is now shown mostly by the fill.
 8. Oil slicks: your own (the lower half of the rim) and a hostile one (a full ring and red dashes) (D127).
 9. Tracers: are your bullets and the enemy's easy to follow?
-10. The police lights in the mirror (D129): can you tell blue from red? A reviewer found them fainter than before.
+10. The police lights in the mirror (D129): can you tell blue from red? They were made bolder after a reviewer found them faint.
 11. A wreck hidden behind a hill: it should vanish behind the crest, not show through.
