@@ -548,3 +548,524 @@ Coming in later plans:
    - the Glass Wasp's gun port and its two chutes in its Gunner and Dropper phases (D67), which no test picture shows
      yet;
    - whether the game stays smooth with smoke clouds on screen (D65).
+
+## Plan 3 calls (before building)
+
+The design left these open, so I picked a default for each before building Plan 3 (traffic, police and heat), and
+the game follows them. I checked every entry below against the finished code. A few things changed while building
+(where police appear, the patrol ground's starting heat, the three-lane rule, the colours); where the build ended up
+different from the plan, the entry says what the game really does.
+
+**D69. Civilians and police are cars like the enemies.** They follow the same car rules as the enemy cars (driving,
+bumping, smoke, the mirror and the radar), so nothing had to be built twice. There are five new kinds: the civilian
+car, the patrol car, the police cruiser, the interceptor and the armored SUV. Each kind belongs to a side, the
+civilians or the police, and the side decides who scores, who warns you and what your missiles and strike can aim at.
+*Cost to change:* hard; everything in this plan is built on it.
+
+**D70. Civilians cost you no points (your ruling, see D96).** Hurting a civilian costs your car armor from the bump,
+as any contact does, and raises heat, but it never takes points off. Civilians and police are worth no points when
+they're destroyed, either.
+*Cost to change:* a few lines.
+
+**D71. Only what you did counts against you.** A civilian or police car that is destroyed counts against you only if
+you hurt it in the last 5 s: your bullets, a bump that was your fault, or your own oil or caltrops. A crash caused by
+an enemy or by another car costs you nothing, and says "CIVILIAN CRASHED" or "POLICE CAR CRASHED". Whose fault a bump
+is:
+- you run into the back of a car: your fault (with two exceptions for police, D99);
+- side by side: your fault only when your own steering moved you into it, faster than it moved into you (D98);
+- a car that runs into the back of you, swerves into you or rams you costs you nothing. An interceptor ramming you
+  never gives heat.
+
+*Cost to change:* one number for the 5 s; the fault rule is a few lines.
+
+**D72. How often a hit counts.**
+- A civilian: +10 heat at most once a second for each car, whether you hit it with bullets or bump it. So holding the
+  guns on one adds at most +10 a second, plus +25 once if it's destroyed.
+- A bump with a police car: +15, at most once a second for each car.
+- A bullet hitting a police car: +5 every time, as the design says. Its message, "POLICE CAR SHOT +5 HEAT", shows at
+  most once a second, so the list doesn't flood.
+
+*Cost to change:* one number each.
+
+**D73. Smoke.**
+- Civilians aren't blinded by it. Inside a cloud they slow to 60% of their usual speed and keep their lane.
+- Police are blinded exactly like enemies (D27). "POLICE LOST YOU IN THE SMOKE" shows (or "INTERCEPTOR", or "POLICE
+  SUV"), and they wander. A blinded police car can't bust you or take a new place in a box-in, and a rolling roadblock
+  with a blinded SUV breaks up. So smoke is a real way to shake a pursuit.
+
+*Cost to change:* one line each.
+
+**D74. Missiles and the satellite strike spare civilians and police.** They only ever aim at enemies. That was already
+true; new tests now prove it, as the design's checks (§11) ask.
+*Cost to change:* none.
+
+**D75. Traffic.**
+- Civilians all drive your way, in lanes, at 25–35 m/s (56–78 mph).
+- New ones appear 1250–1450 m ahead, beyond the 1200 m the view draws, so they never pop into sight. While you drive
+  slower than 25 m/s (56 mph) they also come from 400–450 m behind, at 30–35 m/s (67–78 mph), and catch you up.
+- They're removed when they're more than 1500 m ahead or 500 m behind.
+- A new car never appears within 40 m of another car in its lane, within 60 m of a wreck or roadblock, or within 30 m
+  of anything lying in its lane.
+- At the start, the road from 400 m behind you to 1450 m ahead is filled at once (never within 60 m of you).
+
+The mission file says how busy the road is: `"traffic": { "carsPerKm": n }`, from 0 to 12 (no section means no
+traffic). The game keeps about twice that many cars in the 2 km around you. Mission 1 has 3 per km, so about 6 cars.
+*Cost to change:* a few numbers.
+
+**D76. Police settings in the mission file.** `"police": { "presence": p, "startingHeat": h }`.
+- `presence` runs from 0 to 2: 0 is no police, 1 is normal, 2 is twice as many. A mission with no police section has
+  no police; a police section that leaves `presence` out gets 1.
+- `startingHeat` runs from 0 to 100, and is 0 if left out.
+- Mission 1 has presence 1 and starts at heat 0. The patrol ground starts at 85 (D89, D100).
+
+Police only come onto the road once your heat reaches Patrol (50). So in mission 1 you meet them only if you push your
+heat that high, for example by hurting civilians.
+*Cost to change:* none.
+
+**D77. How heat dies down.**
+- After 5 s with no offence, heat falls 2 a second, or 4 a second when no police car is near. "Near" means within
+  300 m along the road, or any police car that is chasing you and can see you (not blinded), however far away.
+- Heat stays between 0 and 100.
+- Levels hold on. A level starts at its threshold (Watched 25, Patrol 50, Pursuit 70, Manhunt 90), but ends only when
+  heat falls 5 below it (under 20, 45, 65 or 85). Patrol, Pursuit and Manhunt each last at least 20 s once reached.
+  Heat comes down one level at a time.
+- Without the hold, a pursuit could end before the cruisers had even arrived. For example, on the patrol ground
+  (starting at 85, Pursuit), if you commit no offence at all, Pursuit lasts 20 s and then drops to Patrol.
+- A bust sets the heat straight to 50 instead (D84).
+
+The design's check "three civilian hits reach Patrol level" doesn't work from 0 (D97).
+*Cost to change:* a few numbers.
+
+**D78. Speed traps.**
+- A camera post at one edge of the road (either side, at random) with its limit on a sign: 60, 70 or 80 mph, also at
+  random.
+- The first one stands 700 m ahead as soon as heat reaches Patrol, then one every 1500 m of road while heat stays at
+  Patrol or above (D109 keeps that spacing when you come back into Patrol). They keep coming in the boss stage.
+- Passing one above its limit: +8 heat once, "SPEED TRAP 112 IN A 70 +8 HEAT", and its sign turns red and says CAUGHT
+  (D112). Under the limit: "SPEED TRAP: UNDER THE LIMIT".
+- The sign is drawn from 400 m (it fades in between 400 and 350 m), and "SPEED TRAP 70 MPH 380 m" shows from 400 m
+  until you pass it. The design asks for at least 300 m.
+- It never blocks anything: you can't hit it.
+
+*Cost to change:* a few numbers.
+
+**D79. Roadblocks.**
+- Barriers across two lanes, always leaving one lane open. Green chevrons on the road mark the gap, with the word GAP
+  from 400 m. The barriers are drawn from 450 m.
+- "ROADBLOCK 380 m - GAP LEFT" (or CENTRE, or RIGHT) shows from 400 m, with an arrow pointing to the gap when you're
+  not already in it.
+- The first one stands 800 m ahead as soon as heat reaches Patrol, then one every 3000 m while heat stays at Patrol or
+  above, and only one at a time, parked or rolling (D105, D109).
+- Its open lane never has a wreck within 150 m of it. If every lane has one, it tries again 500 m later.
+- None in the boss stage: any left on the road is removed the moment the boss appears.
+- Hitting one does 25 damage, drops you to 5 m/s and gives +15 heat once ("ROADBLOCK +15 HEAT"). Then you slide along
+  it at 5 m/s to get round, so you are past it well inside the 3 s busted countdown.
+- Other cars see it from 120 m, or from 5 s away at their speed if that is further, and steer for the gap. Any other car
+  that touches a barrier is wrecked.
+- If a wreck lands in its gap lane, anywhere from 150 m before it to 30 m after it, the roadblock is removed at once:
+  "ROADBLOCK CLEARED".
+- Within 150 m before a roadblock (or 5 s at your speed), chasing police drop back behind you, so none of them is
+  stopped in the gap.
+- You can also go round the end of a barrier on the shoulder (D102).
+
+*Cost to change:* a few numbers.
+
+**D80. Patrol level.**
+- Patrol cars drive in the traffic at 28–32 m/s (63–72 mph) and ignore you. Their light bars flash all the same
+  (HT-4).
+- The police in the 2 km around you are topped up with patrol cars to 2 × presence: 2 in mission 1, 3 on the patrol
+  ground. New ones appear 1250–1450 m ahead, like traffic.
+- They keep their own lanes like ordinary traffic. At this level the three-lane rule never moves or holds them back
+  (D103).
+- There are no police warnings at Patrol level: the light bars and the radar show them.
+- Below Patrol no new police come at all; any already on the road stay until they're left behind.
+
+*Cost to change:* one number.
+
+**D81. Pursuit level.**
+- Every patrol car within 600 m of you starts chasing.
+- Cruisers join from behind until there are 2 × presence chasers, at most 3 (2 in mission 1, 3 on the patrol ground;
+  patrol cars that switched count). They appear 150–250 m behind you (D100), at your speed + 15 m/s, and close in at
+  up to 20 m/s faster than you.
+- The two nearest take places in a box-in:
+  - **Front** gets past you, takes your lane about 12 m ahead and, while within 25 m ahead of you, slows to your
+    speed − 4 m/s, never below 8 m/s (18 mph).
+  - **Side** holds level with you in the lane beside you, at your speed but never slower than 3 m/s, so it rolls on
+    past you if you stop. It never steers within 2.7 m of your line.
+- The rest **Trail** you: in your lane about 20 m behind, more at speed (about 47 m at 100 mph) so it can stop if you
+  brake hard. When you're below 5 m/s (11 mph) it stops 6 m behind you, bumper to bumper.
+- They never ram at Pursuit level.
+
+D114 says how the box-in stays safe when you brake.
+*Cost to change:* a few numbers.
+
+**D82. Manhunt level.**
+- **Interceptors** are low and long, with a top speed of 80 m/s (179 mph); you top out near 67 m/s (150 mph). As many as
+  the presence (rounded, D95), at most 2: 1 in mission 1, 2 on the patrol ground. They come from 150–250 m
+  behind and attack like a Plan 1 pursuer: they come alongside, ram you and drop back (D106).
+- **Armored SUVs** are tall and boxy, with 30 armor (three times a cruiser's) and a top speed of 82 m/s (183 mph).
+  With presence 1 or more, and never in the boss fight, a pair comes from 150–250 m behind, 35 m apart, at your
+  speed + 15 m/s, and passes you. Once both are at least 60 m ahead they form a **rolling roadblock**: side by side
+  across two lanes, about 40 m ahead, leaving one lane open. That is the outer lane farthest from you, or, if you're in
+  the middle lane, an outer lane picked at random (D105). Once you're within 40 m of both, they ride at your
+  speed − 6 m/s, so you close on them gently and must take the gap or brake.
+- A rolling roadblock gets the same warning as a parked one, "ROLLING ROADBLOCK 60 m - GAP RIGHT" with an arrow, a
+  green chevron in its gap, and the same radar mark.
+- While the pair is forming, or once it has formed with an SUV within 80 m of you, the Side car drops back to Trail.
+  With a formed pair within 80 m, the Front car drops back too: the pair is the front of the box then.
+- At most 6 police in the 2 km around you, with room given first to the SUVs, then the interceptors, then the
+  cruisers, then the patrol cars. A patrol car over the limit is removed only where you can't see it (more than
+  1200 m ahead or 300 m behind); until then, a new police car waits rather than go over 6.
+
+*Cost to change:* a few numbers.
+
+**D83. When heat drops a level, the police back off.** Below Pursuit every chasing car, and below Manhunt the
+interceptors and SUVs, go back to patrol driving at 25 m/s (56 mph), so they fall away behind you, and a rolling
+roadblock breaks up. "POLICE BACKING OFF" shows. Interceptors and SUVs that have backed off never join a chase at
+Pursuit level.
+*Cost to change:* one number.
+
+**D84. Busted (HT-6).**
+- It can only happen at Pursuit or above.
+- You're below 5 mph with a police car within 15 m of you (in a straight line, centre to centre) for 3 s. A blinded
+  or spun police car doesn't count.
+- "BUSTED IN 3", then 2, then 1, shows large in red on a dark box from the very first moment, with "SPEED UP TO BREAK
+  FREE" under it.
+- Going above 5 mph cancels it, and "BROKE FREE" shows.
+- Nothing counts while you're wrecked or respawning, or while the game is paused. It doesn't count until you've first
+  driven faster than 5 mph (D101).
+- A bust costs a spare car, as a wreck does: a "BUSTED" banner and "BUSTED - YOU LOSE A SPARE CAR".
+- When you respawn after a bust, your heat is set straight to 50 (Patrol), without the 20 s hold, and "HEAT SET TO 50:
+  PATROL" shows, so you aren't busted again at once. A wreck leaves your heat as it was.
+
+*Cost to change:* a few numbers.
+
+**D85. Moving police never fill all three lanes near you (HT-7).** As built:
+- A police car covers a lane when its body overlaps it, so one halfway between two lanes covers both.
+- The cars counted are police driving normally (not spun out or wrecked; blinded ones count) within 45 m of you along
+  the road. The plan said 60 m; a check before building showed that 60 m couldn't work.
+- A police car that near may not steer anywhere that would cover the third lane, at any moment on the way.
+- One farther out that would make the third lane is held back, beyond 55 m plus more room at speed (about 145 m at top
+  speed), until a lane frees up. Its own lane is never taken from it: it is held back by speed instead.
+- When a third lane would be covered, the Side car drops back to Trail rather than take its place.
+- The rule never steers a car into another car, into you, or into a wreck or roadblock.
+- Patrol cars just driving in the traffic count toward the three lanes, so chasing cars give way to them, but below
+  Pursuit the rule never moves or holds a patrol car (D103).
+
+Two rare exceptions, where bumps push cars about, are in D104 and the open items.
+*Cost to change:* hard; with the box-in, this is the most carefully tested part of this plan.
+
+**D86. How civilians and police look.**
+- **Civilians:** a dim neutral grey (#7F8C99), each one a sedan, a hatchback or a van, so they never look like the
+  bright enemy cars.
+- **Police:** a pale silver-blue body (#C9D6EA) with a light bar. Its two halves are always opposite colours, blue
+  (#2E6BFF) and red (#FF2E4D), and swap every 0.2 s, so both colours always show. Patrol cars and cruisers are sedans,
+  interceptors are low and long with a wide stance, and armored SUVs are tall and boxy with shoulders. In the mirror a
+  police car has a two-colour line on top that flashes with the light bars.
+- **Radar:** civilians are small grey dots. Police are squares with a white outline and a dark bar across them,
+  filled blue or red in time with the light bars (larger for an SUV). A speed trap is an amber S at the road edge ("S!"
+  in red once it has caught you). A roadblock, parked or rolling, is a red bar across the lanes it holds with a green
+  tick in the gap.
+
+*Cost to change:* drawing only.
+
+**D87. The heat meter.** It sits in the right-hand column under the score and armor (that block grows from 156 to 200
+units tall to make room).
+- It shows "HEAT 85", the level name written in its own colour on the right, and a bar from 0 to 100 in five coloured
+  parts, with ticks at 25, 50, 70 and 90. The colours are in D113.
+- When heat rises, the bar's outline turns thick and white and blinks twice a second for 1 s.
+- Rising to Patrol or above shows a banner:
+  - "POLICE PATROLS" / "SPEED TRAPS AND ROADBLOCKS AHEAD";
+  - "POLICE PURSUIT" / "DON'T LET THEM STOP YOU";
+  - "MANHUNT" / "THEY WILL RAM YOU - SHAKE THEM WITH SMOKE".
+- Every level change also gives exactly one message, such as "HEAT: PURSUIT", "HEAT: WATCHED - THE POLICE ARE TAKING
+  NOTE" or "HEAT DOWN: PATROL". That's because a banner can be held back: by a boss banner or the BUSTED banner (D62),
+  or when another banner went up less than 1 s before.
+
+*Cost to change:* drawing and text only.
+
+**D88. Every offence says what it cost.** "CIVILIAN HIT +10 HEAT", "CIVILIAN DESTROYED +25 HEAT", "POLICE CAR HIT +15
+HEAT", "POLICE CAR SHOT +5 HEAT", "POLICE CAR DESTROYED +40 HEAT", "SPEED TRAP 112 IN A 70 +8 HEAT" and "ROADBLOCK +15
+HEAT". A roadblock also shows "HIT A ROADBLOCK", as other damage does. When it wasn't your fault: "CIVILIAN CRASHED" or
+"POLICE CAR CRASHED", and no heat.
+*Cost to change:* text only.
+
+**D89. A test mission: the patrol ground.** Open it with `--mission patrol-ground`.
+- Heavy traffic (6 cars per km, so about 12 around you), police presence 1.5, and a starting heat of 85, which is
+  Pursuit (the plan said 75; see D100).
+- Two waves of two Runners, a crate of every item (oil, smoke, caltrops, missile, strike and armor), and a 2-phase
+  boss, the Night Heron: 120 health, a Blocker phase, then a Runner phase. The approach is 5 km.
+- You start with 5 oil, 3 smoke, 3 caltrops, 2 missiles and 1 strike.
+- Right at the start, one bullet on a police car (+5) takes you to Manhunt.
+- The game runs while the start help is showing, so the heat starts falling 5 s after the mission opens, and if you
+  wait, Pursuit ends after 20 s (D77). Press the gas soon if you want to meet the pursuit at once.
+
+The real missions 2–6 come in Plan 4.
+*Cost to change:* none; it's a separate file.
+
+**D90. Heat, busts, traps and roadblocks are recorded for sound later**, as warnings are (D52): every heat change, every
+level change, a bust, a speed trap catching you and a roadblock hit. A destroyed car now also records which side it
+was on. The screen stays the master.
+*Cost to change:* none.
+
+**D91. Police warnings.** From Pursuit up only (at Patrol level the light bars and the radar show them):
+- "POLICE LEFT" or "POLICE RIGHT", with an arrow at that edge of the screen, for a police car from 3 m behind you to
+  4 m ahead and within 6 m to the side;
+- "POLICE BEHIND 80 m", with LEFT or RIGHT when it isn't in your lane (D111), for the nearest one 3 to 120 m behind
+  you.
+
+Roadblocks, rolling roadblocks and speed traps warn at any level, from 400 m (D78, D79, D82). Civilians never raise a
+warning: only enemy cars count for the "closing from behind" warning (D51). The police warning words are a lighter
+blue (D110).
+*Cost to change:* a few numbers.
+
+**D92. Enemies and police ignore each other.** Enemy cars don't attack the police and the police don't chase enemies.
+Enemy bullets still never hit any car. If they bump, the usual car-to-car rules apply (D28), and none of it costs you
+heat.
+*Cost to change:* none to keep.
+
+**D93. Civilians and patrol cars see you ahead of them.** The old keep-clear rule (D28) ignored you, so civilians and
+police would have run into you whenever you were slow: after a roadblock or a wreck, after a respawn, or while boxed
+in. Now they treat you as a car ahead: they change to a free lane, or follow at your speed − 2 m/s. (Chasing police
+have their own rules for keeping off you, D81.)
+*Cost to change:* a few lines.
+
+**D94. Missions can't misuse the new kinds.** An enemy wave, or a boss phase, must be one of the six enemy types. A
+mission file asking for "Civilian" or a police kind is refused with a clear message, for example "'Civilian' is not an
+enemy type (Runner, Blocker, Pursuer, Gunner, Dropper, Armored)".
+*Cost to change:* none.
+
+**D95. Counts round halves up.** So presence 1.5 gives 3 patrol cars, not 2. (The usual computer rounding sends halves
+to the even number, which would give 2.)
+*Cost to change:* one line.
+
+## While building Plan 3
+
+**D96. Your ruling: civilians cost no points (2026-11-19).** Hurting civilians costs only heat, and your car's normal
+armor damage from the contact. Civilians and police are worth 0 points. This replaces the design's "costs points" for
+civilians (CIV-3) and "penalties for civilians" in the score (MSN-5). You said you'll judge the police in play and may
+retune the heat levels afterwards. D70 is how the game does it.
+*Cost to change:* a few lines.
+
+**D97. "Three civilian hits reach Patrol level" needs a head start.** The design's example check (§11) only works from
+heat 20 or more: three hits of +10 from 0 give 30, which is Watched. I kept the HT-2 numbers as the design gives them.
+The test starts at 25 and reaches Patrol at 55; a second test checks that from 0 the same three hits give Watched at 30.
+*Cost to change:* one number, in the design or in the heat table.
+
+**D98. Whose fault a side bump is.** Only your own steering counts: your speed times the sideways angle of your car's
+nose. A bump is your fault only when that is above 0.5 m/s (about 1 mph) and more than the other car is moving into you.
+Being pushed or shoved into a car (by an enemy, or by enemy oil) never counts, nor do small lane-keeping corrections,
+and a car running into the back of you never counts.
+*Cost to change:* one number.
+
+**D99. Two police bumps that aren't your fault, and when they still cost you.**
+- Running into the back of a police car isn't your fault when it's going slower than its usual cruising speed (it was
+  put there, or held back, to slow you), or when it's the Front car boxing you in. Without this, holding the gas behind
+  the Front car gave +15 every second, and Pursuit became Manhunt within about 2 s of touching it.
+- The bump still counts as yours for 5 s, though: if your ramming destroys that police car within 5 s, it costs +40.
+  So ramming the Front car to death costs +40 heat (HT-7 says "ramming raises heat"). Braking and swerving stay free
+  ways out.
+- Running into the back of a police car that has backed off and is still slowing down to 25 m/s is your fault: it's
+  braking ahead of you, still faster than its cruising speed.
+
+This bends HT-3's "ramming them always raises heat" in those two cases; say if you want it back.
+*Cost to change:* one rule.
+
+**D100. The police arrive closer, and the patrol ground starts hotter.** Cruisers, interceptors and SUVs appear
+150–250 m behind you, not 350–450 m as planned. From 350–450 m a cruiser took about 27 s to reach you (about 44 s near
+top speed), longer than Pursuit's 20 s hold, so a pursuit could end before it arrived. 150–250 m is still beyond the
+120 m at which "POLICE BEHIND" shows. If a mission starts at Pursuit or above, all its chasers are there from the first
+moment. The patrol ground starts at heat 85, not 75. Both are tuning numbers for you to judge.
+*Cost to change:* two numbers.
+
+**D101. You can't be busted before you've moved.** The busted countdown doesn't start until you've first driven faster
+than 5 mph since the mission start or your last respawn. The game runs while the start help is up, so without this a
+police car could have stopped behind you and busted you while you were still reading.
+*Cost to change:* one line.
+
+**D102. Going round a roadblock on the shoulder is allowed.** The barriers end 7.3 m from the middle of the road; the
+road's edge is at 7.5 m and the guard rail at 12 m. You can drive round the end of a barrier off the road. That slows
+you and shakes the car, as any driving off the road does, but costs no damage and no heat, as long as you keep off
+the guard rail. The design says the gap may be "a lane or the shoulder" (HT-7).
+*Cost to change:* none to keep.
+
+**D103. At Patrol level, patrol cars are just traffic.** They keep their own lanes, and between them they can happen to
+cover all three lanes at once. They never box you in, ram you or bust you (busting needs Pursuit). The "never all three
+lanes" guarantee (D85) is for police chasing you, at Pursuit and above, and its purpose is that you always have a way
+out ahead. An earlier version moved patrol cars out of the way, and they swerved into your lane and ran into you (15
+hits in 30 s in one test). They still count toward the three lanes, so chasing cars give way to them.
+*Cost to change:* a few lines.
+
+**D104. A rare moment behind a rolling roadblock.** When you're stopped dead behind a rolling roadblock with police
+around you, a bump can knock a police car into the third lane behind you for about 5 s. For that moment the police
+cover all three lanes, but only behind you: the open lane ahead stays clear, so you still have a way out. I accepted
+it; here HT-7 means a way out ahead of you.
+*Cost to change:* hard to remove completely; it comes from cars bumping.
+
+**D105. How the rolling roadblock works.**
+- When the pair is sent, it draws which outer lane it would leave open if you were in the middle lane. The gap is
+  locked when the pair forms, from where you are then: the outer lane farthest from you, or that drawn lane if you're
+  in the middle.
+- The SUVs pass you in a lane that is neither yours nor the one they'll leave open, so they never block the gap on the
+  way.
+- A formed pair breaks up when an SUV has sat in the gap for 2 s (pushed there, or stuck), when an SUV within 60 m of
+  you has been off its lane for 3 s (after 4 s to settle in), when an SUV is wrecked, blinded or gone, or when a wreck
+  or roadblock blocks an SUV's lane within 120 m ahead of it. Both SUVs then chase you as Trail.
+- After a pair breaks, a new one waits 20 s. There are never more than 2 SUVs at once.
+- One roadblock at a time: no pair is sent while a parked roadblock is ahead of you or less than 300 m behind you, and
+  no roadblock is parked while a rolling one is on the road.
+- While a pair is near, the Front car drops back and the box-in stays on the side away from the gap.
+
+Before these rules, a formed pair could get stuck in its own gap (in 16 test runs out of 72).
+*Cost to change:* a few numbers.
+
+**D106. Interceptors stay out of the gap and out of your back.**
+- They never sit in a rolling roadblock's open lane; one that finds itself there (spun into it, say) ends its attack
+  and moves out.
+- They switch to your other side when a car blocks their line of attack.
+- They never attack from a side where the road edge would squeeze them into your lane. (Ordinary pursuers still have
+  that flaw; see the open items.)
+- In your lane behind you they never close faster than they could stop 1 m short of you, even if you brake as hard as
+  you can, so they can't run into the back of you.
+- While a rolling roadblock is forming they hold off at least 80 m behind you and don't ram, so the SUVs have room.
+
+In the tests they ram about twice a minute. Please judge whether that is enough.
+*Cost to change:* a few numbers.
+
+**D107. A police car stuck in the gap leaves by changing speed.** If a police car within 60 m of you ends up in a
+rolling roadblock's open lane with no free lane to move into, it drops back behind you (at your speed − 4 m/s) or, if
+it's ahead of you, pulls away (at your speed + 4 m/s) until it's clear.
+*Cost to change:* one number.
+
+**D108. Civilians pull over only where there's room.**
+- At Pursuit and above, a civilian within 150 m of you or of a chasing police car heads for the shoulder at 12 m/s
+  (27 mph). It goes back to its lane 3 s after the chase has passed.
+- It only heads for a side whose path is clear: no car in the lanes between, from 15 m behind it to 40 m ahead. With
+  neither side clear, it holds its lane and slows down.
+- A civilian you hit is shaken: it heads for the shoulder at half speed for 3 s.
+- Civilians also move aside from a car closing fast from behind (about 2.5 s from reaching them) or when you fire at
+  them in your line from within 80 m: they change lane if one is free and slow to 70%, or else keep their lane and
+  slow to 60%.
+
+*Cost to change:* a few numbers.
+
+**D109. Roadblocks and speed traps keep their spacing.** A roadblock that comes due while an earlier one is still on
+the road is placed a full 800 m ahead once it can be, never nearer. When heat comes back up into Patrol, speed traps
+stay at least 1500 m apart (a trap that isn't due yet keeps its place), and the roadblocks start again with one 800 m
+ahead.
+*Cost to change:* a few lines.
+
+**D110. Police warning words are a lighter blue (#6FA0FF)**, so they're easy to read on the dark road. The light bars
+keep the strong blue (#2E6BFF).
+*Cost to change:* one colour.
+
+**D111. "POLICE BEHIND RIGHT 80 m" includes the side**, like the other "behind" warnings (D51). It says just "POLICE
+BEHIND 80 m" when the car is in your lane.
+*Cost to change:* none.
+
+**D112. A speed trap that caught you says so in words.** Its sign turns red with "CAUGHT" under the limit, and its
+radar mark changes from "S" to "S!", so colour isn't the only cue.
+*Cost to change:* drawing only.
+
+**D113. Heat level colours:** Calm green (#39FF88), Watched yellow (#FFE14D), Patrol amber (#FFC13B), Pursuit orange
+(#FF8A1F), Manhunt red (#FF3B3B). A review found them one step out of place at first; they now match the plan. The
+level name is always written beside the bar too.
+*Cost to change:* five colours.
+
+**D114. The box-in stays safe when you brake hard.**
+- The distances grow with speed. A Trail car keeps about 20 m behind you, more at speed (about 47 m at 100 mph). A car
+  held back by the three-lane rule stays beyond 55 m plus extra room at speed (about 145 m at top speed). Either can
+  still stop if you brake as hard as you can.
+- Places in the box stick: a car keeps its place while it's chasing, and Front and Side swap only when Side gets more
+  than 10 m ahead of Front.
+- Side never goes slower than 3 m/s, so it rolls past you if you stop. But if you stop right beside it, rolling at
+  3 m/s it stays within 15 m of you for up to about 5 s, so it can bust you.
+
+*Cost to change:* a few numbers.
+
+**D115. The tests can look inside the game's rules.** This is a note for programmers: the test project is allowed to
+reach parts of the game's rules that are otherwise private, so the tests can check them directly. It changes nothing
+in play.
+*Cost to change:* none.
+
+**D116. Speed figures for Plan 3.**
+- Drawing one frame takes 2.245 ms on average (4.06 ms for the slowest one in twenty). The scene is crowded: 25 enemy,
+  civilian and police cars of every kind, 8 more civilians, 3 more police, heat 80, a roadblock 300 m ahead, a speed
+  trap 200 m ahead, the boss, smoke, crates, missiles and a strike sweep. The limit is 8 ms; Plan 2's scene took
+  1.5 ms.
+- One frame in 600 took 24 ms. It looks like a one-off (probably memory being tidied up, or the very first draw), and
+  I didn't look into it further. Please watch for a single hitch.
+- The stress test drew 18,003 frames of mission 1, the proving ground and the patrol ground at three window sizes,
+  plus a minimised window, with no failures. The boss bar was on screen in 6,003 of them.
+- The stress test now takes about 68 minutes, 47 of them for the very wide 2560×600 window. You can decide whether to
+  shorten it for later plans.
+- As in D17, these figures leave out the graphics card's own work.
+
+*Cost to change:* none.
+
+## Open items after Plan 3
+
+Still open from the earlier lists:
+- F1 help doesn't pause the game.
+- You respawn where you crashed, not a short way back (Plan 4).
+- Mission 1 was "fairly sparse" (12 enemy cars over 6 km). Traffic partly answers that: it now has 3 civilian cars per
+  km (about 6 around you at any time) and police at presence 1. But it starts at heat 0, and the police only come once
+  your heat reaches Patrol (50), so a clean run meets no police. The enemy count is unchanged. Still worth judging when
+  you play it.
+- A boss swerving off a wreck can be drawn passing through it for a moment.
+- If you move to an outer lane while a boss in a Pursuer phase is dropping back toward you, it can cross in front of
+  you about 8 m ahead.
+- An ordinary pursuer (Plan 1) still has the outer-lane flaw: with no room beside you on its side, it can end up almost
+  straight behind or ahead of you. The boss was fixed in Plan 2, and interceptors avoid that side (D106).
+
+New from Plan 3:
+- Police occasionally crash into a roadblock (0 to 2 times in 90 s in the tests). It costs you no heat ("POLICE CAR
+  CRASHED").
+- Right after cars bump at Manhunt level, police can briefly cover all three lanes. The tests allow up to 3 s of this a
+  minute, and one run came close to that. These and D104 are the known times the three-lane rule (D85) gives way.
+- Interceptors ram about twice a minute in the tests (D106).
+- In a very small window (320×200) the BUSTED box sits over the weapon panel and a warning over the mirror's label.
+  Tiny windows were already crowded before Plan 3.
+- The long stress run never happens to show a formed rolling roadblock (the test pictures do), and the automatic
+  test driver's way of taking gaps is only lightly checked. So your drive on the patrol ground is the main check of
+  rolling roadblocks in play.
+- The stress test takes about 68 minutes (D116).
+- One 24 ms frame in the speed test (D116).
+
+Coming in later plans:
+- Plan 4: missions 2–6, each with its own traffic and police settings shown on the briefing screen (and with them enemy
+  missiles in missions 5 and 6), the briefing screen with the boss drawing and your loadout, the mission bonus,
+  respawning a short way back, and the text-size setting.
+- After version 1 (design §10): police helicopters and enemy spies.
+
+## Checks only you can do (Plan 3)
+
+1. Drive mission 1: `dotnet run -c Release --project src/NightPursuit.App` from `C:\repos\NightPursuit`.
+   - Judge the traffic density (about 6 civilian cars around you, D75).
+   - Watch how civilians move aside when you come up fast behind them or fire at them (D108).
+   - Civilians only pull over at Pursuit level and above, which is easiest to see on the patrol ground.
+2. Start the patrol ground: from `C:\repos\NightPursuit`, run
+   `dotnet run -c Release --project src/NightPursuit.App -- --mission patrol-ground`.
+   It starts at heat 85 (Pursuit); one bullet on a police car (+5) takes you to Manhunt. Press the gas soon: the
+   game runs while the start help is up, and after 20 s without an offence Pursuit drops to Patrol (D89). Then:
+   - get boxed in, and break out by braking;
+   - shake the police with smoke;
+   - take the gap in a roadblock (the first one is 800 m ahead at the start), and try going round one on the shoulder
+     (D102);
+   - pass a speed trap over its limit and another under it (the first is 700 m ahead, then one every 1500 m);
+   - at Manhunt, meet a rolling roadblock and take its gap (D105), and see how often the interceptors ram (D106);
+   - get busted once on purpose: at Pursuit or above, after you've moved off, stop with a police car within 15 m and
+     wait 3 s. After the respawn, check that "HEAT SET TO 50: PATROL" shows.
+3. Check that everything reads without sound:
+   - the heat meter, its level name and its flash when heat rises;
+   - the POLICE PATROLS / POLICE PURSUIT / MANHUNT banners and their messages;
+   - the BUSTED IN 3 / 2 / 1 countdown and "SPEED UP TO BREAK FREE";
+   - the police warnings in the lighter blue, and the roadblock warning with its gap arrow;
+   - the police light bars, with both colours, blue and red, visible at once;
+   - a caught speed trap's "CAUGHT" sign and "S!" on the radar.
+4. Judge whether the heat numbers (HT-2) and the police levels feel fair. You said you may retune the heat levels
+   after playing. The other tuning numbers worth a look: police arriving 150–250 m behind (D100), the 20 s hold on
+   each police level (D77) and the patrol ground's starting heat of 85.
+5. Watch for a single hitch (the one 24 ms frame, D116), and for any stutter with heavy traffic.
+6. If you ever play in a very small window, look at how crowded the HUD gets (open items).
+7. Tell me whether to shorten the 68-minute stress test for later plans (D116).
