@@ -25,10 +25,14 @@ internal static class WindshieldRenderer
     static int _seed = int.MinValue;
     static Impact[] _impacts = [];
 
-    public static void Draw(DrawingContext dc, HudLayout l, PlayerCar player)
+    /// <summary>
+    /// Draws the cracks. <paramref name="shatter"/> (0 to 1, from a wreck) grows every impact to its full web at once and
+    /// adds a faint milky haze: the glass has given out.
+    /// </summary>
+    public static void Draw(DrawingContext dc, HudLayout l, PlayerCar player, double shatter = 0, bool haze = true)
     {
         double damage = player.WorstDamage;
-        if (damage < Thresholds[0]) return;
+        if (damage < Thresholds[0] && shatter <= 0) return;
         int seed = 17 + 7919 * player.SpareCars;   // a new car, a new pattern
         if (seed != _seed) { _impacts = Make(seed); _seed = seed; }
 
@@ -36,8 +40,9 @@ internal static class WindshieldRenderer
         var lines = new LineBatch();
         foreach (var im in _impacts)
         {
-            if (damage < im.Threshold) break;
-            double t = Math.Clamp((damage - im.Threshold) / GrowDamage + 0.15, 0, 1);
+            if (damage < im.Threshold && shatter <= 0) break;
+            double t = damage < im.Threshold ? 0 : Math.Clamp((damage - im.Threshold) / GrowDamage + 0.15, 0, 1);
+            t = Math.Max(t, shatter);
             var c = new Point(im.Fx * W, im.Fy * H);
             Point At(Vector v) => c + v * W;
 
@@ -64,7 +69,15 @@ internal static class WindshieldRenderer
                 }
             }
         }
+        if (shatter > 0 && haze) dc.DrawRectangle(Haze(shatter), null, new Rect(0, 0, W, H));
         lines.Draw(dc, LineArt.Detail(Glass, 0.8));
+    }
+
+    static Brush Haze(double shatter)
+    {
+        var b = new SolidColorBrush(Color.FromArgb((byte)(10 * shatter), Glass.R, Glass.G, Glass.B));
+        b.Freeze();
+        return b;
     }
 
     /// <summary>Draws the part of <paramref name="crack"/> grown so far: whole segments, then part of the next one.</summary>

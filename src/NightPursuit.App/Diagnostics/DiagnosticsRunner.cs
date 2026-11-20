@@ -135,6 +135,18 @@ public static class DiagnosticsRunner
             damages.Add(d);
         }
 
+        // SPIKE: --wreck 0.2,1,2.5 renders the player's car that many seconds after it was wrecked (file suffix -w<S>).
+        var wrecks = new List<double>();
+        foreach (string text in (Arg(args, "--wreck") ?? "-1").Split(','))
+        {
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double s) || s > 60 || (s < 0 && s != -1))
+            {
+                Error($"--wreck needs seconds from 0 to 60, e.g. --wreck 0.2,1,2.5, not '{text}'");
+                return 2;
+            }
+            wrecks.Add(s);
+        }
+
         foreach (string scene in scenes)
         {
             var made = new List<(ArtStyle Style, string File)>();
@@ -147,13 +159,18 @@ public static class DiagnosticsRunner
                     : path;
                 LineArt.Style = style;
                 foreach (double damage in damages)
+                foreach (double wreck in wrecks)
                 {
                     SnapshotDamage = damage;
-                    string f = damage < 0 ? file
-                        : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + "-d" + damage.ToString(CultureInfo.InvariantCulture) + Path.GetExtension(file));
+                    SnapshotWreck = wreck;
+                    string tag = (damage < 0 ? "" : "-d" + damage.ToString(CultureInfo.InvariantCulture))
+                               + (wreck < 0 ? "" : "-w" + wreck.ToString(CultureInfo.InvariantCulture));
+                    string f = tag.Length == 0 ? file
+                        : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + tag + Path.GetExtension(file));
                     RenderScene(scene, mission, seconds, width, height, f);
                 }
                 SnapshotDamage = -1;
+                SnapshotWreck = -1;
                 made.Add((style, file));
             }
             LineArt.Style = ArtStyle.Classic;
@@ -200,6 +217,8 @@ public static class DiagnosticsRunner
 
     /// <summary>SPIKE: the windshield damage forced on the next snapshot, or -1 to leave the run's own.</summary>
     static double SnapshotDamage = -1;
+    /// <summary>SPIKE: seconds since a forced wreck for the next snapshot, or -1 for none.</summary>
+    static double SnapshotWreck = -1;
 
     static void RenderScene(string scene, string mission, double seconds, int width, int height, string path)
     {
@@ -235,6 +254,16 @@ public static class DiagnosticsRunner
             // SPIKE: --damage N shows the windshield as if the car's armor had fallen to 100 - N.
             run.World.Player.WorstDamage = SnapshotDamage;
             run.World.Player.Armor = Math.Max(1, 100 - SnapshotDamage);
+        }
+        if (SnapshotWreck >= 0)
+        {
+            // SPIKE: the breakdown, SnapshotWreck seconds after the wreck, under the respawn banner.
+            var pl = run.World.Player;
+            pl.State = VehicleState.Wrecked;
+            pl.Armor = 0;
+            pl.WorstDamage = 100;
+            run.ForceStateForDiagnostics(RunState.Respawning, Math.Max(0, 3 - SnapshotWreck));
+            view.WreckSecondsOverride = SnapshotWreck;
         }
 
         view.Measure(new Size(width, height));

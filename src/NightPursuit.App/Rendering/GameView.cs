@@ -55,8 +55,51 @@ public sealed class GameView : FrameworkElement
         _projector.Begin(w, h, world);
         _layout.Begin(w, h, VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
+        // SPIKE: once the car is wrecked the view shows it breaking down (see Breakdown), with a faint double image
+        // circling the real one. Warnings, messages and the WRECKED banner are drawn once, on top, so they stay sharp.
+        var breakdown = WreckSeconds(world) is { } secs ? Breakdown.After(secs) : Breakdown.None;
+        DrawScene(dc, run, breakdown);
+        if (breakdown.Dizzy > 0)
+        {
+            var off = breakdown.GhostOffset(w);
+            dc.PushTransform(new TranslateTransform(off.X, off.Y));
+            dc.PushOpacity(Breakdown.GhostOpacity * breakdown.Dizzy);
+            DrawScene(dc, run, breakdown, ghost: true);
+            dc.Pop();
+            dc.Pop();
+        }
+
+        bool bossBar = BossBar.Showing(run) is not null;
+        Overlays.DrawWarnings(dc, _layout, world, bossBar);
+        Overlays.DrawMessages(dc, _layout, world, bossBar);
+        Overlays.DrawAnnouncement(dc, _layout, world, bossBar);
+        Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
+        Overlays.DrawDamageAndOffRoad(dc, _layout, run);
+        if (ShowHelp) Overlays.DrawHelp(dc, _layout);
+        Overlays.DrawState(dc, _layout, run);   // after the help, so PAUSED / GAME OVER etc. are never hidden under it
+
+#if DEBUG
+        double now = _frameClock.Elapsed.TotalSeconds, frame = now - _lastFrame;
+        _lastFrame = now;
+        if (frame > 0 && frame < 1) _fps = _fps * 0.95 + 0.05 / frame;
+        _layout.Text(dc, $"{_fps:0} FPS", 16 * _layout.K, h - 24 * _layout.K, 13, Neon.TextGray);
+#endif
+    }
+
+    /// <summary>The world, hood, glass and dashboard: everything the dizzy double image repeats.</summary>
+    void DrawScene(DrawingContext dc, MissionRun run, Breakdown breakdown, bool ghost = false)
+    {
+        var world = run.World;
         double shake = world.Player.Shake * 14;
-        dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
+        var view = new TransformGroup();
+        view.Children.Add(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
+        if (breakdown.Lean > 0)
+        {
+            // The dying car's nose dips (more road, so the world rises on screen) and it leans to one side.
+            view.Children.Add(new RotateTransform(Breakdown.LeanDegrees * breakdown.Lean, _layout.HalfWidth, _layout.Height / 2));
+            view.Children.Add(new TranslateTransform(0, -Breakdown.DipOfHeight * _layout.Height * breakdown.Lean));
+        }
+        dc.PushTransform(view);
         SkyRenderer.Draw(dc, _projector, world.Track, Hud.ReadoutBounds(_layout));
         RoadRenderer.Draw(dc, _projector);
         HazardRenderer.DrawSlicks(dc, _projector, world);
@@ -75,28 +118,29 @@ public sealed class GameView : FrameworkElement
         dc.Pop();
 
         // Screen-fixed from here on.
-        HoodRenderer.Draw(dc, _layout, _projector);
+        HoodRenderer.Draw(dc, _layout, _projector, breakdown);
         EffectRenderer.DrawMuzzleFlash(dc, _layout, world, Effects);
-        WindshieldRenderer.Draw(dc, _layout, world.Player);   // the glass is between you and the hood; the HUD sits on top
+        WindshieldRenderer.Draw(dc, _layout, world.Player, breakdown.Shatter, haze: !ghost);   // the glass is between you and the hood; the HUD sits on top
+        dc.PushOpacity(breakdown.Dash);   // a dead car's dashboard goes dark
         Hud.Draw(dc, _layout, run);
         WeaponPanel.Draw(dc, _layout, world);
-        Mirror.Draw(dc, _layout, world, _projector);
         Radar.Draw(dc, _layout, world, _projector);
         BossBar.Draw(dc, _layout, run);
-        bool bossBar = BossBar.Showing(run) is not null;
-        Overlays.DrawWarnings(dc, _layout, world, bossBar);
-        Overlays.DrawMessages(dc, _layout, world, bossBar);
-        Overlays.DrawAnnouncement(dc, _layout, world, bossBar);
-        Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
-        Overlays.DrawDamageAndOffRoad(dc, _layout, run);
-        if (ShowHelp) Overlays.DrawHelp(dc, _layout);
-        Overlays.DrawState(dc, _layout, run);   // after the help, so PAUSED / GAME OVER etc. are never hidden under it
+        dc.Pop();
+        Mirror.Draw(dc, _layout, world, _projector);
+    }
 
-#if DEBUG
-        double now = _frameClock.Elapsed.TotalSeconds, frame = now - _lastFrame;
-        _lastFrame = now;
-        if (frame > 0 && frame < 1) _fps = _fps * 0.95 + 0.05 / frame;
-        _layout.Text(dc, $"{_fps:0} FPS", 16 * _layout.K, h - 24 * _layout.K, 13, Neon.TextGray);
-#endif
+    /// <summary>SPIKE: when set, the breakdown is drawn as this many seconds after a wreck (diagnostics snapshots).</summary>
+    public double? WreckSecondsOverride { get; set; }
+    readonly Stopwatch _wreckClock = new();
+    bool _wreckSeen;
+
+    /// <summary>Seconds since the player's car was wrecked, from a wall clock (the world stops on Game Over); null while it is not.</summary>
+    double? WreckSeconds(NightPursuit.Core.Simulation.World world)
+    {
+        if (WreckSecondsOverride is { } forced) return forced;
+        if (world.Player.State != NightPursuit.Core.Vehicles.VehicleState.Wrecked) { _wreckSeen = false; return null; }
+        if (!_wreckSeen) { _wreckSeen = true; _wreckClock.Restart(); }
+        return _wreckClock.Elapsed.TotalSeconds;
     }
 }
