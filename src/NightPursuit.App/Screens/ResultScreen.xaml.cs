@@ -11,6 +11,12 @@ namespace NightPursuit.App.Screens;
 /// </summary>
 public partial class ResultScreen : UserControl
 {
+    // In practice Enter goes back to the title and R starts the mission over (ScreenFlow).
+    const string PracticeKeys = "ENTER  BACK TO TITLE   R  RESTART";
+
+    /// <summary>A bonus line: the label in a fixed 22-place column, then the amount right-aligned, so the amounts line up (Consolas is monospaced).</summary>
+    static string BonusLine(string label, int points) => label.PadRight(22) + ("+" + points).PadLeft(6);
+
     public ResultScreen() => InitializeComponent();
 
     public void Update(ScreenFlow flow)
@@ -25,24 +31,24 @@ public partial class ResultScreen : UserControl
                 if (g.Mission.Boss is { } boss) Add($"{boss.Name.ToUpperInvariant()} DESTROYED", "TextHeading", "TextWhite", bold: true);
                 if (g.LastBonus is { } b)
                 {
-                    Add($"MISSION BONUS          +{b.Base}", "TextBody", "TextWhite");
-                    Add($"ARMOR LEFT {b.ArmorLeft} x 10    +{b.ArmorPoints}", "TextBody", "TextWhite");
-                    Add(b.NoCarLost ? "NO CAR LOST            +1000" : "A CAR WAS LOST         +0", "TextBody", "TextWhite");
+                    Add(BonusLine("MISSION BONUS", b.Base), "TextBody", "TextWhite");
+                    Add(BonusLine($"ARMOR LEFT {b.ArmorLeft} X 10", b.ArmorPoints), "TextBody", "TextWhite");
+                    Add(BonusLine(b.NoCarLost ? "NO CAR LOST" : "A CAR WAS LOST", b.CleanPoints), "TextBody", "TextWhite");
                 }
                 Add($"SCORE {g.Score:00000}   SPARE CARS {g.SpareCars}", "TextHeading", "TextCyan", bold: true, top: 14);
-                KeyText.Text = g.MissionIndex + 1 < g.Missions.Count ? "ENTER  NEXT MISSION" : "ENTER  CONTINUE";
+                KeyText.Text = g.Practice ? PracticeKeys : g.MissionIndex + 1 < g.Missions.Count ? "ENTER  NEXT MISSION" : "ENTER  CONTINUE";
                 break;
             case Screen.GameOver:
                 TitleText.Text = g.QuitEarly ? "GAME ENDED" : "GAME OVER";
                 Add($"MISSION REACHED {g.MissionReached} OF {g.Missions.Count}", "TextHeading", "TextWhite");
                 Add($"FINAL SCORE {g.Score:00000}", "TextHeading", "TextCyan", bold: true, top: 10);
-                KeyText.Text = "ENTER  CONTINUE";
+                KeyText.Text = g.Practice ? PracticeKeys : "ENTER  CONTINUE";
                 break;
             default:   // Finished
                 TitleText.Text = "ALL SIX MISSIONS COMPLETE";
                 Add("THE SYNDICATE IS BROKEN. THE ROAD IS YOURS.", "TextHeading", "TextWhite");
                 Add($"FINAL SCORE {g.Score:00000}", "TextHeading", "TextCyan", bold: true, top: 10);
-                KeyText.Text = "ENTER  CONTINUE";
+                KeyText.Text = g.Practice ? "ENTER  BACK TO TITLE" : "ENTER  CONTINUE";
                 break;
         }
         NoticeText.Text = flow.Notice ?? "";
