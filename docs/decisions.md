@@ -1142,8 +1142,8 @@ this call won). In the snapshots the wreck smoke reads as a grey plume.
 *Cost to change:* a fill alpha, or add the rims back.
 
 **D121. Panels get corner brackets; gauges keep their boxes.**
-- Corner brackets (each arm 14 px × the HUD scale): the weapon panel, radar, help box, BUSTED and notice boxes, and the
-  boss-bar panel.
+- Corner brackets (each arm 14 px × the HUD scale): the weapon panel, radar, help box, BUSTED and notice boxes. (The
+  boss-bar panel has none; see D130.)
 - Full boxes: the armour, heat, gun-heat, speed, steer and boss-health bars. A gauge needs its ends.
 - The mirror keeps a full frame, because it is an object.
 
@@ -1160,8 +1160,11 @@ not redone.
 *Cost to change:* none.
 
 **D124. The stress test runs once, at the end, at its current length (about 68 minutes, D116),** in the background,
-because every renderer changed. Your D116 question about shortening it for later plans stays open. The figures
-(frames, failures, minutes) follow when the run finishes.
+because every renderer changed. Your D116 question about shortening it for later plans stays open. Result: it ran on the
+Release build of 9199286 (the head before the final fix wave, whose changes were small drawing tweaks and comments,
+checked by snapshot): 18,003 frames, 0 failures, about 40 minutes (Plan 3's run took about 68). Each part ran 2000
+frames with 0 failures: mission-01 960x540 219.0 s, 320x200 68.2 s, 2560x600 587.8 s; proving-ground 185.3 / 61.6 /
+508.9 s; patrol-ground 183.4 / 64.2 / 522.0 s; plus one minimised frame per mission.
 *Cost to change:* none.
 
 **D125. The trial branch `spike-line-art` stays as history.** `line-art` starts from it, so the trial's commits stay in
@@ -1211,7 +1214,7 @@ frame in 600 took about 10 ms, a one-off like D116's. As in D17, the graphics ca
   two lines while firing, a Dropper's armed chute, oil slicks, tracers and a wreck behind a hill. The speed-trap
   strokes at distance and the small objects at 960x540 look fine in the pictures, but are small.
 - Minor tidy-ups left: some pens and shapes are made again every frame; a few comments are stale.
-- The stress run's result is added to D124 when it finishes.
+- The stress run's result is in D124 (18,003 frames, 0 failures, about 40 minutes).
 
 ## Checks only you can do (line art)
 
