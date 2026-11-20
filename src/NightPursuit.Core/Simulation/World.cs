@@ -3,6 +3,7 @@ using NightPursuit.Core.Control;
 using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
 
@@ -222,7 +223,8 @@ public sealed partial class World
             {
                 case VehicleState.Driving:
                     // Order: the driver decides (a boss's driver includes its slow and leash) -> keep clear of the car
-                    // ahead -> a puncture overrides -> move -> a boss is kept on the road -> weapons.
+                    // ahead -> a puncture overrides -> a police car is held to the three-lane rule -> move -> a boss is
+                    // kept on the road -> weapons.
                     bool blind = a.Blinded > 0;
                     var driver = blind ? BlindDriver.Instance : a.Driver;   // DriverState is untouched, so the plan resumes
                     var intent = driver.Decide(a, _view, Step);
@@ -230,6 +232,8 @@ public sealed partial class World
                     if (!blind)
                         intent = DriverHelpers.KeepClearOfCarAhead(a, _view, intent, a.AheadMemory, DriverHelpers.ReactionDelay(a.Kind), Step);
                     if (a.Punctured) intent = PuncturedIntent(a, intent);
+                    // Call 17: every step, every police car, blinded ones too (pre-flight F2), after everything else that steers it.
+                    if (a.Faction == Faction.Police) intent = PoliceLanes.Restrain(_view, a, intent);
                     CarPhysics.StepAgent(a, intent, Step);
                     if (a is BossCar driving) KeepBossOnRoad(driving);
                     StepAgentWeapons(a, intent);      // after the car has moved

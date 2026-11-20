@@ -1,4 +1,5 @@
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 
@@ -32,22 +33,24 @@ public sealed class CarAheadMemory
 public static class DriverHelpers
 {
     /// <summary>Seconds of travel a car looks ahead for a roadblock (at least the wreck look-ahead of 120 m).</summary>
-    const double RoadblockLookAheadSeconds = 5;
+    public const double RoadblockLookAheadSeconds = 5;
     const double Same = 1e-9;
 
     /// <summary>
     /// Returns <paramref name="desiredLateral"/> if no wreck within <paramref name="lookAhead"/> metres ahead blocks it;
     /// otherwise the clear lane centre nearest to it (ties go to the one nearest the car), or the desire again if every lane is blocked.
+    /// A roadblock is seen from max(<paramref name="lookAhead"/>, <paramref name="roadblockSeconds"/> of the car's travel).
     /// </summary>
-    public static double AvoidWrecks(AgentCar self, WorldView view, double desiredLateral, double lookAhead = 120)
+    public static double AvoidWrecks(AgentCar self, WorldView view, double desiredLateral, double lookAhead = 120,
+        double roadblockSeconds = RoadblockLookAheadSeconds)
     {
-        if (!IsBlocked(self, view, desiredLateral, lookAhead)) return desiredLateral;
+        if (!IsBlocked(self, view, desiredLateral, lookAhead, roadblockSeconds)) return desiredLateral;
 
         double best = desiredLateral;
         bool found = false;
         foreach (double lane in Track.LaneCentres)
         {
-            if (IsBlocked(self, view, lane, lookAhead)) continue;
+            if (IsBlocked(self, view, lane, lookAhead, roadblockSeconds)) continue;
             if (!found || IsBetter(lane, best, desiredLateral, self.Lateral))
             {
                 best = lane;
@@ -64,14 +67,14 @@ public static class DriverHelpers
         return Math.Abs(lane - current) < Math.Abs(best - current);
     }
 
-    static bool IsBlocked(AgentCar self, WorldView view, double lateral, double lookAhead)
+    static bool IsBlocked(AgentCar self, WorldView view, double lateral, double lookAhead, double roadblockSeconds)
     {
         foreach (var h in view.Hazards)
         {
             if (h is not ILaneBlocker blocker) continue;
             double ahead = blocker.Distance - self.Distance;
             // A car in the far lane needs time to cross to a roadblock's gap, so it looks further ahead at speed.
-            double reach = h is Roadblock ? Math.Max(lookAhead, self.Speed * RoadblockLookAheadSeconds) : lookAhead;
+            double reach = h is Roadblock ? Math.Max(lookAhead, self.Speed * roadblockSeconds) : lookAhead;
             if (ahead <= 0 || ahead >= reach) continue;
             if (blocker.Blocks(lateral, self.Stats.Width / 2)) return true;
         }
@@ -81,11 +84,12 @@ public static class DriverHelpers
     /// <summary>
     /// Passes a wish through <see cref="AvoidWrecks"/> with a reaction delay: when the avoiding answer changes
     /// (a wreck appears or is passed) the car keeps its previous steering until <paramref name="reactionDelay"/> seconds have gone by.
+    /// <paramref name="lookAhead"/> and <paramref name="roadblockSeconds"/> are passed to <see cref="AvoidWrecks"/>.
     /// </summary>
     public static double SteerAroundWrecks(AgentCar self, WorldView view, double desiredLateral,
-        AvoidMemory memory, double reactionDelay, double dt)
+        AvoidMemory memory, double reactionDelay, double dt, double lookAhead = 120, double roadblockSeconds = RoadblockLookAheadSeconds)
     {
-        double avoided = AvoidWrecks(self, view, desiredLateral);
+        double avoided = AvoidWrecks(self, view, desiredLateral, lookAhead, roadblockSeconds);
         bool swerving = Math.Abs(avoided - desiredLateral) > Same;
         bool unchanged = swerving == memory.Active && (!swerving || Math.Abs(avoided - memory.Lateral) < Same);
         if (unchanged)
@@ -442,16 +446,20 @@ public static class DriverHelpers
     /// <summary>
     /// The clear lane 5 m either side of the car's nearest lane that is nearest its wish (ties: nearest the car); null if none.
     /// The car's nearest lane itself also counts once it is out of the car ahead's band (the car is already moving out to pass).
+    /// A police car also needs the lane allowed by <see cref="PoliceLanes.MayEnter"/> and clear of you, as of another car
+    /// (the three-lane rule, and police never move over into you).
     /// </summary>
     static double? ClearNeighbourLane(AgentCar self, WorldView view, Vehicle ahead, double wishLateral, double gapAhead)
     {
         double home = NearestLane(self.Lateral);
+        bool police = KindRules.IsPolice(self.Kind);
         double? best = null;
         foreach (double lane in Track.LaneCentres)
         {
             if (Math.Abs(lane - home) > LaneSpacing + Same) continue;
             if (Math.Abs(lane - ahead.Lateral) < Band(self, ahead)) continue;
             if (!IsLaneClear(self, view, lane, gapAhead)) continue;
+            if (police && (InLaneSpan(self, view.Player, lane, gapAhead) || !PoliceLanes.MayEnter(view, self, lane))) continue;
             if (best is null || IsBetter(lane, best.Value, wishLateral, self.Lateral)) best = lane;
         }
         return best;
@@ -466,11 +474,17 @@ public static class DriverHelpers
         foreach (var other in view.Agents)
         {
             if (ReferenceEquals(other, self) || !other.IsOnRoadDriving) continue;
-            if (Math.Abs(other.Lateral - lane) >= Band(self, other)) continue;
-            double d = other.Distance - self.Distance, half = (self.Stats.Length + other.Stats.Length) / 2;
-            if (d > -(ClearBehind + half) && d < gapAhead + ClearBeyond + half) return false;
+            if (InLaneSpan(self, other, lane, gapAhead)) return false;
         }
         return Math.Abs(AvoidWrecks(self, view, lane) - lane) < Same;
+    }
+
+    /// <summary><paramref name="other"/> is in the lane's band from 10 m behind <paramref name="self"/> to 25 m past the car ahead (bumper to bumper).</summary>
+    static bool InLaneSpan(AgentCar self, Vehicle other, double lane, double gapAhead)
+    {
+        if (Math.Abs(other.Lateral - lane) >= Band(self, other)) return false;
+        double d = other.Distance - self.Distance, half = (self.Stats.Length + other.Stats.Length) / 2;
+        return d > -(ClearBehind + half) && d < gapAhead + ClearBeyond + half;
     }
 
     /// <summary>The lane centre nearest <paramref name="lateral"/>.</summary>

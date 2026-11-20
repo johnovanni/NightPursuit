@@ -1,10 +1,12 @@
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Drivers;
 
 /// <summary>
 /// A police car at Patrol level: the same plain lane driving as a civilian, including keeping clear of the player.
-/// It never fires or drops anything.
+/// It never fires or drops anything. Its lane goes through <see cref="PoliceLanes.MayEnter"/> (the three-lane rule):
+/// a refused line keeps its current lane, or the nearest allowed one.
 /// </summary>
 public sealed class PatrolDriver : IDriver
 {
@@ -25,6 +27,9 @@ public sealed class PatrolDriver : IDriver
             s = new State { Lane = DriverHelpers.NearestLane(self.Lateral) };
             self.DriverState = s;
         }
-        return DriverHelpers.DriveInLane(self, view, s.Lane, s.Avoid, s.PlayerAhead, dt);
+        var intent = DriverHelpers.DriveInLane(self, view, s.Lane, s.Avoid, s.PlayerAhead, dt);
+        return PoliceLanes.MayEnter(view, self, intent.TargetLateral)
+            ? intent
+            : intent with { TargetLateral = PoliceLanes.AllowedLateral(view, self) };
     }
 }
