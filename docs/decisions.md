@@ -1149,8 +1149,10 @@ this call won). In the snapshots the wreck smoke reads as a grey plume.
 
 *Cost to change:* a few lines per panel (please judge it, see the checks below).
 
-**D122. The Gunner's port is a short line across the open bottom of its window:** dim while idle, a bright outline while
-aiming, and two parallel lines while firing, so firing differs from aiming by shape and not only by brightness.
+**D122. The Gunner's port is a short line across the open bottom of its window:** dim while idle, a short bright line
+while aiming, and while firing a full-width line (the whole window bottom) with a second line above it at
+max(0.08 x scale, core width + 3 px). Firing differs from aiming by shape and not only by brightness, and the two
+lines stay apart at the real firing distances of 25 to 90 m. The boss's own port follows the same rule.
 *Cost to change:* a few lines.
 
 **D123. The windshield cracks and the rolling tread stay as built in the trial.** You played the trial, so they were
@@ -1181,14 +1183,17 @@ did. The edge and gaps are the same as the outline's.
 *Cost to change:* one width.
 
 **D129. Mirror cars use thin Detail pens, so far ones are fainter.** Cars in the mirror are drawn with the Detail pen
-(about 1 px, 70 per cent), which a reviewer found makes distant police light halves and the boss's trim harder to
-tell apart than before. Colour and position are unchanged; see the open items.
-*Cost to change:* use the Outline weight for the mirror's light halves and boss strip.
+(about 1 px, 70 per cent), but a reviewer found that made distant police light halves and the boss's trim harder to
+tell apart. So the mirror's police light halves and the boss strip now use the Outline weight (fixed in 9199286); the
+rest of the mirror car stays Detail. Colour and position are unchanged.
+*Cost to change:* a few lines.
 
 **D130. Smaller rulings made during the build.**
 - Speed-trap strokes fade twice (the old opacity and the new fade), so distant ones are dimmer than before; I left it.
 - The strike's scan line and corner brackets, and the missile lock box, use the line-art pens too (the lock box's
   corner shape is shared with the strike's).
+- The boss-bar panel lost its brackets: it never had a frame before the restyle, and the brackets crowded its text and
+  touched the mirror frame. It is fill-only again; the boss health bar keeps its gauge box.
 - Brackets and boxes are built every frame (about 15 small shapes). It is cheap (see the speed figure below).
 
 *Cost to change:* a few lines each.
@@ -1200,10 +1205,8 @@ frame in 600 took about 10 ms, a one-off like D116's. As in D17, the graphics ca
 
 ## Open items after the line-art restyle
 
-- Cars in the mirror are fainter than before (D129). The police lights are the clearest case: in the 1280x720
-  `police` and `busted` scenes the red and blue halves are a few pixels and no longer clearly two colours. If you find
-  them hard to tell apart in play, the fix is to give the mirror's light halves the Outline weight.
-- The boss-bar panel's brackets touch the bottom of the mirror frame (the panel's position was already close to it).
+- Cars in the mirror are fainter than before (D129). The police lights were the clearest case, so the mirror's light
+  halves and the boss strip now use the Outline weight (fixed in 9199286). Check that you can tell blue from red.
 - Things no test picture could show (see the checks below): the boss's cyan shield band at close range, the Gunner's
   two lines while firing, a Dropper's armed chute, oil slicks, tracers and a wreck behind a hill. The speed-trap
   strokes at distance and the small objects at 960x540 look fine in the pictures, but are small.

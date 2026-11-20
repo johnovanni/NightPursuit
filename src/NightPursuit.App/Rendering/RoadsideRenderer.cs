@@ -95,7 +95,7 @@ internal static class RoadsideRenderer
                 var nb = left ? bl : br;
                 var nt = left ? tl : tr;
                 dc.DrawGeometry(Neon.Black, null, Polygon(nb, fb, ft, nt));
-                LineArt.Draw(dc, LineArt.Polyline(new[] { fb, ft, nt, nb }), outline);   // open: no line along the foot
+                LineArt.Draw(dc, LineArt.Polyline(new[] { fb, ft, nt }), outline);   // open: no line along the foot, and none down the near edge
             }
         }
 
@@ -113,7 +113,7 @@ internal static class RoadsideRenderer
             dc.DrawGeometry(Neon.StripeWhite, null, Polygon(At(u + pair / 2, 0), At(u + pair, 0), At(u + pair + slant, 1), At(u + pair / 2 + slant, 1)));
         }
         dc.Pop();
-        LineArt.Draw(dc, LineArt.Polyline(new[] { bl, tl, tr, br }), outline);   // open: no line along the foot
+        LineArt.Draw(dc, LineArt.Polyline(new[] { bl, tl, tr, br }), outline);   // open: no line along the foot, and none down the near edge
 
         // The light bar on top: two halves swapping blue and red on the shared clock, at least 3 px tall at any distance.
         double s = p.Ppm(depth), lift = Math.Max(0.2, 3.0 / s);

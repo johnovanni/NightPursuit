@@ -346,7 +346,7 @@ public static class VehicleRenderer
                 {
                     double x = WedgeHalfWidth(y) - 0.12;
                     foreach (double f in new[] { -1.0, -0.5, 0.5, 1.0 })
-                        dc.DrawEllipse(pen.Core.Brush, null, P(f * x, y + 0.07), rr, rr);
+                        dc.DrawEllipse(Neon.Solid(colour, fade), null, P(f * x, y + 0.07), rr, rr);
                 }
                 break;
         }
@@ -359,20 +359,22 @@ public static class VehicleRenderer
                 // The gun port: a line across the window's open bottom. Dim while it rides along (or is blinded by smoke),
                 // bright while it aims, and a second white line above it during the burst.
                 bool aiming = GunnerDriver.IsAiming(car);
-                double py = boss is null ? 0.9 : 0.84, half = 0.3;
+                bool firing = aiming && car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst };
+                double py = boss is null ? 0.9 : 0.84, half = firing ? 0.8 : 0.3;   // firing: the line runs the whole window bottom
                 var portLine = new LineBatch();
                 portLine.Line(P(-half, py), P(half, py));
                 if (!aiming) portLine.Draw(dc, LineArt.Detail(LineArt.ColorOf(Neon.GunnerCar), fade * 0.5));
+                else if (!firing) portLine.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.PortGlow), fade));
                 else
                 {
                     portLine.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.PortGlow), fade));
-                    if (car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst })
-                    {
-                        var burst = new LineBatch();
-                        var (bl, br) = (P(-half, py), P(half, py));
-                        burst.Line(new Point(bl.X, bl.Y - 0.08 * s), new Point(br.X, br.Y - 0.08 * s));
-                        burst.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.PortBurst), fade));
-                    }
+                    // The second line clears the first by at least the pen's core width plus 3 px, even at 90 m where 0.08 * s is tiny.
+                    var burstPen = LineArt.Outline(LineArt.ColorOf(Neon.PortBurst), fade);
+                    double gap = Math.Max(0.08 * s, burstPen.Core.Thickness + 3);
+                    var (bl, br) = (P(-half, py), P(half, py));
+                    var burst = new LineBatch();
+                    burst.Line(new Point(bl.X, bl.Y - gap), new Point(br.X, br.Y - gap));
+                    burst.Draw(dc, burstPen);
                 }
                 break;
             case AgentKind.Dropper:
@@ -412,7 +414,7 @@ public static class VehicleRenderer
                 dc.DrawRectangle(Neon.TailLight, null, new Rect(g.X + side * (w / 2 - lw * 0.7) - lw / 2, g.Y - 0.62 * s, lw, lh));
         }
 
-        if (car.Punctured) TyreSpark(dc, car, g, w, wheel);   // after the body fill, or the outline would hide it
+        if (car.Punctured) TyreSpark(dc, car, g, w, wheel, fade);   // after the body fill, or the outline would hide it
 
         dc.Pop();
     }
@@ -501,7 +503,7 @@ public static class VehicleRenderer
     }
 
     /// <summary>A few sparks thrown down and out from the bare rim under one wheel; the pattern comes from the puncture time, so it is the same every frame.</summary>
-    static void TyreSpark(DrawingContext dc, AgentCar car, Point g, double w, double wheel)
+    static void TyreSpark(DrawingContext dc, AgentCar car, Point g, double w, double wheel, double fade)
     {
         var sparks = new LineBatch();
         double x = g.X + car.Side * (w / 2), y = g.Y - 0.25 * wheel;
@@ -511,6 +513,6 @@ public static class VehicleRenderer
             double a = Math.PI * (0.05 + 0.3 * f), len = Math.Max(4, wheel * (1.2 + 1.8 * ((k * 0.61 + car.PunctureSeconds * 5) % 1)));
             sparks.Line(new Point(x, y), new Point(x + Math.Cos(a) * len * car.Side, y + Math.Sin(a) * len));
         }
-        sparks.Draw(dc, Neon.Tracer);
+        sparks.Draw(dc, LineArt.Outline(Neon.Amber, fade));
     }
 }

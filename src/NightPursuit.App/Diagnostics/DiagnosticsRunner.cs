@@ -17,7 +17,7 @@ namespace NightPursuit.App.Diagnostics;
 
 /// <summary>
 /// Command-line diagnostics run instead of the game window:
-/// <c>--snapshot out.png [--seconds S] [--scene name] [--size WxH]</c>, <c>--stress report.txt</c> and <c>--perf report.txt</c>.
+/// <c>--snapshot out.png [--seconds S] [--scene name] [--size WxH]</c>, <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c> and <c>--perf report.txt</c>.
 /// </summary>
 public static class DiagnosticsRunner
 {
@@ -113,7 +113,7 @@ public static class DiagnosticsRunner
         var damages = new List<double>();
         foreach (string text in (Arg(args, "--damage") ?? "-1").Split(','))
         {
-            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) || d > 100 || (d < 0 && d != -1))
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) || double.IsNaN(d) || d > 100 || (d < 0 && d != -1))
             {
                 Error($"--damage needs numbers from 0 to 100, e.g. --damage 0,40,80, not '{text}'");
                 return 2;

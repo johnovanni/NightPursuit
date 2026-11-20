@@ -25,7 +25,7 @@ public static class HazardRenderer
 
     // Smoke: a column of grey puffs in world space, driven by the burn time so it never needs randomness.
     const int Puffs = 8;
-    const double PuffLife = 4.0, RiseSpeed = 1.5, WindSpeed = 0.7, StartRadius = 0.6, EndRadius = 2.2, MaxAlpha = 0.5;
+    const double PuffLife = 4.0, RiseSpeed = 1.5, WindSpeed = 0.7, StartRadius = 0.6, EndRadius = 2.2;
     const double SmokeDistance = 900;   // visible from far away: it helps the WRECK AHEAD warning
     const int AlphaLevels = 10;         // opacity is quantised so the brushes can be built once
     static readonly Brush[] SmokeFills = MakeSmokeFills();

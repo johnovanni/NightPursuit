@@ -6,8 +6,8 @@ namespace NightPursuit.App.Rendering;
 
 /// <summary>
 /// Cracks in the driver's windshield. They appear and spread as the car's worst damage grows
-/// (<see cref="PlayerCar.WorstDamage"/>), and stay when armor is regained; each new car gets a clean windshield and its own
-/// pattern. Each impact is a chip with jagged radial cracks that lengthen and branch, then broken rings of a spider web.
+/// (<see cref="PlayerCar.WorstDamage"/>), and stay when armor is regained; each new car gets a clean windshield. The pattern is seeded by the spare-car count, so it
+/// differs from car to car within a run, but a new mission's first car repeats the last mission's first one. Each impact is a chip with jagged radial cracks that lengthen and branch, then broken rings of a spider web.
 /// Thin, pale and dim, so the road stays readable through them; they keep clear of the aim mark at first.
 /// </summary>
 internal static class WindshieldRenderer
@@ -29,7 +29,7 @@ internal static class WindshieldRenderer
     {
         double damage = player.WorstDamage;
         if (damage < Thresholds[0]) return;
-        int seed = 17 + 7919 * player.SpareCars;   // a new car, a new pattern
+        int seed = 17 + 7919 * player.SpareCars;   // seeded by spare cars: a new mission starts with the same first pattern
         if (seed != _seed) { _impacts = Make(seed); _seed = seed; }
 
         double W = l.Width, H = l.Height;

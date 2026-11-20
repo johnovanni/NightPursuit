@@ -51,7 +51,7 @@ broken in the middle and stopping short of the sides, so near cars stand on the 
 
 ## Non-goals
 
-- No gameplay change. Core is untouched; StateHash and all 869 tests stay as they are.
+- No gameplay change. Core's only change is `PlayerCar.WorstDamage` (goal 8: presentation only, not in StateHash); the suite is 873 tests.
 - No new colours; each type keeps its colour.
 - No wreck "breakdown" effects. The trial tried a shattered windshield, a crumpled smoking bonnet, a nose dip and lean,
   a dying dashboard and a dizzy double image circling the view; the owner played it and dropped them all as not needed

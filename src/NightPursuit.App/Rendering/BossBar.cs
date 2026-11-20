@@ -40,7 +40,6 @@ internal static class BossBar
         var box = new Rect(l.HalfWidth - Width / 2 * k, Top * k, Width * k, Height * k);
         var panel = new Rect(box.X - 4 * k, box.Y - 2 * k, box.Width + 8 * k, box.Height + 4 * k);
         dc.DrawRectangle(Neon.PanelFill, null, panel);
-        LineArt.Brackets(dc, panel, 14 * k, LineArt.Gauge);
 
         int n = boss.PhaseIndex + 1, m = boss.Definition.Phases.Count;
         l.Text(dc, $"{boss.Definition.Name.ToUpperInvariant()}  PHASE {n}/{m}: {boss.Phase.Behaviour.ToString().ToUpperInvariant()}",

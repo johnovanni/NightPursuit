@@ -113,7 +113,7 @@ internal static class ArsenalRenderer
 
     // ---- crates ---------------------------------------------------------------------------------------------
 
-    /// <summary>A 1.6 m glowing box drawn as a 3D outline, with its label ("MISSILE +1") above it within 250 m.</summary>
+    /// <summary>A 1.6 m glowing box drawn as its near face without the base plus the top's far edge, with its label ("MISSILE +1") above it within 250 m.</summary>
     public static void DrawCrates(DrawingContext dc, Projector p, World w, HudLayout l)
     {
         const double h = SupplyCrate.Size, half = SupplyCrate.Size / 2;
