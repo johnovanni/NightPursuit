@@ -1047,8 +1047,8 @@ in play.
 ## Open items after Plan 3
 
 Still open from the earlier lists:
-- F1 help doesn't pause the game.
-- You respawn where you crashed, not a short way back (Plan 4).
+- ~~F1 help doesn't pause the game.~~ Closed in Plan 4 (D140).
+- ~~You respawn where you crashed, not a short way back.~~ Closed in Plan 4 (D134).
 - Mission 1 was "fairly sparse" (12 enemy cars over 6 km). Traffic partly answers that: it now has 3 civilian cars per
   km (about 6 around you at any time) and police at presence 1. But it starts at heat 0, and the police only come once
   your heat reaches Patrol (50), so a clean run meets no police. The enemy count is unchanged. Still worth judging when
@@ -1073,11 +1073,8 @@ New from Plan 3:
 - The stress test takes about 68 minutes (D116).
 - One 24 ms frame in the speed test (D116).
 
-Coming in later plans:
-- Plan 4: missions 2–6, each with its own traffic and police settings shown on the briefing screen (and with them enemy
-  missiles in missions 5 and 6), the briefing screen with the boss drawing and your loadout, the mission bonus,
-  respawning a short way back, and the text-size setting.
-- After version 1 (design §10): police helicopters and enemy spies.
+After version 1 (design §10): police helicopters and enemy spies. Sound (design §9).
+(Plan 4 was the last plan before version 1; see "Open items after Plan 4".)
 
 ## Checks only you can do (Plan 3)
 
@@ -1229,3 +1226,172 @@ frame in 600 took about 10 ms, a one-off like D116's. As in D17, the graphics ca
 9. Tracers: are your bullets and the enemy's easy to follow?
 10. The police lights in the mirror (D129): can you tell blue from red? They were made bolder after a reviewer found them faint.
 11. A wreck hidden behind a hill: it should vanish behind the crest, not show through.
+
+## Plan 4 calls (2026-11-20, branch `plan-4`)
+
+Missions 2-6, the screens (title, briefing, pause, results, initials, high scores, settings, controls), the mission
+bonus, respawning back, saving, and the text-size setting. These are my calls, for you to check. Numbers continue from
+the line-art restyle (D130).
+
+**D131. Where things live.** The session rules (`Game`, `ScreenFlow`, menus, initials, settings, high scores, saving)
+are in Core, so they are unit-tested. The screens are passive XAML views with no focusable controls; keys reach them
+only through the flow. There is no mouse in menus (keyboard and pad only). This is closer to the spec's split (§8.2),
+and it means the whole menu flow can be tested without a window.
+*Cost to change:* large.
+
+**D132. What carries between missions.** The score and spare cars carry over. Each mission starts with full armor, the
+loadout its briefing shows (WPN-8) and its own starting heat (HT-5). The throttle scheme comes from Settings; F2/F3 in
+play change it and save it. No extra spare cars are awarded: 3 per game, as MSN-3 says. A restarted practice mission
+re-applies your saved scheme after it rebuilds, and the scheme is saved only when the run's scheme actually changed.
+*Cost to change:* small.
+
+**D133. The mission bonus (MSN-5)** is the mission's own `bonus` (missions 1-6: 1000, 1500, 2000, 2500, 3000, 4000),
+plus armor left x 10, plus 1000 if you lost no car in that mission. It shows line by line on the Mission complete
+screen. There are no point penalties for civilians (D96). I picked the figures to rise gently; you should judge them.
+*Cost to change:* a few numbers (the bonus is in each mission's JSON).
+
+**D134. "A short way back" (MSN-3) is 150 m** before where you crashed (not where the wreck slid to), never before 0.
+The road is cleared from 200 m behind the new spot to 200 m past the crash: cars except the boss, and hazards except
+supply crates. Waves and crates are not rewound, a tripped speed trap stays tripped, and the boss comes back 300 m
+ahead of the new spot (as before). This closes "You respawn where you crashed".
+*Cost to change:* a few numbers.
+
+**D135. Restarting and quitting.** No restarts in a campaign game: R does nothing, so you can't replay a mission with
+your spare cars back. A practice game (`--mission name`) keeps R as before, also on its Mission complete and Game over
+screens, and has "RESTART MISSION" on its pause menu (the pad help says restart is on the pause menu; no hidden
+gamepad remap). "QUIT TO TITLE" (from Pause or a briefing) asks for confirmation, then ends the game as "GAME ENDED";
+the score still goes to the high-score check. The Controls screen also closes on P.
+*Cost to change:* a few table rows.
+
+**D136. High scores (MSN-5).** Top 10. A score qualifies if it is above 0 and the table has fewer than 10 entries or
+it beats the 10th. An equal score ranks below the older one. An entry is 3 initials A-Z, the score, the mission reached
+(the one you were on), and whether you finished all six (shown as `ALL 6`). Practice games are never recorded. HIGH
+SCORES can also be opened from the Title and returns there.
+*Cost to change:* small.
+
+**D137. Initials.** Type the letters, or use Up/Down to change the letter and Left/Right to move; Backspace steps back
+and Enter saves. The slots start with your last initials (`AAA` the first time). Esc does nothing there, so a high
+score can't be thrown away by accident.
+*Cost to change:* a few lines.
+
+**D138. Settings (HUD-5).** Controls scheme ("RAMP PEDAL + CRUISE" or "SPEED LEVER"), lighter steering at speed
+(on/off; `FeelSettings.SpeedSensitiveSteering`, default on), screen shake (on/off, default on), text size (Normal
+100%, Large 125%, Largest 150%), and key bindings (a read-only view, the Controls screen). Changes apply at once and
+are saved when you leave Settings. Enter also cycles the value of the highlighted setting, as well as Left/Right. The
+text size scales the HUD, the screens and the in-play lines every frame.
+*Cost to change:* small.
+
+**D139. Files (NFR-4):** `%AppData%\NightPursuit\settings.json` and `highscores.json`. Each is written to a `.tmp`
+file first, then moved over the old one (a test checks the old file survives a save that fails half way). A file that
+can't be read is copied to `settings.bad.json` or `highscores.bad.json`, and defaults are used, with a notice. If that
+copy fails, the file is never overwritten in this session, and a save reports why. The game loads settings and scores
+before any save and holds one store, so that "never overwritten" flag holds. Failures show on screen: a notice line on
+the briefing, and a line in play (drawn by the App, not through the world's messages, so the game state and its hash
+are untouched).
+*Cost to change:* medium.
+
+**D140. F1 in play opens the Controls screen and pauses** (this closes "F1 help doesn't pause the game"). F1, Enter or
+Esc closes it and play resumes. The start-of-run help box (gas to start) shows only at the start of a game's first
+mission.
+*Cost to change:* small.
+
+**D141. The six missions** are the ones in the Plan 4 table (traffic, police presence, starting heat, boss and bonus
+each). Missile-firing boss phases are only in missions 5 and 6 (ENM-4, D44): one phase each.
+*Cost to change:* the JSON files.
+
+**D142. Each boss has a look.** The JSON has `"look"`: `Fin` (the shape so far, the default), `Twin` (two fins,
+wider) or `Dome` (raised cabin, no fins). It is used in play and for the briefing drawing (MSN-1). Colours stay the
+boss colour (ENM-1). The mirror keeps one boss shape.
+*Cost to change:* a few lines per look.
+
+**D143. The briefing's words.** Traffic: 0 = NONE; up to 2 per km = LIGHT; up to 5 = MODERATE; above 5 = HEAVY. Police
+presence: none, or below 1 = LOW, exactly 1 = NORMAL, above 1 = HIGH. The starting heat and its level are shown when
+above 0. A mission with no boss says "KM TO THE END" instead of the boss distance.
+*Cost to change:* copy.
+
+**D144. The stress test is shorter (this was your open question in D116).** It covers all 8 mission files. At 960x540
+it still draws every 10 m (NFR-5). At 320x200 and 2560x600 it draws every 100 m, which is where the time went. It also
+draws every screen at all three sizes and all three text sizes. Figures follow once the run has finished. You can ask
+for the full cadence back.
+*Cost to change:* one number.
+
+**D145. Practice missions** (`proving-ground`, `patrol-ground`, or any single mission) are reached only with
+`--mission name`. A practice game is that one mission: briefing, play, then "PRACTICE COMPLETE" or game over, then
+back to the title. The practice result screens say "ENTER  BACK TO TITLE   R  RESTART" (a review found the first copy,
+"ENTER  CONTINUE", did not say where Enter goes).
+*Cost to change:* copy.
+
+**D146. Mission briefing prose is mixed case on purpose.** The rule is that screen copy is upper case, but the
+mission story paragraphs are long, and long all-caps text is harder to read; you read everything on screen. Titles,
+labels and all short copy stay upper case; key-help lines and file names are exempt too. Please overrule me if you want
+it all in capitals.
+*Cost to change:* one `ToUpperInvariant` call.
+
+**D147. The result screens wait for the fire key to be released.** Mission complete, Game over and Finished ignore
+Enter (and pad A) until every confirm key has been up once after the screen appears. Otherwise someone still firing
+with Space or pad A as the mission ends would skip the score and bonus with the next press. Cost: one extra press if
+you were not holding anything.
+*Cost to change:* a few lines (one gate in Core, with a test).
+
+**D148. The missile warning has its own amber line** on the briefing, instead of being added to the phases line. Same
+words; easier to read.
+*Cost to change:* a layout tweak.
+
+**D149. Screens cover the play view.** Behind any screen the world's effects freeze (the game is not running, so
+neither are they), and announcements, the BUSTED box, warnings, messages and the respawning box are hidden, so that
+nothing shows through a screen's backdrop. The backdrop is the HUD panel's dark colour (#E604080E).
+*Cost to change:* small.
+
+**D150. Smaller rulings made during the build.**
+- The plan's exact error message texts are kept even where the style differs a little.
+- One shared helper reads the three enum names in the mission files.
+- The tests use the existing small-world style (`Def()` and the track profile).
+- A `--text-size` option and a list `--size` option were added to the diagnostics, for the pictures and the stress run.
+- Key-help lines and file names are exempt from "screen copy is upper case".
+- The briefing's boss drawing and the trim strip scale with the boss's look.
+- The respawn test for the boss's return uses a boss near the start, where "back" is cut at 0.
+
+*Cost to change:* none to a few lines each.
+
+## Open items after Plan 4
+
+Carried forward from the earlier lists (still open): the Plan 3 items above (mission 1's sparse enemy count, the boss
+drawn passing through a wreck, a boss crossing in front of you in an outer lane, the ordinary pursuer's outer-lane
+flaw, police crashing into roadblocks, three-lane gaps at Manhunt, interceptor rams, the 320x200 HUD crowding, rolling
+roadblocks in the long run, one 24 ms frame), and the line-art items (fainter cars in the mirror, the small things no
+picture shows).
+
+New from Plan 4:
+- The Twin boss's tyres sit slightly inside its wider body (about 0.1 in).
+- Large text size was not looked at closely; only Largest was. At Largest the help box covers part of the weapon
+  panel and heat meter, and in a 1280x720 window the BUSTED box, the off-road warning, an announcement and a notice
+  cannot all fit at once. The briefing tips line sits about 7 px above REAR VIEW at 960x540.
+- Pressing R on a practice Game over reached from a quit may flicker to play for one frame.
+- Saving could still hit an unexpected file error not covered by the "file problem" cases; the App has no last
+  backstop.
+- A `.bad.json` copy overwrites an earlier one, and invalid entries in a high-score file are dropped silently when the
+  file is next saved.
+- Values of missions 3-5 are protected only by review; the 90 s mission test can pass trivially.
+- The stress run now also draws the screens; its figures will be in D144.
+- After version 1 (design §10): police helicopters and enemy spies. Sound (design §9).
+
+## Checks only you can do (Plan 4)
+
+1. Play the campaign from the title: `dotnet run -c Release --project src/NightPursuit.App`. Judge each mission's
+   difficulty and length, the rise from 1 to 6, and the bonus numbers (D133).
+2. Missions 5 and 6: the missile phases (D44 warnings) feel fair.
+3. Missions 2-6: the Twin and Dome bosses in play (D142). Do they read as different bosses? No picture showed them in
+   play.
+4. The Gunner firing (two lines) against aiming (one bright line) (D122).
+5. Get a high score, enter initials, and check `%AppData%\NightPursuit\highscores.json` is there after you close and
+   reopen the game (D136, D139).
+6. Settings: try each text size (Large too; only Largest was looked at closely), shake off, lighter steering off, and
+   the speed lever. Check they're kept after a restart (D138).
+7. Press F1 in play: the game pauses and comes back (D140).
+8. Quit from the pause menu: it asks first, and your score still reaches the high scores (D135).
+9. On the results screens, hold the fire key as the mission ends: Enter should do nothing until you let go once
+   (D147). Does it feel right?
+10. The in-play notice line, for example after a failed save (try making `settings.json` read-only) (D139).
+11. Use the gamepad in every menu.
+12. Read a briefing: is the mixed-case prose (D146) fine, or do you want capitals?
+13. The stress test's new length (D144): keep it, or ask for the full cadence back.
