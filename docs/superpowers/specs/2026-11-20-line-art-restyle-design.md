@@ -49,18 +49,6 @@ broken in the middle and stopping short of the sides, so near cars stand on the 
    clear of the aim mark; drawn thin and pale over the hood and under the HUD and mirror, so all readouts stay on top.
    `WorstDamage` is presentation only and is not in StateHash.
 
-9. **The car breaks down (owner's request).** From the moment the player's car is wrecked (a wall clock in the view,
-   so it also plays on the frozen Game Over screen), over the three-second respawn:
-   - the windshield jumps to a full web of cracks with a faint milky haze (within 0.35 s);
-   - the bonnet line buckles at four points and the right gun barrel bends down (0.3 s); the aim mark goes;
-   - grey smoke rolls up from under the bonnet, and small flames sway at the two worst buckles;
-   - the nose dips (the world rises 3.5% of the screen height) and the view leans 4 degrees (over 1.4 s);
-   - the dashboard (HUD, weapon panel, radar, boss bar) dips twice and fades to 12% brightness; the mirror stays;
-   - **dizzy double image:** a 42% copy of everything except the messages circles the real view on a tight circle
-     (1.2% of the screen width, one turn every 1.4 s), fading in from 0.3 s.
-   Warnings, messages and the WRECKED banner with its countdown and spare-car count are drawn once, on top, and stay
-   sharp. The new car restores everything. Nothing flashes quickly: two dashboard dips in about 0.7 s, and slow flames.
-
 ## Non-goals
 
 - No gameplay change. Core is untouched; StateHash and all 869 tests stay as they are.
