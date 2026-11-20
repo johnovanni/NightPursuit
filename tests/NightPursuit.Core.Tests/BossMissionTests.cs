@@ -172,7 +172,7 @@ public class BossMissionTests
     [InlineData("\"boss\": { \"name\": \"Test\", \"health\": 1001, \"phases\": [] }", "boss.health must be from 20 to 1000 (got 1001)")]
     [InlineData("\"boss\": { \"name\": \"\", \"health\": 100, \"phases\": [] }", "boss.name must not be empty")]
     [InlineData("\"boss\": { \"health\": 100, \"phases\": [] }", "boss.name is missing")]
-    [InlineData("\"boss\": { \"name\": \"Test\", \"health\": 100, \"phase\": [] }", "boss.phase is not a known field (name, health, phases)")]
+    [InlineData("\"boss\": { \"name\": \"Test\", \"health\": 100, \"phase\": [] }", "boss.phase is not a known field (name, health, phases, look)")]
     [InlineData("\"boss\": 7", "boss must be an object")]
     [InlineData("\"boss\": { \"name\": \"Test\", \"health\": 100, \"phases\": 3 }", "boss.phases must be an array")]
     [InlineData("\"boss\": { \"name\": \"Test\", \"health\": 100, \"phases\": [ {}, {}, {}, {} ] }", "boss.phases must have 2 or 3 phases (got 4)")]

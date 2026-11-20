@@ -8,5 +8,8 @@ namespace NightPursuit.Core.Missions;
 /// </summary>
 public sealed record BossPhaseDefinition(AgentKind Behaviour, double EndsBelow, bool FiresMissiles = false);
 
-/// <summary>A mission's boss: its name, full health and the phases it goes through in order.</summary>
-public sealed record BossDefinition(string Name, double Health, IReadOnlyList<BossPhaseDefinition> Phases);
+/// <summary>How a boss is drawn.</summary>
+public enum BossLook { Fin, Twin, Dome }
+
+/// <summary>A mission's boss: its name, full health, the phases it goes through in order, and how it looks.</summary>
+public sealed record BossDefinition(string Name, double Health, IReadOnlyList<BossPhaseDefinition> Phases, BossLook Look = BossLook.Fin);

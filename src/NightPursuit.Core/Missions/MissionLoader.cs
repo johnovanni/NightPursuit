@@ -34,6 +34,7 @@ public static class MissionLoader
     const double MinAllowedRadius = 50;
     const double MaxCarsPerKm = 12, MaxPresence = 2;
     const double CarSpacing = 40;   // matches MissionDirector
+    const int MaxBonus = 100000;
     const double MinBossHealth = 20, MaxBossHealth = 1000;
     const double BehindNear = -30, BehindFar = -450, AheadNear = 30, AheadFar = 1400;
 
@@ -76,7 +77,14 @@ public static class MissionLoader
             TrafficDefinition? traffic = root.TryGetProperty("traffic", out var trafficEl) ? ReadTraffic(trafficEl) : null;
             PoliceDefinition? police = root.TryGetProperty("police", out var policeEl) ? ReadPolice(policeEl) : null;
 
-            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss, traffic, police);
+            int bonus = 1000;
+            if (root.TryGetProperty("bonus", out var bonusEl))
+            {
+                if (bonusEl.ValueKind != JsonValueKind.Number || !bonusEl.TryGetInt32(out bonus) || bonus is < 0 or > MaxBonus)
+                    throw Fail($"bonus must be a whole number from 0 to {MaxBonus}");
+            }
+
+            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss, traffic, police, bonus);
         }
 
         TrafficDefinition ReadTraffic(JsonElement el)
@@ -119,8 +127,8 @@ public static class MissionLoader
         {
             if (el.ValueKind != JsonValueKind.Object) throw Fail("boss must be an object");
             foreach (var prop in el.EnumerateObject())
-                if (prop.Name is not ("name" or "health" or "phases"))
-                    throw Fail($"boss.{prop.Name} is not a known field (name, health, phases)");
+                if (prop.Name is not ("name" or "health" or "phases" or "look"))
+                    throw Fail($"boss.{prop.Name} is not a known field (name, health, phases, look)");
 
             string name = Str(el, "name", "boss.name");
             if (string.IsNullOrWhiteSpace(name)) throw Fail("boss.name must not be empty");
@@ -135,7 +143,15 @@ public static class MissionLoader
             var phases = new List<BossPhaseDefinition>();
             foreach (var phaseEl in phasesEl.EnumerateArray())
                 phases.Add(ReadPhase(phaseEl, phases.Count, count, phases.Count > 0 ? phases[^1].EndsBelow : null));
-            return new BossDefinition(name, health, phases);
+
+            var look = BossLook.Fin;
+            if (el.TryGetProperty("look", out var lookEl))
+            {
+                string lookText = lookEl.ValueKind == JsonValueKind.String ? lookEl.GetString() ?? "" : lookEl.ToString();
+                if (lookEl.ValueKind != JsonValueKind.String || !TryEnumName(lookText, out look))
+                    throw Fail($"boss.look must be Fin, Twin or Dome, not '{lookText}'");
+            }
+            return new BossDefinition(name, health, phases, look);
         }
 
         /// <summary>
@@ -213,8 +229,7 @@ public static class MissionLoader
             var itemEl = Required(el, "item", $"{p}.item");
             if (itemEl.ValueKind != JsonValueKind.String) throw Fail($"{p}.item must be a string");
             string itemText = itemEl.GetString() ?? "";
-            if (!Enum.TryParse<SupplyItem>(itemText, ignoreCase: true, out var item)
-                || !Enum.IsDefined(item) || itemText.Length == 0 || char.IsDigit(itemText[0]))
+            if (!TryEnumName<SupplyItem>(itemText, out var item))
                 throw Fail($"{p}.item '{itemText}' is not a known supply item");
 
             int amount = Int(el, "amount", $"{p}.amount");
@@ -276,11 +291,14 @@ public static class MissionLoader
             var v = Required(obj, name, path);
             if (v.ValueKind != JsonValueKind.String) throw Fail($"{path} must be a string");
             string text = v.GetString() ?? "";
-            if (!Enum.TryParse<AgentKind>(text, ignoreCase: true, out var kind)
-                || !Enum.IsDefined(kind) || text.Length == 0 || char.IsDigit(text[0]))
+            if (!TryEnumName<AgentKind>(text, out var kind))
                 throw Fail($"{path} '{text}' is not a known enemy type");
             return kind;
         }
+
+        /// <summary>An enum value by name (any case); empty text, numbers and undefined values are rejected.</summary>
+        static bool TryEnumName<T>(string text, out T value) where T : struct, Enum =>
+            Enum.TryParse(text, ignoreCase: true, out value) && Enum.IsDefined(value) && text.Length > 0 && !char.IsDigit(text[0]);
 
         JsonElement Required(JsonElement obj, string name, string path) =>
             obj.TryGetProperty(name, out var v) ? v : throw Fail($"{path} is missing");

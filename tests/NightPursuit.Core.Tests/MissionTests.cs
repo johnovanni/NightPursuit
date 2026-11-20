@@ -39,6 +39,42 @@ public class MissionTests
     }
 
     [Fact]
+    public void Bonus_and_look_default_when_absent()
+    {
+        Assert.Equal(1000, MissionLoader.Load(Valid, "m.json").Bonus);
+        var def = MissionLoader.LoadFile(Mission01Path);
+        Assert.Equal(1000, def.Bonus);
+        Assert.Equal(BossLook.Fin, def.Boss!.Look);
+    }
+
+    const string BossJson = "\"boss\": { \"name\": \"B\", \"health\": 100, {LOOK}\"phases\": [ { \"behaviour\": \"Gunner\", \"endsBelow\": 0.5 }, { \"behaviour\": \"Pursuer\", \"endsBelow\": 0 } ] }";
+
+    static string WithBonusAndBoss(string bonus, string look) =>
+        Valid.Replace("\"id\"", (bonus.Length > 0 ? $"\"bonus\": {bonus}, " : "") + BossJson.Replace("{LOOK}", look) + ", \"id\"");
+
+    [Fact]
+    public void Bonus_and_look_are_read()
+    {
+        var def = MissionLoader.Load(WithBonusAndBoss("2500", "\"look\": \"dome\", "), "m.json");
+        Assert.Equal(2500, def.Bonus);
+        Assert.Equal(BossLook.Dome, def.Boss!.Look);
+    }
+
+    [Theory]
+    [InlineData("-1", "", "m.json: bonus must be a whole number from 0 to 100000")]
+    [InlineData("100001", "", "m.json: bonus must be a whole number from 0 to 100000")]
+    [InlineData("1.5", "", "m.json: bonus must be a whole number from 0 to 100000")]
+    [InlineData("\"lots\"", "", "m.json: bonus must be a whole number from 0 to 100000")]
+    [InlineData("", "\"look\": \"Round\", ", "m.json: boss.look must be Fin, Twin or Dome, not 'Round'")]
+    [InlineData("", "\"look\": \"1\", ", "m.json: boss.look must be Fin, Twin or Dome, not '1'")]
+    [InlineData("", "\"look\": 1, ", "m.json: boss.look must be Fin, Twin or Dome, not '1'")]
+    public void Bad_bonus_and_look_are_rejected(string bonus, string look, string message)
+    {
+        var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(WithBonusAndBoss(bonus, look), "m.json"));
+        Assert.Equal(message, ex.Message);
+    }
+
+    [Fact]
     public void Patrol_ground_loads()
     {
         var def = MissionLoader.LoadFile(Path.Combine(AppContext.BaseDirectory, "content", "missions", "patrol-ground.json"));
