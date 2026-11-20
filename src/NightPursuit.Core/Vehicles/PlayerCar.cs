@@ -22,4 +22,11 @@ public sealed class PlayerCar() : Vehicle(VehicleStats.Player)
     /// <summary>Total slowdown on the flat while punctured and above the cap, m/s².</summary>
     public const double PunctureBrakeDecel = 4.5;
     public int SpareCars { get; set; } = 3;
+
+    /// <summary>
+    /// The most damage this car has taken, 0 to 100 (100 minus the lowest armor it has had). It never goes down when armor
+    /// is regained, so the windshield cracks it drives stay; a new car (respawn or new mission) starts at 0.
+    /// Presentation only: not part of StateHash.
+    /// </summary>
+    public double WorstDamage { get; set; }
 }

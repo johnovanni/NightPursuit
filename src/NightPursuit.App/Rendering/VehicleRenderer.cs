@@ -91,6 +91,10 @@ public static class VehicleRenderer
     };
 
     // The right half of each body outline, bottom to roof: x as a fraction of the half-width, y in metres (the left half mirrors it).
+    // SPIKE: the rolling tread on the strip of tyre under the body (the body's bottom edge is at 0.224 m).
+    const double TreadVisibleMetres = 0.224, TreadCycle = 10.5, TreadMinPixels = 7;   // 3.5 m per bar: under half a bar per 60 Hz frame up to 100 m/s
+    const int TreadBars = 3;
+
     static readonly (double X, double Y)[] RunnerShape = { (1, 0.224), (1, 0.78), (0.78, 1.4) };
     static readonly (double X, double Y)[] BlockerShape = { (1, 0.224), (1, 1.55), (0.96, 2.1) };
     static readonly (double X, double Y)[] PursuerShape = { (1, 0.224), (1, 0.62), (0.78, 1.15) };
@@ -162,6 +166,7 @@ public static class VehicleRenderer
 
         double ww = Math.Max(1, 0.3 * s * widthScale);
         var tyres = new LineBatch();
+        var tread = new LineBatch();
         foreach (int side in Projector.Sides)
         {
             var tyre = new Rect(g.X + side * (w / 2 - ww / 2) - ww / 2, g.Y - wheel, ww, wheel);
@@ -174,6 +179,22 @@ public static class VehicleRenderer
             dc.DrawRectangle(Neon.Black, null, tyre);
             double outer = side < 0 ? tyre.Left : tyre.Right;
             tyres.Line(new Point(outer, g.Y - 0.224 * s), new Point(outer, tyre.Bottom));
+            // SPIKE: the rolling tread. Seen from behind, the back of a turning wheel moves down, so short dim bars slide down
+            // the strip of tyre under the body. Their phase comes from the distance the car has driven, so they stop when it
+            // stops; a bar every 3.5 m driven keeps each step under half a bar per frame even at top speed (no backward roll).
+            if (TreadVisibleMetres * s >= TreadMinPixels)
+            {
+                double phase = car.Distance / TreadCycle;
+                phase -= Math.Floor(phase);
+                double inset = ww * 0.18;
+                for (int k = 0; k < TreadBars; k++)
+                {
+                    double u = (k + phase) / TreadBars;          // 0 at the top of the strip, 1 at the road
+                    u -= Math.Floor(u);
+                    double y = g.Y - (TreadVisibleMetres - 0.02) * (1 - u) * s - 0.01 * s;
+                    tread.Line(new Point(tyre.Left + inset, y), new Point(tyre.Right - inset, y));
+                }
+            }
         }
 
         // The boss's two tall rear fins stand behind the body outline.
@@ -246,6 +267,7 @@ public static class VehicleRenderer
             LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outlinePen);
         }
         tyres.Draw(dc, detailPen);
+        tread.Draw(dc, LineArt.Detail(colour, fade * 0.55));
 
         if (art && kind != AgentKind.Boss)
         {

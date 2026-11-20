@@ -2,6 +2,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using NightPursuit.App.Diagnostics;
+using NightPursuit.App.Rendering;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
 
@@ -24,6 +25,12 @@ public partial class App : Application
 
         try
         {
+            // SPIKE: --style combined (or laser, newwave) plays the game in a trial line-art look; the default is unchanged.
+            int si = Array.IndexOf(e.Args, "--style");
+            if (si >= 0 && si + 1 < e.Args.Length && Enum.TryParse<ArtStyle>(e.Args[si + 1], true, out var style)
+                && !e.Args[si + 1].All(char.IsDigit))
+                LineArt.Style = style;
+
             string name = MissionName(e.Args);
             string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", name + ".json");
             if (!File.Exists(path))

@@ -77,6 +77,7 @@ public sealed class GameView : FrameworkElement
         // Screen-fixed from here on.
         HoodRenderer.Draw(dc, _layout, _projector);
         EffectRenderer.DrawMuzzleFlash(dc, _layout, world, Effects);
+        WindshieldRenderer.Draw(dc, _layout, world.Player);   // the glass is between you and the hood; the HUD sits on top
         Hud.Draw(dc, _layout, run);
         WeaponPanel.Draw(dc, _layout, world);
         Mirror.Draw(dc, _layout, world, _projector);

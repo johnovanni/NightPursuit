@@ -194,6 +194,7 @@ public sealed partial class World
         DropBrokenRollingRoadblocks();   // before the warnings, so none is ever shown for a broken one
 
         Player.HitFlash = Math.Max(0, Player.HitFlash - Step);
+        Player.WorstDamage = Math.Max(Player.WorstDamage, Math.Clamp(100 - Player.Armor, 0, 100));
         PublishNewWarnings();
         Time += Step;
         RecentMessages.RemoveAll(e => Time - e.Time > MessageLifetime);

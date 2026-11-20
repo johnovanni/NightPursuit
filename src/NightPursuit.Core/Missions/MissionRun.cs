@@ -126,6 +126,7 @@ public sealed class MissionRun
         var p = World.Player;
         p.SpareCars--;
         p.Armor = 100;
+        p.WorstDamage = 0;   // a new car, a clean windshield
         p.Speed = 0;
         p.Lateral = 0;
         p.Heading = 0;

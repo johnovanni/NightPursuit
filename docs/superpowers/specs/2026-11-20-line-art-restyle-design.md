@@ -37,6 +37,18 @@ broken in the middle and stopping short of the sides, so near cars stand on the 
 6. **HUD:** panels keep their text exactly as readable as now; their frames move to the same pens (corner brackets
    instead of full boxes, where a full box adds nothing). Text is never broken or faded.
 
+7. **Rolling tread.** On cars close enough for the tyre strip under the body to be at least 7 px tall, three dim bars
+   slide down that strip, as the back of a turning wheel does. Their phase comes from the distance the car has driven
+   (one bar per 3.5 m), so they stop when it stops and never seem to roll backwards (under half a bar per frame at
+   100 m/s). No flashing.
+8. **Windshield cracks (owner's request).** Cracks appear in the driver's windshield and spread as the car takes damage.
+   They follow the car's worst damage so far (`PlayerCar.WorstDamage` = 100 minus its lowest armor), so they do not go
+   away when armor is regained. My calls: a new car (respawn or new mission) starts with a clean windshield and a new
+   pattern; the first chip shows when armor first drops below 96; seven impacts appear by 84 damage, each growing over
+   30 damage from a chip with jagged radial cracks to branches and then a broken spider-web ring; impacts are placed
+   clear of the aim mark; drawn thin and pale over the hood and under the HUD and mirror, so all readouts stay on top.
+   `WorstDamage` is presentation only and is not in StateHash.
+
 ## Non-goals
 
 - No gameplay change. Core is untouched; StateHash and all 869 tests stay as they are.

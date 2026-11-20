@@ -123,6 +123,18 @@ public static class DiagnosticsRunner
         }
         bool sheet = Has(args, "--sheet") && styles.Count == 4;
 
+        // SPIKE: --damage 0,40,80 renders each picture at each windshield damage level (file suffix -d<N>).
+        var damages = new List<double>();
+        foreach (string text in (Arg(args, "--damage") ?? "-1").Split(','))
+        {
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double d) || d > 100 || (d < 0 && d != -1))
+            {
+                Error($"--damage needs numbers from 0 to 100, e.g. --damage 0,40,80, not '{text}'");
+                return 2;
+            }
+            damages.Add(d);
+        }
+
         foreach (string scene in scenes)
         {
             var made = new List<(ArtStyle Style, string File)>();
@@ -134,7 +146,14 @@ public static class DiagnosticsRunner
                     ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + suffix + Path.GetExtension(path))
                     : path;
                 LineArt.Style = style;
-                RenderScene(scene, mission, seconds, width, height, file);
+                foreach (double damage in damages)
+                {
+                    SnapshotDamage = damage;
+                    string f = damage < 0 ? file
+                        : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + "-d" + damage.ToString(CultureInfo.InvariantCulture) + Path.GetExtension(file));
+                    RenderScene(scene, mission, seconds, width, height, f);
+                }
+                SnapshotDamage = -1;
                 made.Add((style, file));
             }
             LineArt.Style = ArtStyle.Classic;
@@ -179,6 +198,9 @@ public static class DiagnosticsRunner
         encoder.Save(file);
     }
 
+    /// <summary>SPIKE: the windshield damage forced on the next snapshot, or -1 to leave the run's own.</summary>
+    static double SnapshotDamage = -1;
+
     static void RenderScene(string scene, string mission, double seconds, int width, int height, string path)
     {
         var run = NewRun(mission);
@@ -208,6 +230,12 @@ public static class DiagnosticsRunner
         else if (scene == "roadblock") { PlaceOnOpenRoad(run.World); PlaceRoadblock(run.World, view.Effects); }
         else if (scene == "busted") { PlaceOnOpenRoad(run.World); PlaceBusted(run.World, view.Effects); }
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
+        if (SnapshotDamage >= 0)
+        {
+            // SPIKE: --damage N shows the windshield as if the car's armor had fallen to 100 - N.
+            run.World.Player.WorstDamage = SnapshotDamage;
+            run.World.Player.Armor = Math.Max(1, 100 - SnapshotDamage);
+        }
 
         view.Measure(new Size(width, height));
         view.Arrange(new Rect(0, 0, width, height));
