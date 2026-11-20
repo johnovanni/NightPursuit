@@ -602,7 +602,8 @@ true; new tests now prove it, as the design's checks (§11) ask.
 **D75. Traffic.**
 - Civilians all drive your way, in lanes, at 25–35 m/s (56–78 mph).
 - New ones appear 1250–1450 m ahead, beyond the 1200 m the view draws, so they never pop into sight. While you drive
-  slower than 25 m/s (56 mph) they also come from 400–450 m behind, at 30–35 m/s (67–78 mph), and catch you up.
+  slower than 25 m/s (56 mph), new ones come from 400–450 m behind instead, at 30–35 m/s (67–78 mph), and catch
+  you up.
 - They're removed when they're more than 1500 m ahead or 500 m behind.
 - A new car never appears within 40 m of another car in its lane, within 60 m of a wreck or roadblock, or within 30 m
   of anything lying in its lane.
@@ -712,10 +713,13 @@ D114 says how the box-in stays safe when you brake.
 - A rolling roadblock gets the same warning as a parked one, "ROLLING ROADBLOCK 60 m - GAP RIGHT" with an arrow, a
   green chevron in its gap, and the same radar mark.
 - While the pair is forming, or once it has formed with an SUV within 80 m of you, the Side car drops back to Trail.
+  It doesn't take the Side place back until that pair is gone, so it doesn't swing back and forth across a lane.
   With a formed pair within 80 m, the Front car drops back too: the pair is the front of the box then.
 - At most 6 police in the 2 km around you, with room given first to the SUVs, then the interceptors, then the
-  cruisers, then the patrol cars. A patrol car over the limit is removed only where you can't see it (more than
-  1200 m ahead or 300 m behind); until then, a new police car waits rather than go over 6.
+  cruisers, then the patrol cars. To make room, a police car lower down that list is removed, but only where you
+  can't see it (more than 1200 m ahead or 300 m behind), patrol cars first. For an interceptor that can also be a
+  cruiser, and for the SUVs a cruiser or even an interceptor; a new cruiser only ever replaces a patrol car. Until
+  there is room, a new police car waits rather than go over 6.
 
 *Cost to change:* a few numbers.
 
@@ -835,8 +839,8 @@ mission file asking for "Civilian" or a police kind is refused with a clear mess
 enemy type (Runner, Blocker, Pursuer, Gunner, Dropper, Armored)".
 *Cost to change:* none.
 
-**D95. Counts round halves up.** So presence 1.5 gives 3 patrol cars, not 2. (The usual computer rounding sends halves
-to the even number, which would give 2.)
+**D95. Counts round halves up.** So presence 1.25 gives 2.5 patrol cars, rounded to 3, not 2, and presence 0.5 gives
+1 interceptor, not 0. (The usual computer rounding sends halves to the even number, which would give 2 and 0.)
 *Cost to change:* one line.
 
 ## While building Plan 3
@@ -911,7 +915,9 @@ it; here HT-7 means a way out ahead of you.
 - A formed pair breaks up when an SUV has sat in the gap for 2 s (pushed there, or stuck), when an SUV within 60 m of
   you has been off its lane for 3 s (after 4 s to settle in), when an SUV is wrecked, blinded or gone, or when a wreck
   or roadblock blocks an SUV's lane within 120 m ahead of it. Both SUVs then chase you as Trail.
-- After a pair breaks, a new one waits 20 s. There are never more than 2 SUVs at once.
+- After a pair breaks, a new one comes no sooner than 20 s later, and only once both old SUVs are gone (wrecked, left
+  behind, or backed off). Never more than 2 SUVs chase you at once; SUVs that have backed off don't count, so more
+  than 2 can be on the road.
 - One roadblock at a time: no pair is sent while a parked roadblock is ahead of you or less than 300 m behind you, and
   no roadblock is parked while a rolling one is on the road.
 - While a pair is near, the Front car drops back and the box-in stays on the side away from the gap.
@@ -942,7 +948,8 @@ it's ahead of you, pulls away (at your speed + 4 m/s) until it's clear.
   (27 mph). It goes back to its lane 3 s after the chase has passed.
 - It only heads for a side whose path is clear: no car in the lanes between, from 15 m behind it to 40 m ahead. With
   neither side clear, it holds its lane and slows down.
-- A civilian you hit is shaken: it heads for the shoulder at half speed for 3 s.
+- A civilian is shaken when your bullets hit it or you run into the back of it (whoever's fault that was): it heads
+  for the shoulder at half speed for 3 s. A side bump, or a bump from another car, doesn't shake it.
 - Civilians also move aside from a car closing fast from behind (about 2.5 s from reaching them) or when you fire at
   them in your line from within 80 m: they change lane if one is free and slow to 70%, or else keep their lane and
   slow to 60%.
@@ -993,8 +1000,8 @@ in play.
   civilian and police cars of every kind, 8 more civilians, 3 more police, heat 80, a roadblock 300 m ahead, a speed
   trap 200 m ahead, the boss, smoke, crates, missiles and a strike sweep. The limit is 8 ms; Plan 2's scene took
   1.5 ms.
-- One frame in 600 took 24 ms. It looks like a one-off (probably memory being tidied up, or the very first draw), and
-  I didn't look into it further. Please watch for a single hitch.
+- One frame in 600 took 24 ms. It looks like a one-off, perhaps memory being tidied up, or the first draw after the test
+  rebuilds its scene (it does that every 60 frames). I didn't look into it further. Please watch for a single hitch.
 - The stress test drew 18,003 frames of mission 1, the proving ground and the patrol ground at three window sizes,
   plus a minimised window, with no failures. The boss bar was on screen in 6,003 of them.
 - The stress test now takes about 68 minutes, 47 of them for the very wide 2560×600 window. You can decide whether to
