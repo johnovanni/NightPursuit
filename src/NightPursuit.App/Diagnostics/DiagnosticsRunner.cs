@@ -233,7 +233,10 @@ public static class DiagnosticsRunner
 
     // ---- --stress -------------------------------------------------------------------------------------------
 
-    static readonly string[] StressMissions = { "mission-01", "proving-ground", "patrol-ground" };
+    /// <summary>The six campaign missions, then the two practice grounds.</summary>
+    static readonly string[] StressMissions = Campaign.MissionIds.Concat(new[] { "proving-ground", "patrol-ground" }).ToArray();
+    /// <summary>The HUD text scales (Normal, Large, Largest) the stress frames cycle through, by frame number.</summary>
+    static readonly double[] StressTextScales = { 1, 1.25, 1.5 };
     /// <summary>Every kind of car but the boss, listed out (not cast from a number), so a new kind cannot slip in unseen.</summary>
     static readonly AgentKind[] NonBossKinds =
     {
@@ -257,6 +260,8 @@ public static class DiagnosticsRunner
         var report = new System.Text.StringBuilder();
         var failureMessages = new List<string>();
         int totalFrames = 0, totalFailures = 0, totalBossBar = 0;
+        int roadFrames = 0, minimisedFrames = 0;
+        var totalClock = System.Diagnostics.Stopwatch.StartNew();
 
         foreach (string mission in StressMissions)
         {
@@ -271,12 +276,15 @@ public static class DiagnosticsRunner
                 int frames = 0, failures = 0, bossBar = 0;
                 var sizeClock = System.Diagnostics.Stopwatch.StartNew();
 
-                for (double z = 0; z < run.World.Track.Length; z += 10, frames++)
+                // The 960 x 540 window every 10 m; the extreme sizes every 100 m.
+                double step = width == 960 && height == 540 ? 10 : 100;
+                for (double z = 0; z < run.World.Track.Length; z += step, frames++)
                 {
                     if (frames % 50 == 0) Progress($"stress {mission} {width}x{height}: frame {frames}, {sizeClock.Elapsed.TotalSeconds:0.0} s");
                     try
                     {
                         PlaceStressFrame(run, view, boss, z, frames);
+                        view.TextScale = StressTextScales[frames % StressTextScales.Length];
                         int before = view.RenderCount;
                         view.InvalidateVisual();
                         view.UpdateLayout();
@@ -293,6 +301,7 @@ public static class DiagnosticsRunner
                 }
                 report.AppendLine($"{mission} {width}x{height}: {frames} frames, {failures} failures, boss bar on {bossBar}, {sizeClock.Elapsed.TotalSeconds:0.0} s");
                 totalFrames += frames;
+                roadFrames += frames;
                 totalBossBar += bossBar;
                 totalFailures += failures;
             }
@@ -316,11 +325,22 @@ public static class DiagnosticsRunner
                 }
                 report.AppendLine($"{mission} 0x0: 1 frame, {failures} failures");
                 totalFrames++;
+                minimisedFrames++;
                 totalFailures += failures;
             }
         }
+        double roadMinutes = totalClock.Elapsed.TotalMinutes;
 
-        report.Insert(0, $"stress: {totalFrames} frames, {totalFailures} failures, boss bar on {totalBossBar}{Environment.NewLine}");
+        // Every screen at every stress size and every text size.
+        var screensClock = System.Diagnostics.Stopwatch.StartNew();
+        var (screenFrames, screenFailures, screenMessages) = ScreenSnapshots.StressScreens(StressSizes);
+        report.AppendLine($"screens: {screenFrames} frames (every screen x {StressSizes.Length} sizes x 3 text sizes), {screenFailures} failures, {screensClock.Elapsed.TotalMinutes:0.0} min");
+        failureMessages.AddRange(screenMessages.Take(Math.Max(0, 10 - failureMessages.Count)));
+        totalFrames += screenFrames;
+        totalFailures += screenFailures;
+
+        report.Insert(0, $"stress: {totalFrames} frames, {totalFailures} failures, boss bar on {totalBossBar}{Environment.NewLine}"
+            + $"parts: road {roadFrames} frames in {roadMinutes:0.0} min, minimised {minimisedFrames} frames, screens {screenFrames} frames in {screensClock.Elapsed.TotalMinutes:0.0} min; total {totalClock.Elapsed.TotalMinutes:0.0} min{Environment.NewLine}");
         if (failureMessages.Count > 0)
         {
             report.AppendLine("first failures:");
@@ -609,7 +629,7 @@ public static class DiagnosticsRunner
     }
 
     /// <summary>Appends a progress line to the log file (a long run can then be watched without a console).</summary>
-    static void Progress(string message)
+    internal static void Progress(string message)
     {
         try { File.AppendAllText(_logPath, message + Environment.NewLine); }
         catch (Exception) { /* progress is optional */ }

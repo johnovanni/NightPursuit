@@ -81,6 +81,49 @@ public static class ScreenSnapshots
         return 0;
     }
 
+    /// <summary>
+    /// The stress pass over the screens: every screen name (briefing-all as its six briefings) at every window size and every
+    /// text size, drawn but not saved. Any exception counts as a failure.
+    /// </summary>
+    internal static (int Frames, int Failures, List<string> Messages) StressScreens(IReadOnlyList<(int W, int H)> sizes)
+    {
+        var campaign = Campaign.MissionIds.Select(LoadMission).ToArray();
+        string[] screens = ScreenNames.SelectMany(n => n == BriefingAll
+            ? Enumerable.Range(1, Campaign.MissionIds.Length).Select(i => "briefing-" + i)
+            : new[] { n }).ToArray();
+        int frames = 0, failures = 0;
+        var messages = new List<string>();
+        foreach (string screen in screens)
+        {
+            DiagnosticsRunner.Progress($"stress screen {screen}");
+            foreach (var textSize in new[] { TextSize.Normal, TextSize.Large, TextSize.Largest })
+            {
+                try
+                {
+                    var view = new GameView { ShowHelp = false };
+                    var flow = NewFlow(campaign, null, textSize);
+                    DriveTo(flow, screen, view, false, screen.StartsWith("briefing-", StringComparison.Ordinal) ? int.Parse(screen[9..], CultureInfo.InvariantCulture) - 1 : -1);
+                    foreach (var (width, height) in sizes)
+                    {
+                        frames++;
+                        try { Render(flow, view, width, height, null); }
+                        catch (Exception ex)
+                        {
+                            failures++;
+                            if (messages.Count < 10) messages.Add($"screen {screen} {textSize} {width}x{height}: {ex.GetType().Name}: {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    failures++;
+                    if (messages.Count < 10) messages.Add($"screen {screen} {textSize} (driving): {ex.GetType().Name}: {ex.Message}");
+                }
+            }
+        }
+        return (frames, failures, messages);
+    }
+
     static ScreenFlow NewFlow(MissionDefinition[] campaign, MissionDefinition? practice, TextSize textSize)
     {
         var settings = new GameSettings { TextSize = textSize };
@@ -248,7 +291,7 @@ public static class ScreenSnapshots
     }
 
     /// <summary>Renders the game view and the screen host in one grid, as the window stacks them.</summary>
-    static void Render(ScreenFlow flow, GameView view, int width, int height, string path)
+    static void Render(ScreenFlow flow, GameView view, int width, int height, string? path)
     {
         view.Run = flow.Game?.Run;
         view.ShowHelp = flow.ShowIntroHelp && flow.Current == Screen.Play;
@@ -267,6 +310,7 @@ public static class ScreenSnapshots
         grid.UpdateLayout();
         var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(grid);
+        if (path is null) return;   // the stress pass only draws
 
         var encoder = new PngBitmapEncoder();
         encoder.Frames.Add(BitmapFrame.Create(bitmap));
