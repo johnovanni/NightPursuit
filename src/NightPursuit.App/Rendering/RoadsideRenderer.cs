@@ -116,7 +116,7 @@ internal static class RoadsideRenderer
         double s = p.Ppm(depth), lift = Math.Max(0.2, 3.0 / s);
         foreach (int half in Projector.Sides)
         {
-            double a = centre + (half < 0 ? -1.0 : 0), b = centre + (half < 0 ? 0 : 1.0);
+            double a = centre + (half < 0 ? -Roadblock.BarrierHalfWidth : 0), b = centre + (half < 0 ? 0 : Roadblock.BarrierHalfWidth);   // the whole barrier width
             if (!p.ToScreen(nearD, a, BarrierHeight, out var lo, out _) || !p.ToScreen(nearD, b, BarrierHeight + lift, out var hi, out _)) continue;
             var rect = new Rect(lo, hi);
             var pen = Neon.LightPen(time, half);
@@ -127,7 +127,7 @@ internal static class RoadsideRenderer
 
     // ---- speed trap -----------------------------------------------------------------------------------------
 
-    /// <summary>A post 2.5 m tall at the road's edge with a square limit sign (amber; red once it caught you) and a small camera box.</summary>
+    /// <summary>A post 2.5 m tall at the road's edge with a square limit sign (amber; red with the word CAUGHT once it caught you) and a small camera box.</summary>
     static void DrawSpeedTrap(DrawingContext dc, Projector p, SpeedTrap trap)
     {
         double dz = trap.Distance - p.CamDistance;
@@ -151,7 +151,15 @@ internal static class RoadsideRenderer
         double size = Math.Max(6, 0.6 * s);
         var text = new FormattedText(trap.LimitMph.ToString("0", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture,
                                      FlowDirection.LeftToRight, Font, size, trap.Caught ? Neon.TextRed : Neon.TextAmber, 1.0);
-        dc.DrawText(text, new Point(sign.X + (sign.Width - text.Width) / 2, sign.Y + (sign.Height - text.Height) / 2));
+        double numberY = sign.Y + (sign.Height - text.Height) / 2;
+        if (trap.Caught)
+        {
+            // Red against amber is not enough on its own: the word CAUGHT goes under the number.
+            numberY = sign.Y + 0.02 * s;
+            var caught = new FormattedText("CAUGHT", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, Math.Max(5, 0.26 * s), Neon.TextRed, 1.0);
+            dc.DrawText(caught, new Point(sign.X + (sign.Width - caught.Width) / 2, sign.Bottom - caught.Height - 0.04 * s));
+        }
+        dc.DrawText(text, new Point(sign.X + (sign.Width - text.Width) / 2, numberY));
 
         // The camera box: on the road side of the post, a lens facing you, joined to the sign by a short arm.
         double toward = lat > 0 ? -1 : 1, camLo = lat + toward * (half + 0.8), camHi = lat + toward * (half + 0.15);

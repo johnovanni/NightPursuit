@@ -62,8 +62,8 @@ internal static class Radar
                     dc.DrawEllipse(Neon.TextSteel, null, new Point(at.X + f * u * 0.9, at.Y), u * 0.3, u * 0.3);
             }
             else if (h is Roadblock block) RoadblockMark(dc, Map, k, h.Distance - cam.CamDistance, block.GapLane, 0);
-            else if (h is SpeedTrap trap)   // an amber S at the road edge it stands on (red once it caught you)
-                l.Text(dc, "S", at.X, at.Y - 7 * k, 14, trap.Caught ? Neon.TextRed : Neon.TextAmber, TextAlignment.Center, true);
+            else if (h is SpeedTrap trap)   // an amber S at the road edge it stands on (red, and "S!", once it caught you)
+                l.Text(dc, trap.Caught ? "S!" : "S", at.X, at.Y - 7 * k, 14, trap.Caught ? Neon.TextRed : Neon.TextAmber, TextAlignment.Center, true);
             else if (h is SupplyCrate crate)   // a white square with its item letter
             {
                 double q = u * 1.4;

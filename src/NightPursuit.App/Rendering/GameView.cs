@@ -86,6 +86,7 @@ public sealed class GameView : FrameworkElement
         Overlays.DrawWarnings(dc, _layout, world, bossBar);
         Overlays.DrawMessages(dc, _layout, world, bossBar);
         Overlays.DrawAnnouncement(dc, _layout, world, bossBar);
+        Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
         Overlays.DrawState(dc, _layout, run);   // after the help, so PAUSED / GAME OVER etc. are never hidden under it

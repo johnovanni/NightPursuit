@@ -18,6 +18,7 @@ internal static class Hud
         DrawDriving(dc, l, run.World);
         DrawControls(dc, l, run.World);
         DrawCarState(dc, l, run);
+        HeatMeterView.Draw(dc, l, run.World);
     }
 
     static void DrawDriving(DrawingContext dc, HudLayout l, World w)
@@ -84,9 +85,9 @@ internal static class Hud
         l.Text(dc, "F1 help  P pause  R restart when paused", 16 * k, y + 4 * k, 13, Neon.TextGray);
     }
 
-    /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, boss or distance, no-grip and puncture timers), so scenery can keep clear of it.</summary>
+    /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, boss or distance, no-grip and puncture timers, the heat meter), so scenery can keep clear of it.</summary>
     public static Rect ReadoutBounds(HudLayout l) =>
-        new(l.Width - 290 * l.K, 0, 290 * l.K, 156 * l.K);
+        new(l.Width - 290 * l.K, 0, 290 * l.K, 200 * l.K);
 
     static void DrawCarState(DrawingContext dc, HudLayout l, MissionRun run)
     {

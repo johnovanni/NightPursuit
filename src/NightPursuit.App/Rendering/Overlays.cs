@@ -31,6 +31,7 @@ internal static class Overlays
         "SPEED      C cruise     F2 ramp pedal     F3 speed lever",
         "           1-0 lever presets     mouse wheel moves the lever",
         "GAME       P / Esc pause   R restart (when paused or finished)   F1 this help",
+        "HEAT       hurting civilians or police raises heat; drive clean to cool off",
         "GAMEPAD    right trigger gas     left trigger brake     left stick steer",
         "           A guns   B drop   X next rear   RB missile   LB strike   Y cruise",
         "           D-pad up/down lever   Start pause   Back restart",
@@ -72,6 +73,8 @@ internal static class Overlays
     {
         WarningKind.BlockerAhead => Neon.TextAmber,
         WarningKind.WreckAhead or WarningKind.HazardAhead => Neon.TextOrange,
+        WarningKind.PoliceAlongside or WarningKind.PoliceBehind => Neon.TextLightBlue,
+        WarningKind.SpeedTrapAhead => Neon.TextAmber,
         _ => Neon.TextRed,
     };
 
@@ -92,6 +95,19 @@ internal static class Overlays
         l.Centered(dc, a.Title, top + 6 * k, 34, Neon.TextAmber);
         if (detail) l.Centered(dc, a.Detail, top + 52 * k, 18, Neon.TextCyan);
         dc.Pop();
+    }
+
+    /// <summary>
+    /// The busted countdown, on a dark backing box at 0.70 of the height: between the off-road banner (0.62) and the hood (0.86), so it
+    /// covers neither. The whole seconds left are written out; the amber line says how to cancel it.
+    /// </summary>
+    public static void DrawBusted(DrawingContext dc, HudLayout l, World w)
+    {
+        if (!w.Busted.Counting) return;
+        double k = l.K, top = l.Height * 0.70, boxWidth = Math.Max(0, Math.Min(l.Width - 20, 470 * k));
+        dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, new Rect(l.HalfWidth - boxWidth / 2, top - 8 * k, boxWidth, 88 * k));
+        l.Centered(dc, $"BUSTED IN {w.Busted.SecondsLeft}", top, 44, Neon.TextRed);
+        l.Centered(dc, "SPEED UP TO BREAK FREE", top + 56 * k, 18, Neon.TextAmber);
     }
 
     /// <summary>A chevron on the screen edge pointing out toward the side a warning comes from (both sides when it is dead behind): pursuers, missiles, blockers, the boss and hostiles.</summary>
