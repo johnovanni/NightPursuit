@@ -69,7 +69,7 @@ public sealed class GameView : FrameworkElement
         _layout.TextScale = TextScale;
 
         double shake = ShakeEnabled ? world.Player.Shake * 14 : 0;
-        dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
+        if (ShakeEnabled) dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
         SkyRenderer.Draw(dc, _projector, world.Track, Hud.ReadoutBounds(_layout));
         RoadRenderer.Draw(dc, _projector);
         HazardRenderer.DrawSlicks(dc, _projector, world);
@@ -85,7 +85,7 @@ public sealed class GameView : FrameworkElement
         EffectRenderer.DrawBeams(dc, _projector, Effects, Mirror.Bounds(_layout));
         EffectRenderer.DrawExplosions(dc, _projector, world, Effects);
         ArsenalRenderer.DrawLock(dc, _projector, world);
-        dc.Pop();
+        if (ShakeEnabled) dc.Pop();
 
         // Screen-fixed from here on.
         HoodRenderer.Draw(dc, _layout, _projector);

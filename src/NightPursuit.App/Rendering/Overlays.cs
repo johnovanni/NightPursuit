@@ -153,7 +153,7 @@ internal static class Overlays
             dc.PushOpacity(Math.Clamp(left / MessageFade, 0, 1));
             l.Centered(dc, m.Text, y, 18, brush);
             dc.Pop();
-            y += MessageRow * l.K;
+            y += l.T(MessageRow);
         }
     }
 
@@ -198,7 +198,7 @@ internal static class Overlays
     {
         double k = l.T(1), size = 18, room = Math.Max(1, l.Width - 40);
         double width = l.TextWidth(notice, size, bold: true);
-        if (width > room) { size = Math.Max(18 / l.TextScale, size * room / width); width = l.TextWidth(notice, size, bold: true); }
+        if (width > room) { size = Math.Max(8 / k, size * room / width); width = l.TextWidth(notice, size, bold: true); }
         double y = l.HoodTop - l.T(30), boxWidth = Math.Min(l.Width - 20, width + 40 * k);
         dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, y - 4 * k, Math.Max(0, boxWidth), 30 * k));
         l.Centered(dc, notice, y, size, Neon.TextAmber);
