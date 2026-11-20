@@ -17,6 +17,7 @@ public sealed class GameLoop
     TimeSpan _last;
     bool _haveLast;
     bool _gasSeen;   // the intro help stays up until the first gas
+    bool _everActive;   // the window has had focus at least once since it opened
 
     public GameLoop(Window window, MissionRun run, GameView view, InputHub input)
     {
@@ -36,6 +37,16 @@ public sealed class GameLoop
         double seconds = _haveLast ? (now - _last).TotalSeconds : 0;
         _last = now;
         _haveLast = true;
+
+        // A newly opened window can take a moment to get focus (for example when started from a terminal).
+        // Until it has had focus once, hold the run still instead of pausing it: pausing here left the game
+        // paused behind the intro help, so pressing gas hid the help but nothing moved.
+        if (!_everActive)
+        {
+            if (!_window.IsActive) { _view.InvalidateVisual(); return; }
+            _everActive = true;
+            seconds = 0;   // don't run the time spent waiting for focus
+        }
 
         // Losing focus pauses the run, including mid-respawn, so it never carries on with nobody at the keyboard.
         if (!_window.IsActive && _run.State == RunState.Playing) _run.Handle(new GameAction(ActionKind.Pause));
