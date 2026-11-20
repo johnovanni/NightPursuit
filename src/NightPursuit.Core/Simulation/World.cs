@@ -525,7 +525,7 @@ public sealed partial class World
     /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its player-blame time and hit-heat cooldown, its oil and caltrops
     /// droppers' charges and timers, its missile rack's cooldown and, for a boss, its phase, shield, caltrops slow and
     /// whether it is engaged; every missile's and enemy missile's Distance and Lateral; each hazard's type, Distance and
-    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat's value and the time since the last offence, and the busted timer and whether it is armed.
+    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat (value, level, the time since the last offence and in the level), the busted timer, whether it is armed and whether a bust is pending, and each rolling roadblock (formed, open and planned lane, the two lanes held, its cars, three timers).
     /// </summary>
     public ulong StateHash()
     {
@@ -563,6 +563,15 @@ public sealed partial class World
         Add(ref h, Loadout.Strike.Targeting ? 1 : 0); Add(ref h, Loadout.Strike.SweepLeft);
         Add(ref h, Heat.Value); Add(ref h, Heat.SinceOffence);
         Add(ref h, Busted.Held); Add(ref h, BustedArmed ? 1 : 0);
+        Add(ref h, (double)Heat.Level); Add(ref h, Heat.LevelTime); Add(ref h, BustedPending ? 1 : 0);
+        foreach (var rb in RollingRoadblockList)
+        {
+            Add(ref h, rb.Formed ? 1 : 0); Add(ref h, rb.OpenLane); Add(ref h, rb.PlannedOpen);
+            Add(ref h, rb.LaneOf(0)); Add(ref h, rb.LaneOf(1));
+            Add(ref h, rb.Cars[0].Id); Add(ref h, rb.Cars[1].Id);
+            Add(ref h, rb.FormedSeconds); Add(ref h, rb.OffSlotSeconds); Add(ref h, rb.InGapSeconds);
+        }
+        Add(ref h, RollingRoadblockList.Count);
         return h;
 
         static void Mix(ref ulong h, Vehicle v)

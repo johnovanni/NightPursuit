@@ -1,13 +1,19 @@
 using System.Globalization;
 using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Police;
+using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Simulation;
 
 /// <summary>What a warning is about. The order of declaration is the priority: earlier kinds win when more than four apply.</summary>
-public enum WarningKind { MissileIncoming, PursuerAlongside, GunnerAiming, HazardAhead, WreckAhead, BlockerAhead, BossBehind, HostileBehind, PursuerBehind }
+public enum WarningKind
+{
+    MissileIncoming, PursuerAlongside, PoliceAlongside, GunnerAiming, HazardAhead, WreckAhead, RoadblockAhead, BlockerAhead,
+    BossBehind, HostileBehind, PursuerBehind, PoliceBehind, SpeedTrapAhead,
+}
 
 /// <summary>One warning for the HUD. <paramref name="Side"/> is -1 left, +1 right, or 0 for both edges; the edge arrow shows only when <paramref name="ShowArrow"/>.</summary>
 public readonly record struct Warning(WarningKind Kind, string Text, int Side, bool ShowArrow);
@@ -20,6 +26,7 @@ public static class Warnings
     const double PursuerRange = 120, AlongsideAhead = 4, AlongsideZone = 3, AheadRange = 150;
     const double WreckLane = 2.2, BlockerLane = 2, OilLane = 2.5, GunnerLane = 2, SideDeadZone = 1;
     const double GunnerRange = 120, BossRange = 120, HostileRange = 60, HostileMinGap = 3, HostileClosing = 3;
+    const double PoliceAlongsideAhead = 4, PoliceSideReach = 6, PoliceBehindMin = 3, PoliceBehindRange = 120, RoadblockRange = 400, SpeedTrapRange = 400, OnGapSlack = 1.5;
 
     /// <summary>At most <see cref="MaxShown"/> warnings, highest priority first (one per kind).</summary>
     public static IReadOnlyList<Warning> Collect(World w)
@@ -41,11 +48,26 @@ public static class Warnings
 
         AgentCar? pursuer = null, blocker = null, gunner = null, hostile = null;
         int pursuerSides = 0;          // bit 0: one on the left, bit 1: centred, bit 2: one on the right
+        AgentCar? policeAlongside = null, policeBehind = null;
+        int policeSides = 0;           // the same bits for police alongside
         BossCar? boss = null, bossAlongside = null;
         foreach (var e in w.Agents)
         {
             if (e.State != VehicleState.Driving) continue;
             double dz = e.Distance - p.Distance;
+            if (e.Faction == Faction.Police)
+            {
+                // Police warn from Pursuit up; at Patrol their light bars and the radar show them. A boss is never police.
+                if (w.Heat.Level < HeatLevel.Pursuit) continue;
+                if (dz > -AlongsideZone && dz < PoliceAlongsideAhead && Math.Abs(e.Lateral - p.Lateral) < PoliceSideReach)
+                {
+                    policeSides |= 1 << (SideOf(e.Lateral - p.Lateral) + 1);
+                    if (policeAlongside is null || Math.Abs(dz) < Math.Abs(policeAlongside.Distance - p.Distance)) policeAlongside = e;
+                }
+                else if (dz <= -PoliceBehindMin && dz >= -PoliceBehindRange && (policeBehind is null || dz > policeBehind.Distance - p.Distance))
+                    policeBehind = e;
+                continue;
+            }
             // A boss also gets the warnings of the car its phase drives like, in words that name it (D67).
             var bossCar = e as BossCar;
             var drivesLike = bossCar is null ? e.Kind : bossCar.Phase.Behaviour;
@@ -107,6 +129,17 @@ public static class Warnings
             found[(int)WarningKind.BossBehind] = Behind(WarningKind.BossBehind, "BOSS", boss, p);
         if (hostile is not null)
             found[(int)WarningKind.HostileBehind] = Behind(WarningKind.HostileBehind, hostile.Kind.ToString().ToUpperInvariant(), hostile, p);
+        if (policeAlongside is not null)
+        {
+            int policeSide = policeSides == 1 ? -1 : policeSides == 4 ? 1 : 0;
+            found[(int)WarningKind.PoliceAlongside] = new Warning(WarningKind.PoliceAlongside,
+                $"POLICE {Beside(policeAlongside.Lateral - p.Lateral)}", policeSide, true);
+        }
+        if (policeBehind is not null)
+        {
+            var behind = Behind(WarningKind.PoliceBehind, "POLICE", policeBehind, p);
+            found[(int)WarningKind.PoliceBehind] = behind;
+        }
 
         double hazardGap = double.MaxValue, wreckGap = double.MaxValue;
         string? hazardText = null;
@@ -121,6 +154,41 @@ public static class Warnings
         }
         if (hazardText is not null) found[(int)WarningKind.HazardAhead] = new Warning(WarningKind.HazardAhead, hazardText, 0, false);
         if (wreckGap < double.MaxValue) found[(int)WarningKind.WreckAhead] = new Warning(WarningKind.WreckAhead, "WRECK AHEAD", 0, false);
+
+        // The nearer of a parked roadblock and a formed rolling one (its open lane is locked; a dropped pair is gone from the list).
+        double blockGap = RoadblockRange;
+        int blockGapLane = -1;
+        bool blockRolling = false;
+        double trapGap = SpeedTrapRange;
+        SpeedTrap? trap = null;
+        foreach (var h in w.Hazards)
+        {
+            double dz = h.Distance - p.Distance;
+            if (dz < 0 || dz >= RoadblockRange) continue;
+            if (h is Roadblock block && dz < blockGap) { blockGap = dz; blockGapLane = block.GapLane; blockRolling = false; }
+            else if (h is SpeedTrap t && !t.Triggered && dz < trapGap) { trapGap = dz; trap = t; }
+        }
+        foreach (var rb in w.RollingRoadblocks)
+        {
+            if (!rb.Formed) continue;
+            foreach (var car in rb.Cars)
+            {
+                double dz = car.Distance - p.Distance;
+                if (dz >= 0 && dz < blockGap) { blockGap = dz; blockGapLane = rb.OpenLane; blockRolling = true; }
+            }
+        }
+        if (blockGapLane >= 0)
+        {
+            double dx = Track.LaneCentres[blockGapLane] - p.Lateral;
+            string name = blockRolling ? "ROLLING ROADBLOCK" : "ROADBLOCK";
+            string lane = blockGapLane == 0 ? "LEFT" : blockGapLane == Track.LaneCentres.Length - 1 ? "RIGHT" : "CENTRE";
+            bool arrow = Math.Abs(dx) >= OnGapSlack;
+            found[(int)WarningKind.RoadblockAhead] = new Warning(WarningKind.RoadblockAhead,
+                $"{name} {Metres(blockGap)} m - GAP {lane}", arrow ? (dx < 0 ? -1 : 1) : 0, arrow);
+        }
+        if (trap is not null)
+            found[(int)WarningKind.SpeedTrapAhead] = new Warning(WarningKind.SpeedTrapAhead,
+                $"SPEED TRAP {trap.LimitMph.ToString("0", CultureInfo.InvariantCulture)} MPH  {Metres(trapGap)} m", 0, false);
 
         var result = new List<Warning>(MaxShown);
         foreach (var f in found)

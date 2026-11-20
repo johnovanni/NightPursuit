@@ -2,4 +2,8 @@
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- The tests build rolling roadblocks directly, to check the state hash and the warnings. -->
+    <InternalsVisibleTo Include="NightPursuit.Core.Tests" />
+  </ItemGroup>
 </Project>

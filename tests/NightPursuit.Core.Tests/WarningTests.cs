@@ -2,6 +2,7 @@ using NightPursuit.Core.Control;
 using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
@@ -47,6 +48,266 @@ public class WarningTests
     static Warning Single(World w, WarningKind kind) => Assert.Single(Warnings.Collect(w), x => x.Kind == kind);
 
     static bool Has(World w, WarningKind kind) => Warnings.Collect(w).Any(x => x.Kind == kind);
+
+    // ---- Task 11: police, roadblocks and speed traps ----
+
+    static AgentCar Police(World w, double gap, double lateral = 0, AgentKind kind = AgentKind.PoliceCruiser) => Car(w, kind, gap, lateral);
+
+    [Fact]
+    public void Roadblock_warning_names_the_gap_and_points_to_it()
+    {
+        var w = Straight();
+        w.Hazards.Add(Roadblock.Place(w.Player.Distance + 300, 2));
+        var warning = Single(w, WarningKind.RoadblockAhead);
+        Assert.Equal("ROADBLOCK 300 m - GAP RIGHT", warning.Text);
+        Assert.Equal(1, warning.Side);
+        Assert.True(warning.ShowArrow);
+        Assert.False(Has(w, WarningKind.WreckAhead));          // a roadblock is not a wreck
+        Assert.False(Has(w, WarningKind.HazardAhead));
+    }
+
+    [Fact]
+    public void Roadblock_warning_has_no_arrow_when_you_are_in_the_gap()
+    {
+        var w = Straight();
+        w.Hazards.Add(Roadblock.Place(w.Player.Distance + 200, 1));
+        var warning = Single(w, WarningKind.RoadblockAhead);
+        Assert.Equal("ROADBLOCK 200 m - GAP CENTRE", warning.Text);
+        Assert.False(warning.ShowArrow);
+        w.Player.Lateral = -4;                                  // far from the middle lane: points right
+        var off = Single(w, WarningKind.RoadblockAhead);
+        Assert.True(off.ShowArrow);
+        Assert.Equal(1, off.Side);
+    }
+
+    [Fact]
+    public void Roadblock_warns_from_400_m_only_and_not_once_passed()
+    {
+        var w = Straight();
+        var block = Roadblock.Place(w.Player.Distance + 401, 0);
+        w.Hazards.Add(block);
+        Assert.False(Has(w, WarningKind.RoadblockAhead));
+        block.Distance = w.Player.Distance + 399;
+        Assert.Equal("ROADBLOCK 399 m - GAP LEFT", Single(w, WarningKind.RoadblockAhead).Text);
+        block.Distance = w.Player.Distance - 1;
+        Assert.False(Has(w, WarningKind.RoadblockAhead));
+    }
+
+    /// <summary>A formed rolling roadblock <paramref name="gap"/> m ahead with the open lane <paramref name="open"/> (an outer lane).</summary>
+    static RollingRoadblock Rolling(World w, double gap, int open)
+    {
+        int lo = open == 0 ? 1 : 0, hi = open == 2 ? 1 : 2;
+        var a = Police(w, gap, Track.LaneCentres[lo], AgentKind.ArmoredSuv);
+        var b = Police(w, gap + 1, Track.LaneCentres[hi], AgentKind.ArmoredSuv);
+        var rb = new RollingRoadblock(a, b, open);
+        w.RollingRoadblockList.Add(rb);
+        w.Player.Lateral = Track.LaneCentres[open == 0 ? 2 : 0];     // the lane farthest from the gap, so the open lane is the one wanted
+        rb.Form(w.Player.Lateral);
+        Assert.Equal(open, rb.OpenLane);
+        return rb;
+    }
+
+    [Fact]
+    public void Rolling_roadblock_warns_with_its_gap()
+    {
+        var w = Straight();
+        Rolling(w, 50, open: 0);
+        var warning = Single(w, WarningKind.RoadblockAhead);
+        Assert.Equal("ROLLING ROADBLOCK 50 m - GAP LEFT", warning.Text);
+        Assert.Equal(-1, warning.Side);
+        Assert.True(warning.ShowArrow);
+    }
+
+    [Fact]
+    public void Rolling_roadblock_gives_no_warning_before_it_forms_and_none_after_it_is_dropped()
+    {
+        var w = Straight();
+        var a = Police(w, 50, -5, AgentKind.ArmoredSuv);
+        var b = Police(w, 51, 5, AgentKind.ArmoredSuv);
+        var rb = new RollingRoadblock(a, b, 0);
+        w.RollingRoadblockList.Add(rb);
+        Assert.False(Has(w, WarningKind.RoadblockAhead));       // not formed: no locked gap to name
+        rb.Form(0);
+        Assert.True(Has(w, WarningKind.RoadblockAhead));
+        a.State = VehicleState.Wrecked;                          // the pair breaks: the next step drops it
+        w.StepOnce(ControlFrame.Empty);
+        Assert.Empty(w.RollingRoadblocks);
+        Assert.False(Has(w, WarningKind.RoadblockAhead));        // no ghost
+    }
+
+    [Fact]
+    public void Rolling_roadblock_gap_is_its_locked_open_lane_not_the_planned_one()
+    {
+        var w = Straight();
+        var a = Police(w, 60, 0, AgentKind.ArmoredSuv);
+        var b = Police(w, 61, 5, AgentKind.ArmoredSuv);
+        var rb = new RollingRoadblock(a, b, 2);                  // planned open: RIGHT
+        w.RollingRoadblockList.Add(rb);
+        w.Player.Lateral = 5;                                    // you are in the right lane: the open lane locks to LEFT
+        rb.Form(w.Player.Lateral);
+        Assert.Equal(0, rb.OpenLane);
+        Assert.Equal("ROLLING ROADBLOCK 60 m - GAP LEFT", Single(w, WarningKind.RoadblockAhead).Text);
+    }
+
+    [Fact]
+    public void The_nearer_of_a_roadblock_and_a_rolling_roadblock_wins()
+    {
+        var w = Straight();
+        w.Hazards.Add(Roadblock.Place(w.Player.Distance + 300, 2));
+        Rolling(w, 80, open: 0);
+        Assert.StartsWith("ROLLING ROADBLOCK 80 m", Single(w, WarningKind.RoadblockAhead).Text);
+        w.Hazards.Clear();
+        w.Hazards.Add(Roadblock.Place(w.Player.Distance + 40, 2));
+        Assert.StartsWith("ROADBLOCK 40 m", Single(w, WarningKind.RoadblockAhead).Text);
+    }
+
+    [Fact]
+    public void Speed_trap_warns_from_400_m()
+    {
+        var w = Straight();
+        var trap = new SpeedTrap { Distance = w.Player.Distance + 390, Lateral = 9, LimitMph = 70 };
+        w.Hazards.Add(trap);
+        var warning = Single(w, WarningKind.SpeedTrapAhead);
+        Assert.Equal("SPEED TRAP 70 MPH  390 m", warning.Text);
+        Assert.False(warning.ShowArrow);
+        trap.Distance = w.Player.Distance + 410;
+        Assert.False(Has(w, WarningKind.SpeedTrapAhead));
+        trap.Distance = w.Player.Distance + 100;
+        trap.Triggered = true;
+        Assert.False(Has(w, WarningKind.SpeedTrapAhead));       // it only works once
+    }
+
+    [Fact]
+    public void The_nearest_speed_trap_is_named()
+    {
+        var w = Straight();
+        w.Hazards.Add(new SpeedTrap { Distance = w.Player.Distance + 300, LimitMph = 80 });
+        w.Hazards.Add(new SpeedTrap { Distance = w.Player.Distance + 120, LimitMph = 60 });
+        Assert.Equal("SPEED TRAP 60 MPH  120 m", Single(w, WarningKind.SpeedTrapAhead).Text);
+    }
+
+    [Fact]
+    public void Police_warn_only_at_pursuit()
+    {
+        var w = Straight();
+        Police(w, 0, lateral: -5);
+        w.Heat.Set(60);
+        Assert.False(Has(w, WarningKind.PoliceAlongside));
+        w.Heat.Set(75);
+        var warning = Single(w, WarningKind.PoliceAlongside);
+        Assert.Equal("POLICE LEFT", warning.Text);
+        Assert.Equal(-1, warning.Side);
+        Assert.True(warning.ShowArrow);
+    }
+
+    [Fact]
+    public void Police_alongside_on_both_sides_show_both_edges()
+    {
+        var w = Straight();
+        w.Heat.Set(75);
+        Police(w, 0, lateral: -5);
+        Police(w, 1, lateral: 5);
+        var warning = Single(w, WarningKind.PoliceAlongside);
+        Assert.Equal(0, warning.Side);
+        Assert.True(warning.ShowArrow);
+    }
+
+    [Fact]
+    public void Police_alongside_window_is_minus_3_to_4_m_and_within_6_m_sideways()
+    {
+        var w = Straight();
+        w.Heat.Set(75);
+        var car = Police(w, 3.9, lateral: 5);
+        Assert.Equal("POLICE RIGHT", Single(w, WarningKind.PoliceAlongside).Text);
+        car.Distance = w.Player.Distance + 4.1;
+        Assert.False(Has(w, WarningKind.PoliceAlongside));
+        car.Distance = w.Player.Distance - 2.9;
+        Assert.True(Has(w, WarningKind.PoliceAlongside));
+        car.Distance = w.Player.Distance - 3.1;
+        Assert.False(Has(w, WarningKind.PoliceAlongside));
+        car.Distance = w.Player.Distance;
+        car.Lateral = 6.5;                                       // 6.5 m sideways
+        Assert.False(Has(w, WarningKind.PoliceAlongside));
+    }
+
+    [Fact]
+    public void Police_behind_warns_with_distance_and_side()
+    {
+        var w = Straight();
+        var car = Police(w, -80, lateral: 5);
+        w.Heat.Set(60);
+        Assert.False(Has(w, WarningKind.PoliceBehind));
+        w.Heat.Set(75);
+        var warning = Single(w, WarningKind.PoliceBehind);
+        Assert.Equal("POLICE BEHIND RIGHT 80 m", warning.Text);
+        Assert.Equal(1, warning.Side);
+        Assert.True(warning.ShowArrow);
+        car.Distance = w.Player.Distance - 121;
+        Assert.False(Has(w, WarningKind.PoliceBehind));
+        car.Distance = w.Player.Distance - 3;
+        Assert.True(Has(w, WarningKind.PoliceBehind));
+        Assert.False(Has(w, WarningKind.PoliceAlongside));       // 3 m behind is behind, not alongside
+    }
+
+    [Fact]
+    public void Police_behind_in_your_lane_has_no_side_word()
+    {
+        var w = Straight();
+        w.Heat.Set(75);
+        Police(w, -50, lateral: 0);
+        Assert.Equal("POLICE BEHIND 50 m", Single(w, WarningKind.PoliceBehind).Text);
+    }
+
+    [Fact]
+    public void Patrol_level_police_raise_no_warning()
+    {
+        var w = Straight();
+        w.Heat.Set(50);
+        Police(w, -50);
+        Police(w, 0, lateral: -5);
+        Assert.Empty(Warnings.Collect(w));
+    }
+
+    [Fact]
+    public void Civilians_never_warn()
+    {
+        var w = Straight();
+        w.Heat.Set(90);
+        Car(w, AgentKind.Civilian, 0, -5);                       // alongside
+        Car(w, AgentKind.Civilian, -50, 0, speed: 60);           // behind, closing fast
+        Car(w, AgentKind.Civilian, 80, 0);                       // ahead in lane
+        Assert.Empty(Warnings.Collect(w));
+    }
+
+    [Fact]
+    public void New_kinds_sit_in_the_priority_order_and_under_the_mask_limit()
+    {
+        WarningKind[] expected =
+        [
+            WarningKind.MissileIncoming, WarningKind.PursuerAlongside, WarningKind.PoliceAlongside, WarningKind.GunnerAiming,
+            WarningKind.HazardAhead, WarningKind.WreckAhead, WarningKind.RoadblockAhead, WarningKind.BlockerAhead,
+            WarningKind.BossBehind, WarningKind.HostileBehind, WarningKind.PursuerBehind, WarningKind.PoliceBehind,
+            WarningKind.SpeedTrapAhead,
+        ];
+        Assert.Equal(expected, Enum.GetValues<WarningKind>());
+        Assert.True(expected.Length < 32);
+    }
+
+    [Fact]
+    public void At_most_four_warnings_and_the_trap_yields_first()
+    {
+        var w = Straight();
+        w.Heat.Set(90);
+        Police(w, 0, -5);
+        Police(w, -60, 5);
+        w.Hazards.Add(Roadblock.Place(w.Player.Distance + 100, 0));
+        w.Hazards.Add(new Wreck { Distance = w.Player.Distance + 50, Lateral = 0 });
+        w.Hazards.Add(new SpeedTrap { Distance = w.Player.Distance + 200, LimitMph = 70 });
+        var shown = Warnings.Collect(w);
+        Assert.Equal(4, shown.Count);
+        Assert.DoesNotContain(shown, x => x.Kind == WarningKind.SpeedTrapAhead);
+        Assert.Equal(WarningKind.PoliceAlongside, shown[0].Kind);
+    }
 
     [Fact]
     public void Missile_warning_shows_every_step_from_launch_to_outcome()
@@ -398,6 +659,64 @@ public class WarningTests
         Assert.Contains(typeof(EnemyMissileEnded), seen);
         Assert.Contains(typeof(BossPhaseChanged), seen);
         Assert.Contains(typeof(StrikeLanded), seen);
+    }
+
+    /// <summary>
+    /// A police mission (traffic 6 per km, presence 1.5, heat 75) for 90 s, with the new events made to happen on purpose:
+    /// a speed trap passed over its limit, a roadblock driven into, a stop beside a cruiser (busted) and the respawn.
+    /// Each must occur, and each must come with words.
+    /// </summary>
+    [Fact]
+    public void Every_heat_event_is_shown()
+    {
+        var def = new MissionDefinition("t", "T", "B", new TrackProfile(7), 200000, 5, Array.Empty<WaveDefinition>(),
+            Traffic: new TrafficDefinition(6), Police: new PoliceDefinition(1.5, 75));
+        var run = new MissionRun(def, new FeelSettings(), 5);
+        var w = run.World;
+        var seen = new HashSet<Type>();
+        var announced = new List<(double Start, string Title)>();
+        int raisedChecked = 0;
+        AgentCar? cruiser = null;
+        for (int step = 0; step < 90 * 120; step++)
+        {
+            double t = step * World.Step;
+            var p = w.Player;
+            var input = new ControlFrame { Gas = true, PadConnected = true, PadSteer = EnemyMissileTests.AutopilotSteer(w) };
+            if (t < 0.01) { p.Distance = 1000; p.SnapPrev(); }
+            if (t is >= 3 and < 8)                       // a speed trap 90 m ahead, taken at 80 mph in a 60 zone
+            {
+                if (step == 3 * 120) w.Hazards.Add(new SpeedTrap { Distance = p.Distance + 90, Lateral = 9, LimitMph = 60 });
+                p.Speed = Math.Max(p.Speed, 35.8); p.Armor = 100;
+            }
+            if (t is >= 10 and < 16)                     // a roadblock whose gap is on the right, taken from the left lane
+            {
+                if (step == 10 * 120)
+                {
+                    w.Heat.Set(40);
+                    p.Lateral = -5; p.Speed = 25;
+                    w.Hazards.Add(Roadblock.Place(p.Distance + 60, 2));
+                }
+                input = new ControlFrame { Gas = true, PadConnected = false };
+                p.Lateral = -5; p.Armor = 100;
+            }
+            if (t is >= 20 and < 40)                     // stopped beside a cruiser at Pursuit: busted after 3 s
+            {
+                if (step == 20 * 120) { w.Heat.Set(80); w.BustedArmed = true; w.Agents.RemoveAll(a => a.Faction == Faction.Police); }
+                if (step == 20 * 120 + 1)
+                {
+                    cruiser = AgentCar.Create(w.NextId(), AgentKind.PoliceCruiser, p.Distance - 6, p.Lateral, 0);
+                    cruiser.Driver = new StillDriver();
+                    w.Agents.Add(cruiser);
+                }
+                if (w.Player.State == VehicleState.Driving && run.State == RunState.Playing) { p.Speed = 0; p.Armor = 100; input = ControlFrame.Empty; }
+            }
+            int before = w.Events.Count;
+            run.Update(input, World.Step);
+            if (w.Announcement is { } a) announced.Add((a.Start, a.Title));
+            Check(w, before, run, seen, announced, ref raisedChecked);
+        }
+        foreach (var type in new[] { typeof(HeatChanged), typeof(HeatLevelChanged), typeof(SpeedTrapPassed), typeof(RoadblockHit), typeof(PlayerBusted) })
+            Assert.Contains(type, seen);
     }
 
     static void Check(World w, int from, MissionRun run, HashSet<Type> seen, List<(double Start, string Title)> announced, ref int raisedChecked)

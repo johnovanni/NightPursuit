@@ -28,13 +28,16 @@ public sealed partial class World
     /// <summary>True from a bust until the respawn, which then sets the heat to 50.</summary>
     public bool BustedPending { get; set; }
 
-    /// <summary>Sets the heat outright (no decay rules), publishing the change and, if the level moved, the level event. The caller says why on screen.</summary>
+    /// <summary>
+    /// Sets the heat outright (no decay rules; unlike <see cref="AddHeat"/> it does not reset the quiet-spell timer), publishing the change
+    /// (nothing when the value is the same) and, if the level moved, the level event. The caller says why on screen.
+    /// </summary>
     public void SetHeat(double value, string reason)
     {
         double before = Heat.Value;
         var from = Heat.Level;
         var change = Heat.Set(value);
-        Publish(new HeatChanged(Time, Heat.Value - before, Heat.Value, reason));
+        if (Heat.Value != before) Publish(new HeatChanged(Time, Heat.Value - before, Heat.Value, reason));
         if (change is { } to) Publish(new HeatLevelChanged(Time, from, to));
     }
 

@@ -1,4 +1,6 @@
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Drivers;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
@@ -90,6 +92,13 @@ public class WorldLoopTests
         var dropper = AgentCar.Create(w.NextId(), AgentKind.Dropper, 650, 2.5, 30);
         w.Agents.Add(dropper);
         w.Hazards.Add(new OilSlick { Distance = 600, Lateral = 1, Hostile = true });
+        w.Hazards.Add(new SpeedTrap { Distance = 800, Lateral = 9, LimitMph = 70 });
+        w.Hazards.Add(Roadblock.Place(900, 1));
+        var suvA = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, 560, -5, 30);
+        var suvB = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, 561, 5, 30);
+        w.Agents.Add(suvA);
+        w.Agents.Add(suvB);
+        w.RollingRoadblockList.Add(new RollingRoadblock(suvA, suvB, 2));
         return (w, boss, dropper);
     }
 
@@ -123,6 +132,24 @@ public class WorldLoopTests
         ["missile cooldown"] = (w, _, _) => { w.Loadout.Missiles.TryUse(); w.Loadout.Missiles.Restock(1); },
         ["strike charges"] = (w, _, _) => w.Loadout.Strike.Restock(1),
         ["strike sweep"] = (w, _, _) => { w.Loadout.Strike.Restock(1); w.Loadout.Strike.TryBegin(); w.Loadout.Strike.Restock(1); },
+        ["heat value"] = (w, _, _) => w.Heat.Set(30),
+        ["heat quiet spell"] = (w, _, _) => w.Heat.Update(World.Step, false),
+        ["busted timer"] = (w, _, _) => w.Busted.SetHeldForDiagnostics(1),
+        ["busted armed"] = (w, _, _) => w.BustedArmed = true,
+        ["busted pending"] = (w, _, _) => w.BustedPending = true,
+        ["agent blame time"] = (_, _, d) => d.PlayerBlameUntil = 5,
+        ["agent hit-heat cooldown"] = (_, _, d) => d.HitHeatCooldown = 1,
+        ["speed trap triggered"] = (w, _, _) => ((SpeedTrap)w.Hazards[1]).Triggered = true,
+        ["speed trap caught"] = (w, _, _) => ((SpeedTrap)w.Hazards[1]).Caught = true,
+        ["roadblock gap lane"] = (w, _, _) => w.Hazards[2] = Roadblock.Place(900, 0),
+        ["roadblock hit"] = (w, _, _) => ((Roadblock)w.Hazards[2]).HitPlayer = true,
+        ["rolling roadblock formed"] = (w, _, _) => w.RollingRoadblockList[0].Form(0),
+        ["rolling roadblock planned open"] = (w, _, _) =>
+            w.RollingRoadblockList[0] = new RollingRoadblock(w.RollingRoadblockList[0].Cars[0], w.RollingRoadblockList[0].Cars[1], 0),
+        ["rolling roadblock formed time"] = (w, _, _) => w.RollingRoadblockList[0].FormedSeconds = 1,
+        ["rolling roadblock off-slot time"] = (w, _, _) => w.RollingRoadblockList[0].OffSlotSeconds = 1,
+        ["rolling roadblock in-gap time"] = (w, _, _) => w.RollingRoadblockList[0].InGapSeconds = 1,
+        ["rolling roadblock dropped"] = (w, _, _) => w.RollingRoadblockList.Clear(),
     };
 
     [Theory]
@@ -136,6 +163,43 @@ public class WorldLoopTests
         Assert.NotEqual(before, w.StateHash());
     }
 
+
+    /// <summary>Two heat meters at the same value and quiet-spell time; the hash must still tell them apart by level or by time in the level.</summary>
+    static ulong HashOfHeat(Action<HeatMeter> script)
+    {
+        var w = TestWorlds.World(track: TestWorlds.Straight());
+        script(w.Heat);
+        return w.StateHash();
+    }
+
+    [Fact]
+    public void Hash_tells_two_levels_at_the_same_heat_apart()
+    {
+        // 47 is Watched when set outright, but Patrol when it fell from 55 (the level is held below its threshold).
+        ulong set = HashOfHeat(h => h.Set(47));
+        ulong fell = HashOfHeat(h => { h.Set(55); h.Add(-8); });
+        Assert.NotEqual(set, fell);
+    }
+
+    [Fact]
+    public void Hash_tells_how_long_the_level_has_been_held()
+    {
+        ulong early = HashOfHeat(h => { h.Update(5 * World.Step, false); h.Set(55); });
+        ulong later = HashOfHeat(h => { h.Set(55); h.Update(5 * World.Step, false); });
+        Assert.NotEqual(early, later);     // same value and quiet spell (5 steps), 0 and 5 steps in Patrol
+    }
+
+    [Fact]
+    public void Hash_tells_which_lane_a_rolling_roadblock_leaves_open()
+    {
+        ulong Formed(double playerLateral)
+        {
+            var (w, _, _) = HashWorld();
+            w.RollingRoadblockList[0].Form(playerLateral);
+            return w.StateHash();
+        }
+        Assert.NotEqual(Formed(-5), Formed(5));     // the open lane locks to RIGHT, or to LEFT
+    }
     [Fact]
     public void Hash_tells_a_sweep_part_way_from_one_just_begun()
     {

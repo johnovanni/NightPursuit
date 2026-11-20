@@ -295,4 +295,25 @@ public class HeatTests
         Assert.Equal(HeatLevel.Calm, w.Heat.Level);
         Assert.DoesNotContain(w.Events, e => e is HeatChanged or HeatLevelChanged);
     }
+
+    [Fact]
+    public void Setting_heat_to_the_value_it_already_has_publishes_nothing()
+    {
+        var w = Straight();
+        w.SetHeat(60, "TEST");
+        Assert.Single(w.Events.OfType<HeatChanged>());
+        w.Advance(ControlFrame.Empty, World.Step);                 // clears the step's events
+        w.SetHeat(60, "TEST");
+        Assert.DoesNotContain(w.Events, e => e is HeatChanged or HeatLevelChanged);
+    }
+
+    [Fact]
+    public void Setting_heat_does_not_reset_the_quiet_spell_timer()
+    {
+        var w = Straight();
+        Run(w, 240);
+        double quiet = w.Heat.SinceOffence;
+        w.SetHeat(60, "TEST");
+        Assert.Equal(quiet, w.Heat.SinceOffence);
+    }
 }
