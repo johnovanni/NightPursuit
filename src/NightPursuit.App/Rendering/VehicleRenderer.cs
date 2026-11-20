@@ -170,11 +170,10 @@ public static class VehicleRenderer
                 dc.DrawRectangle(Neon.Black, pen.Core, tyre);
                 continue;
             }
-            // Only the tyre's outer side and where it meets the road: the edges that face you.
+            // Only the tyre's outer side: the edge that faces you. No line along the road (it read as a tank's tread).
             dc.DrawRectangle(Neon.Black, null, tyre);
-            double outer = side < 0 ? tyre.Left : tyre.Right, inner = side < 0 ? tyre.Right : tyre.Left;
+            double outer = side < 0 ? tyre.Left : tyre.Right;
             tyres.Line(new Point(outer, g.Y - 0.224 * s), new Point(outer, tyre.Bottom));
-            tyres.Line(new Point(outer, tyre.Bottom), new Point(inner, tyre.Bottom));
         }
 
         // The boss's two tall rear fins stand behind the body outline.

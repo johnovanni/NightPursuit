@@ -21,7 +21,7 @@ broken in the middle and stopping short of the sides, so near cars stand on the 
 ## Goals
 
 1. **Presenting edges only.** Black fills hide what is behind. No line where an object meets the road (body bottoms,
-   tyres show only their outer side and footprint, windows open at the bottom). Each car (not the boss) has a bumper line
+   tyres show only their outer side, with no line along the road, which read as a tank's tread; windows open at the bottom). Each car (not the boss) has a bumper line
    just above the body's bottom edge (0.30 m; the body ends at 0.224 m), running to 90% of the body's half-width each
    side, with a small break in the middle. (The owner moved it down from the first trial's 0.45 m, which left near cars
    looking like arches.)
