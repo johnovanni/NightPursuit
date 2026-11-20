@@ -20,13 +20,17 @@ internal static class HoodRenderer
             }, true, false);
         }
         hood.Freeze();
-        dc.DrawGeometry(Neon.Black, Neon.Hood.Glow, hood);
-        dc.DrawGeometry(null, Neon.Hood.Core, hood);
+        dc.DrawGeometry(Neon.Black, null, hood);   // the fill hides the road; only the top edge is stroked, below
+        LineArt.Draw(dc, LineArt.Polyline(new[]
+        {
+            new Point(-5, top + 46 * k), new Point(l.Width * 0.2, top + 10 * k), new Point(hw, top),
+            new Point(l.Width * 0.8, top + 10 * k), new Point(l.Width + 5, top + 46 * k),
+        }, (0.56, 0.6)), LineArt.Outline(Neon.Green, 1));
 
         var guns = new LineBatch();
         foreach (int side in Projector.Sides)
             guns.Line(new Point(hw + side * 95 * k, top + 6 * k), new Point(hw + side * 78 * k, top - 12 * k));
-        guns.Draw(dc, Neon.Gun);
+        guns.Draw(dc, LineArt.Outline(Neon.Green, 1));
 
         // Aim mark: where the tracers will be 60 m ahead. The nose is always at the screen centre.
         double aimY = l.Height * 0.44 - (p.View.At(60).Y - Projector.CamHeight + 0.6) * hw * Projector.Focal / 60;
@@ -35,6 +39,6 @@ internal static class HoodRenderer
         cross.Line(aim + new Vector(-14 * k, 0), aim + new Vector(-5 * k, 0));
         cross.Line(aim + new Vector(5 * k, 0), aim + new Vector(14 * k, 0));
         cross.Line(aim + new Vector(0, -10 * k), aim + new Vector(0, -4 * k));
-        cross.Draw(dc, Neon.Hood);
+        cross.Draw(dc, LineArt.Outline(Neon.Green, 1));
     }
 }
