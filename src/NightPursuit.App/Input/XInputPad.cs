@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Session;
 
 namespace NightPursuit.App.Input;
 
@@ -25,7 +26,7 @@ public sealed class XInputPad
     [DllImport("xinput1_4.dll", EntryPoint = "XInputGetState")]
     static extern uint GetState(uint index, out State state);
 
-    const ushort DPadUp = 0x0001, DPadDown = 0x0002, Start = 0x0010,
+    const ushort DPadUp = 0x0001, DPadDown = 0x0002, DPadLeft = 0x0004, DPadRight = 0x0008, Start = 0x0010,
         Back = 0x0020, LeftShoulder = 0x0100, RightShoulder = 0x0200, A = 0x1000, B = 0x2000, X = 0x4000, Y = 0x8000;
 
     /// <summary>Held pad values for one frame.</summary>
@@ -45,8 +46,8 @@ public sealed class XInputPad
     /// </summary>
     public void SkipHeldButtons() => _resync = true;
 
-    /// <summary>Polls the pad; queues press-edge actions into <paramref name="actions"/>.</summary>
-    public Reading Poll(Queue<GameAction> actions)
+    /// <summary>Polls the pad; queues press-edge game actions into <paramref name="actions"/> and menu keys into <paramref name="menu"/>.</summary>
+    public Reading Poll(Queue<GameAction> actions, Queue<MenuKey> menu)
     {
         if (!_available) return default;
         double now = _clock.Elapsed.TotalSeconds;
@@ -78,6 +79,15 @@ public sealed class XInputPad
         if ((pressed & DPadDown) != 0) actions.Enqueue(new GameAction(ActionKind.LeverDown));
         if ((pressed & Start) != 0) actions.Enqueue(new GameAction(ActionKind.Pause));
         if ((pressed & Back) != 0) actions.Enqueue(new GameAction(ActionKind.Restart));
+
+        if ((pressed & DPadUp) != 0) menu.Enqueue(new MenuKey(MenuInput.Up));
+        if ((pressed & DPadDown) != 0) menu.Enqueue(new MenuKey(MenuInput.Down));
+        if ((pressed & DPadLeft) != 0) menu.Enqueue(new MenuKey(MenuInput.Left));
+        if ((pressed & DPadRight) != 0) menu.Enqueue(new MenuKey(MenuInput.Right));
+        if ((pressed & A) != 0) menu.Enqueue(new MenuKey(MenuInput.Confirm));
+        if ((pressed & B) != 0) menu.Enqueue(new MenuKey(MenuInput.Back));
+        if ((pressed & Start) != 0) menu.Enqueue(new MenuKey(MenuInput.Pause));
+        if ((pressed & Back) != 0) menu.Enqueue(new MenuKey(MenuInput.Back));
 
         return new Reading(true, (g.Buttons & A) != 0,
             Deadzone(Math.Clamp(g.ThumbLX / 32767.0, -1, 1), 0.18),

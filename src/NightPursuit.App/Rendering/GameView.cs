@@ -24,8 +24,17 @@ public sealed class GameView : FrameworkElement
     /// <summary>Explosions and other presentation-only effects; the game loop feeds it after each update.</summary>
     public EffectList Effects { get; } = new();
 
-    /// <summary>Whether the controls help is on screen: shown at the start until the first gas, and toggled by F1 (the game loop owns the logic).</summary>
+    /// <summary>Whether the start-of-game controls help is on screen (shown until the first gas; the game loop sets it from the flow each frame).</summary>
     public bool ShowHelp { get; set; } = true;
+
+    /// <summary>Whether the world shakes with the car (the screen-shake setting; the game loop sets it each frame).</summary>
+    public bool ShakeEnabled { get; set; } = true;
+
+    /// <summary>The text-size setting's scale (1, 1.25 or 1.5). Not used for drawing yet: the HUD takes it in a later task.</summary>
+    public double TextScale { get; set; } = 1;
+
+    /// <summary>A one-line notice from the screen flow (such as a failed save) shown in play, or null.</summary>
+    public string? Notice { get; set; }
 
     /// <summary>Milliseconds the latest <see cref="OnRender"/> spent recording its draw calls (read by the --perf diagnostic).</summary>
     public double LastRenderMilliseconds { get; private set; }
@@ -55,7 +64,7 @@ public sealed class GameView : FrameworkElement
         _projector.Begin(w, h, world);
         _layout.Begin(w, h, VisualTreeHelper.GetDpi(this).PixelsPerDip);
 
-        double shake = world.Player.Shake * 14;
+        double shake = ShakeEnabled ? world.Player.Shake * 14 : 0;
         dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
         SkyRenderer.Draw(dc, _projector, world.Track, Hud.ReadoutBounds(_layout));
         RoadRenderer.Draw(dc, _projector);
@@ -90,7 +99,8 @@ public sealed class GameView : FrameworkElement
         Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
-        Overlays.DrawState(dc, _layout, run);   // after the help, so PAUSED / GAME OVER etc. are never hidden under it
+        Overlays.DrawState(dc, _layout, run);   // after the help, so the respawn countdown is never hidden under it
+        if (Notice is not null) Overlays.DrawNotice(dc, _layout, Notice);
 
 #if DEBUG
         double now = _frameClock.Elapsed.TotalSeconds, frame = now - _lastFrame;

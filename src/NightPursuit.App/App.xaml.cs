@@ -4,6 +4,7 @@ using System.Windows.Threading;
 using NightPursuit.App.Diagnostics;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
+using NightPursuit.Core.Session;
 
 namespace NightPursuit.App;
 
@@ -24,15 +25,34 @@ public partial class App : Application
 
         try
         {
-            string name = MissionName(e.Args);
-            string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", name + ".json");
-            if (!File.Exists(path))
+            // One store for the whole session: it remembers which unreadable files it must never overwrite.
+            // Both files are loaded before anything can save.
+            var store = new FileGameStore(AppPaths.DataDirectory);
+            var (settings, settingsProblem) = store.LoadSettings();
+            var (scores, scoresProblem) = store.LoadHighScores();
+            var feel = new FeelSettings { SpeedSensitiveSteering = settings.LighterSteering };
+
+            // START GAME is always the real campaign; --mission name adds a practice game of that one mission.
+            var campaign = new List<MissionDefinition>();
+            foreach (string id in Campaign.MissionIds)
             {
-                Fail("Night Pursuit: mission not found", $"There is no mission called '{name}'.{Environment.NewLine}Looked for: {path}");
-                return;
+                if (LoadMission(id) is not { } def) return;
+                campaign.Add(def);
             }
-            var run = new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
-            new MainWindow(run).Show();
+            MissionDefinition? practice = null;
+            if (MissionName(e.Args) is { } name && (practice = LoadMission(name)) is null) return;
+
+            var flow = new ScreenFlow(
+                isPractice => isPractice && practice is not null
+                    ? new Game(new[] { practice }, feel, settings, practice: true)
+                    : new Game(campaign, feel, settings),
+                feel, settings, scores, store);
+            if (practice is not null) flow.StartGame(practice: true);
+            // After StartGame, so a load problem shows on the first screen (the title, or the practice briefing) instead of being cleared by it.
+            foreach (string? problem in new[] { settingsProblem, scoresProblem })
+                if (problem is not null) flow.ShowNotice(problem);
+
+            new MainWindow(flow).Show();
         }
         catch (MissionFormatException ex)
         {
@@ -44,11 +64,23 @@ public partial class App : Application
         }
     }
 
-    /// <summary><c>--mission name</c> picks a file in content/missions (letters, digits and '-' only); the default is mission-01.</summary>
-    static string MissionName(string[] args)
+    /// <summary>Loads content/missions/<paramref name="name"/>.json, or shows why not and returns null (the app is then shutting down).</summary>
+    MissionDefinition? LoadMission(string name)
+    {
+        string path = Path.Combine(AppContext.BaseDirectory, "content", "missions", name + ".json");
+        if (!File.Exists(path))
+        {
+            Fail("Night Pursuit: mission not found", $"There is no mission called '{name}'.{Environment.NewLine}Looked for: {path}");
+            return null;
+        }
+        return MissionLoader.LoadFile(path);
+    }
+
+    /// <summary><c>--mission name</c> picks a practice mission in content/missions (letters, digits and '-' only); null without it.</summary>
+    static string? MissionName(string[] args)
     {
         int i = Array.IndexOf(args, "--mission");
-        if (i < 0) return "mission-01";
+        if (i < 0) return null;
         string name = i + 1 < args.Length ? args[i + 1] : "";
         if (name.Length == 0 || !name.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-'))
             throw new MissionFormatException($"--mission needs a mission name of letters, digits and '-' only, e.g. mission-01 or proving-ground, not '{name}'");

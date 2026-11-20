@@ -1,8 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using NightPursuit.App.Input;
-using NightPursuit.Core.Control;
-using NightPursuit.Core.Missions;
+using NightPursuit.Core.Session;
 
 namespace NightPursuit.App;
 
@@ -11,13 +10,12 @@ public partial class MainWindow : Window
     readonly InputHub _input = new();
     readonly GameLoop _loop;
 
-    public MainWindow(MissionRun run)
+    public MainWindow(ScreenFlow flow)
     {
         InitializeComponent();
-        Game.Run = run;
 #if DEBUG
-        // The run keeps the FeelSettings it was given when it rebuilds after a restart, so this stays the live one.
-        var tuning = new Tuning.TuningPanel(run.World.Feel);
+        // Every run of every game is built with the flow's FeelSettings (and keeps it across a restart), so this is the live one.
+        var tuning = new Tuning.TuningPanel(flow.Feel);
         Root.Children.Add(tuning);
 #endif
 
@@ -39,8 +37,8 @@ public partial class MainWindow : Window
         Deactivated += (_, _) =>
         {
             _input.ReleaseAll();
-            // Cruise or the lever would keep driving an unattended car (decision D12).
-            if (run.State == RunState.Playing) run.Handle(new GameAction(ActionKind.Pause));
+            // Cruise or the lever would keep driving an unattended car (decision D12); on any other screen nothing changes.
+            flow.FocusLost();
         };
         PreviewMouseWheel += (_, e) =>
         {
@@ -48,7 +46,7 @@ public partial class MainWindow : Window
             e.Handled = true;
         };
 
-        _loop = new GameLoop(this, run, Game, _input);
+        _loop = new GameLoop(this, flow, View, Host, _input);
         Closed += (_, _) => _loop.Stop();
     }
 

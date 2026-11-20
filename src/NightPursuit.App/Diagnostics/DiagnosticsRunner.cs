@@ -17,7 +17,7 @@ namespace NightPursuit.App.Diagnostics;
 
 /// <summary>
 /// Command-line diagnostics run instead of the game window:
-/// <c>--snapshot out.png [--seconds S] [--scene name] [--size WxH]</c>, <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c> and <c>--perf report.txt</c>.
+/// <c>--snapshot out.png [--seconds S] [--scene name] [--size WxH]</c>, <c>--snapshot out.png --screen name</c> (see <see cref="ScreenSnapshots"/>), <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c> and <c>--perf report.txt</c>.
 /// </summary>
 public static class DiagnosticsRunner
 {
@@ -52,7 +52,7 @@ public static class DiagnosticsRunner
     static string _logPath = "diagnostics.log";
 
     /// <summary>Reports an error on stderr and in the log file (a WinExe has no visible console).</summary>
-    static void Error(string message)
+    internal static void Error(string message)
     {
         Console.Error.WriteLine(message);
         try { File.AppendAllText(_logPath, message + Environment.NewLine); }
@@ -73,6 +73,7 @@ public static class DiagnosticsRunner
             Error("--snapshot needs an output file name, e.g. --snapshot snapshots/frame.png");
             return 2;
         }
+        if (Has(args, "--screen")) return ScreenSnapshots.Run(path, args);
         string[] scenes = (Arg(args, "--scene") ?? "default").Split(',');
         foreach (string scene in scenes)
             if (Array.IndexOf(Scenes, scene) < 0)
@@ -1041,9 +1042,9 @@ public static class DiagnosticsRunner
         return new MissionRun(MissionLoader.LoadFile(path), new FeelSettings(), seed: 1);
     }
 
-    static bool Has(string[] args, string name) => Array.IndexOf(args, name) >= 0;
+    internal static bool Has(string[] args, string name) => Array.IndexOf(args, name) >= 0;
 
-    static string? Arg(string[] args, string name)
+    internal static string? Arg(string[] args, string name)
     {
         int i = Array.IndexOf(args, name);
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;

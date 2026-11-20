@@ -1,0 +1,21 @@
+<!-- The screens' look: Consolas, the HUD's text colours and four text sizes.
+     ScreenHost puts the sizes times Settings.TextScale in its own resources, so views use them as DynamicResource.
+     The brushes are Neon's own (added in NeonStyles.xaml.cs, since Neon is internal). -->
+<ResourceDictionary x:Class="NightPursuit.App.Screens.NeonStyles"
+                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+    <FontFamily x:Key="NeonFont">Consolas</FontFamily>
+
+    <sys:Double x:Key="TextSmall">16</sys:Double>
+    <sys:Double x:Key="TextBody">20</sys:Double>
+    <sys:Double x:Key="TextHeading">30</sys:Double>
+    <sys:Double x:Key="TextTitle">56</sys:Double>
+
+    <!-- Keyed, not implicit: an implicit TextBlock style would also reach the TextBlocks inside control templates. -->
+    <Style x:Key="NeonText" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource NeonFont}" />
+        <Setter Property="FontSize" Value="{DynamicResource TextBody}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextWhite}" />
+    </Style>
+</ResourceDictionary>

@@ -2,29 +2,39 @@ using System.Windows;
 using System.Windows.Media;
 using NightPursuit.App.Input;
 using NightPursuit.App.Rendering;
+using NightPursuit.App.Screens;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
+using NightPursuit.Core.Session;
 
 namespace NightPursuit.App;
 
-/// <summary>Drives the mission once per rendered frame.</summary>
+/// <summary>
+/// Drives the screen flow once per rendered frame. Each frame's presses go to one side only: game actions in play,
+/// menu keys on a screen; the other queue is dropped, so a key that opens or closes a screen never also acts on the game.
+/// </summary>
 public sealed class GameLoop
 {
     readonly Window _window;
-    readonly MissionRun _run;
+    readonly ScreenFlow _flow;
     readonly GameView _view;
+    readonly ScreenHost _host;
     readonly InputHub _input;
     TimeSpan _last;
     bool _haveLast;
-    bool _gasSeen;   // the intro help stays up until the first gas
     bool _everActive;   // the window has had focus at least once since it opened
+    // Space and pad A both confirm a screen and fire: after a screen hands over to play, the guns stay off until both are let go.
+    bool _fireLatch;
+    bool _closing;
 
-    public GameLoop(Window window, MissionRun run, GameView view, InputHub input)
+    public GameLoop(Window window, ScreenFlow flow, GameView view, ScreenHost host, InputHub input)
     {
         _window = window;
-        _run = run;
+        _flow = flow;
         _view = view;
+        _host = host;
         _input = input;
+        _host.Show(flow);   // the first screen is up before the first frame
         CompositionTarget.Rendering += OnFrame;
     }
 
@@ -39,7 +49,7 @@ public sealed class GameLoop
         _haveLast = true;
 
         // A newly opened window can take a moment to get focus (for example when started from a terminal).
-        // Until it has had focus once, hold the run still instead of pausing it: pausing here left the game
+        // Until it has had focus once, hold everything still instead of pausing: pausing here left the game
         // paused behind the intro help, so pressing gas hid the help but nothing moved.
         if (!_everActive)
         {
@@ -48,26 +58,58 @@ public sealed class GameLoop
             seconds = 0;   // don't run the time spent waiting for focus
         }
 
-        // Losing focus pauses the run, including mid-respawn, so it never carries on with nobody at the keyboard.
-        if (!_window.IsActive && _run.State == RunState.Playing) _run.Handle(new GameAction(ActionKind.Pause));
+        // Losing focus pauses play, including mid-respawn, so it never carries on with nobody at the keyboard (D12).
+        if (!_window.IsActive) _flow.FocusLost();
 
-        // Read first: polling the pad is what queues its press-edge actions, and they must act this frame.
+        // Read first: polling the pad is what queues its press-edge actions and menu keys, and they must act this frame.
         var held = _input.Read(_window.IsActive);
-        foreach (var a in _input.Drain())
+        bool startedOnScreen = _flow.Current != Screen.Play;
+        if (!startedOnScreen)
         {
-            // The help screen is an App matter: the run never sees it.
-            if (a.Kind == ActionKind.ToggleHelp) { _view.ShowHelp = !_view.ShowHelp; continue; }
-            if (a.Kind == ActionKind.Restart && _run.CanRestart) { _view.ShowHelp = true; _gasSeen = false; }
-            _run.Handle(a);
+            foreach (var a in _input.Drain()) _flow.HandleGameAction(a);
+            foreach (var _ in _input.DrainMenu()) { }   // dropped: in play, keys are game actions
+            if (_flow.ShowIntroHelp && (held.Gas || held.PadGas > 0.2)) _flow.IntroHelpSeen();   // gas to start
         }
-        if (!_gasSeen && (held.Gas || held.PadGas > 0.2))
+        else
         {
-            _gasSeen = true;
-            _view.ShowHelp = false;
+            foreach (var k in _input.DrainMenu()) _flow.Handle(k);
+            foreach (var _ in _input.Drain()) { }   // dropped: on a screen, keys are menu keys
         }
-        _run.Update(held, seconds);   // Core caps a long stall at 0.25 s
-        _view.Effects.Absorb(_run.World);
-        if (_run.State != RunState.Paused) _view.Effects.Update(seconds);
+
+        if (startedOnScreen && _flow.Current == Screen.Play) _fireLatch = true;
+        if (_fireLatch)
+        {
+            if (held.Fire || held.PadFire) held = WithoutFire(held);
+            else _fireLatch = false;
+        }
+
+        _flow.Update(held, seconds);   // Core caps a long stall at 0.25 s
+
+        var run = _flow.Game?.Run;
+        _view.Run = run;
+        _view.ShowHelp = _flow.ShowIntroHelp && _flow.Current == Screen.Play;
+        _view.ShakeEnabled = _flow.Settings.ScreenShake;
+        _view.Notice = _flow.Current == Screen.Play ? _flow.Notice : null;
+        if (run is not null)
+        {
+            _view.Effects.Absorb(run.World);   // a new world (next mission, restart) clears the old effects
+            // Behind a screen the road is frozen, explosions included.
+            if (_flow.Current == Screen.Play && run.State != RunState.Paused) _view.Effects.Update(seconds);
+        }
+        _host.Show(_flow);
         _view.InvalidateVisual();
+
+        if (_flow.ExitRequested && !_closing)
+        {
+            _closing = true;
+            Stop();
+            _window.Close();
+        }
     }
+
+    static ControlFrame WithoutFire(ControlFrame f) => new()
+    {
+        SteerDir = f.SteerDir, Gas = f.Gas, Brake = f.Brake, Fire = false,
+        PadConnected = f.PadConnected, PadFire = false, PadSteer = f.PadSteer, PadGas = f.PadGas, PadBrake = f.PadBrake,
+    };
 }

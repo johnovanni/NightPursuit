@@ -1,12 +1,17 @@
 using System.Windows.Input;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Session;
 
 namespace NightPursuit.App.Input;
 
-/// <summary>Combines keyboard, mouse wheel and gamepad into held controls plus a queue of one-off actions.</summary>
+/// <summary>
+/// Combines keyboard, mouse wheel and gamepad into held controls plus two queues of one-off presses: game actions (for play)
+/// and menu keys (for the screens). Every press goes into both; the game loop reads one queue and drops the other each frame.
+/// </summary>
 public sealed class InputHub
 {
     readonly Queue<GameAction> _actions = new();
+    readonly Queue<MenuKey> _menu = new();
     readonly KeyboardReader _keys = new();
     readonly XInputPad _pad = new();
     int _wheel;
@@ -36,9 +41,31 @@ public sealed class InputHub
             _ => null,
         };
         if (a is GameAction ga && !isRepeat) _actions.Enqueue(ga);
-        return a is not null || key is Key.Left or Key.Right or Key.Up or Key.Down
-                                     or Key.W or Key.A or Key.S or Key.D or Key.Space;
+        MenuKey? m = MenuKeyFor(key);
+        // Holding a direction scrolls a menu or a letter; nothing else repeats.
+        if (m is MenuKey mk && (!isRepeat || mk.Input is MenuInput.Up or MenuInput.Down or MenuInput.Left or MenuInput.Right))
+            _menu.Enqueue(mk);
+        return a is not null || m is not null;
     }
+
+    /// <summary>The menu key for a keyboard key: arrows and W A S D move (W A S D also carry their letter, for typing initials), other letters type, Enter and Space confirm, Esc goes back.</summary>
+    static MenuKey? MenuKeyFor(Key key) => key switch
+    {
+        Key.Up => new MenuKey(MenuInput.Up),
+        Key.Down => new MenuKey(MenuInput.Down),
+        Key.Left => new MenuKey(MenuInput.Left),
+        Key.Right => new MenuKey(MenuInput.Right),
+        Key.W => new MenuKey(MenuInput.Up, 'W'),
+        Key.S => new MenuKey(MenuInput.Down, 'S'),
+        Key.A => new MenuKey(MenuInput.Left, 'A'),
+        Key.D => new MenuKey(MenuInput.Right, 'D'),
+        >= Key.A and <= Key.Z => new MenuKey(MenuInput.Letter, (char)('A' + (key - Key.A))),
+        Key.Enter or Key.Space => new MenuKey(MenuInput.Confirm),
+        Key.Escape => new MenuKey(MenuInput.Back),
+        Key.Back => new MenuKey(MenuInput.Delete),
+        Key.F1 => new MenuKey(MenuInput.Help),
+        _ => null,
+    };
 
     public void OnKeyUp(Key key) => _keys.KeyUp(key);
 
@@ -58,6 +85,12 @@ public sealed class InputHub
         while (_actions.Count > 0) yield return _actions.Dequeue();
     }
 
+    /// <summary>The menu keys pressed since the last call, oldest first.</summary>
+    public IEnumerable<MenuKey> DrainMenu()
+    {
+        while (_menu.Count > 0) yield return _menu.Dequeue();
+    }
+
     /// <summary>Held controls for this frame. An inactive window gets an empty frame and forgets held keys.</summary>
     public ControlFrame Read(bool windowActive)
     {
@@ -67,7 +100,7 @@ public sealed class InputHub
             _pad.SkipHeldButtons();
             return ControlFrame.Empty;
         }
-        var p = _pad.Poll(_actions);
+        var p = _pad.Poll(_actions, _menu);
         return new ControlFrame
         {
             SteerDir = _keys.SteerDir, Gas = _keys.Gas, Brake = _keys.Brake, Fire = _keys.Fire,

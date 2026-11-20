@@ -9,7 +9,7 @@ namespace NightPursuit.App.Rendering;
 
 /// <summary>
 /// Everything that tells the driver something happened or is about to: warnings with words and edge arrows,
-/// the off-road banner, the damage flash, recent messages, and the pause / respawn / end / help overlays.
+/// the off-road banner, the damage flash, recent messages, the respawn and help overlays, and the flow's notice in play.
 /// Blinking is a dim-to-bright pulse driven by world time, so a warning never disappears entirely.
 /// </summary>
 internal static class Overlays
@@ -161,36 +161,33 @@ internal static class Overlays
             l.Centered(dc, p.Lateral < 0 ? "<< OFF ROAD" : "OFF ROAD >>", l.Height * 0.62, 26, Neon.TextAmber);
     }
 
+    /// <summary>
+    /// The respawn countdown, on a dark backing box so it stays readable over the help panel or bright scenery. Paused, mission
+    /// complete and game over are screens now (ScreenHost), so nothing is drawn for them here.
+    /// </summary>
     public static void DrawState(DrawingContext dc, HudLayout l, MissionRun run)
     {
+        if (run.State != RunState.Respawning) return;
         var w = run.World;
-        // A dark backing box keeps the words readable over the help panel or any bright scenery behind them.
-        if (run.State != RunState.Playing)
-        {
-            double boxTop = run.State == RunState.Paused ? l.Height * 0.36 : l.Height * 0.30;
-            double boxHeight = run.State == RunState.Paused ? l.S(54) : l.S(110);
-            double boxWidth = Math.Min(l.Width - 20, l.S(760));
-            dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, boxTop - l.S(12), boxWidth, boxHeight));
-        }
-        switch (run.State)
-        {
-            case RunState.Paused:
-                l.Centered(dc, "PAUSED  (P to resume)", l.Height * 0.36, 30, Neon.TextAmber);
-                break;
-            case RunState.Respawning:
-                l.Centered(dc, "WRECKED — RESPAWNING", l.Height * 0.30, 40, Neon.TextRed);
-                l.Centered(dc, $"NEW CAR IN {Math.Max(0, run.StateTimer):0.0} s     SPARE CARS LEFT: {Math.Max(0, w.Player.SpareCars - 1)}",
-                           l.Height * 0.30 + l.S(54), 20, Neon.TextWhite);
-                break;
-            case RunState.Completed:
-                l.Centered(dc, "MISSION COMPLETE  (R to drive again)", l.Height * 0.30, 34, Neon.TextGreen);
-                l.Centered(dc, $"SCORE {w.Score:00000}", l.Height * 0.30 + l.S(50), 26, Neon.TextAmber);
-                break;
-            case RunState.GameOver:
-                l.Centered(dc, "GAME OVER  (R to restart)", l.Height * 0.30, 36, Neon.TextRed);
-                l.Centered(dc, $"SCORE {w.Score:00000}", l.Height * 0.30 + l.S(50), 26, Neon.TextAmber);
-                break;
-        }
+        double boxWidth = Math.Min(l.Width - 20, l.S(760));
+        dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, l.Height * 0.30 - l.S(12), boxWidth, l.S(110)));
+        l.Centered(dc, "WRECKED — RESPAWNING", l.Height * 0.30, 40, Neon.TextRed);
+        l.Centered(dc, $"NEW CAR IN {Math.Max(0, run.StateTimer):0.0} s     SPARE CARS LEFT: {Math.Max(0, w.Player.SpareCars - 1)}",
+                   l.Height * 0.30 + l.S(54), 20, Neon.TextWhite);
+    }
+
+    /// <summary>
+    /// The screen flow's notice in play (a failed save, for example), in amber on a dark box just above the hood: below the busted
+    /// countdown's box, so the two do not overlap (in any window 288 px tall or more, where K is not clamped). A notice too wide for the window is drawn smaller rather than cut off.
+    /// </summary>
+    public static void DrawNotice(DrawingContext dc, HudLayout l, string notice)
+    {
+        double k = l.K, size = 18, room = Math.Max(1, l.Width - 40);
+        double width = l.TextWidth(notice, size, bold: true);
+        if (width > room) { size = Math.Max(8 / k, size * room / width); width = l.TextWidth(notice, size, bold: true); }
+        double y = l.HoodTop - 30 * k, boxWidth = Math.Min(l.Width - 20, width + 40 * k);
+        dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, y - 4 * k, Math.Max(0, boxWidth), 30 * k));
+        l.Centered(dc, notice, y, size, Neon.TextAmber);
     }
 
     /// <summary>
