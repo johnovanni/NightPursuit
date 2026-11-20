@@ -1070,7 +1070,7 @@ New from Plan 3:
 - The long stress run never happens to show a formed rolling roadblock (the test pictures do), and the automatic
   test driver's way of taking gaps is only lightly checked. So your drive on the patrol ground is the main check of
   rolling roadblocks in play.
-- The stress test takes about 68 minutes (D116).
+- The stress test takes about 68 minutes (D116). Superseded in Plan 4: see D144.
 - One 24 ms frame in the speed test (D116).
 
 After version 1 (design §10): police helicopters and enemy spies. Sound (design §9).
@@ -1311,8 +1311,15 @@ above 0. A mission with no boss says "KM TO THE END" instead of the boss distanc
 
 **D144. The stress test is shorter (this was your open question in D116).** It covers all 8 mission files. At 960x540
 it still draws every 10 m (NFR-5). At 320x200 and 2560x600 it draws every 100 m, which is where the time went. It also
-draws every screen at all three sizes and all three text sizes. Figures follow once the run has finished. You can ask
-for the full cadence back.
+draws every screen at all three sizes and all three text sizes. You can ask for the full cadence back.
+Result: it ran on the Release build of defa1b0. The road part drew 19,200 frames with 0 failures in 49.7 minutes, across
+the six campaign missions plus proving-ground and patrol-ground (960x540: 2000 frames each, about 4.5 to 6.4 minutes
+per mission; 320x200 and 2560x600: 200 frames each), plus 8 minimised frames, 0 failures. That is more than the
+line-art run (about 40 minutes for three missions, D124) because there are eight missions now, and less than Plan 3's
+68 minutes for three (D116). The screens pass drew 162 frames with 108 failures, all "element is already the logical
+child of another element": a bug in the diagnostics only (one GameView was moved between sizes), found by the final
+review and fixed in 22e2c91. After the fix, one `--snapshot` launch drew every screen (17, including the six
+briefings) at 1280x720, 960x540, 320x200 and 2560x600 in Normal, Large and Largest text: 204 pictures, no error.
 *Cost to change:* one number.
 
 **D145. Practice missions** (`proving-ground`, `patrol-ground`, or any single mission) are reached only with
@@ -1372,7 +1379,8 @@ New from Plan 4:
 - A `.bad.json` copy overwrites an earlier one, and invalid entries in a high-score file are dropped silently when the
   file is next saved.
 - Values of missions 3-5 are protected only by review; the 90 s mission test can pass trivially.
-- The stress run now also draws the screens; its figures will be in D144.
+- The stress run now also draws the screens; its result is in D144 (19,200 road frames, 0 failures, 49.7 minutes; the
+  screens pass's 108 failures were a diagnostics-only bug, fixed in 22e2c91).
 - After version 1 (design §10): police helicopters and enemy spies. Sound (design §9).
 
 ## Checks only you can do (Plan 4)
