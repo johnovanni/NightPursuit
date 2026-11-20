@@ -29,8 +29,8 @@ internal static class Neon
     public static readonly Color LightBlue = Color.FromRgb(0x2E, 0x6B, 0xFF);   // police light bar
     public static readonly Color LightRed = Color.FromRgb(0xFF, 0x2E, 0x4D);
     // The heat meter, calm to manhunt (the level name is always written too).
-    public static readonly Color HeatCalm = Color.FromRgb(0x39, 0xFF, 0x88), HeatWatched = Color.FromRgb(0xFF, 0xC1, 0x3B),
-        HeatPatrol = Color.FromRgb(0xFF, 0x8A, 0x1F), HeatPursuit = Color.FromRgb(0xFF, 0x3B, 0x3B), HeatManhunt = Color.FromRgb(0xFF, 0x4D, 0xE1);
+    public static readonly Color HeatCalm = Color.FromRgb(0x39, 0xFF, 0x88), HeatWatched = Color.FromRgb(0xFF, 0xE1, 0x4D),
+        HeatPatrol = Color.FromRgb(0xFF, 0xC1, 0x3B), HeatPursuit = Color.FromRgb(0xFF, 0x8A, 0x1F), HeatManhunt = Color.FromRgb(0xFF, 0x3B, 0x3B);
 
     public static readonly Brush Black = Solid(Colors.Black);
 
@@ -94,7 +94,7 @@ internal static class Neon
     public static readonly NeonPen Hood = Pen(Green, 0.8, 1.6), Gun = Pen(Green, 1, 3);
     public static readonly NeonPen Hud = Pen(Cyan, 0.8, 1.2), RadarLine = Pen(Green, 0.55, 1.0), MirrorRoad = Pen(Cyan, 0.6, 1.0);
     public static readonly NeonPen RadarWreck = Pen(Orange, 1, 1.6), RadarRunner = Pen(Magenta, 1, 1.5), RadarBlocker = Pen(Amber, 1, 1.5), RadarPursuer = Pen(Red, 1, 1.5);
-    public static readonly Brush TextLightBlue = Solid(LightBlue), TextCyan = Solid(Cyan), TextGray = Solid(Gray), TextAmber = Solid(Amber), TextRed = Solid(Red);
+    public static readonly Brush TextLightBlue = Solid(Color.FromRgb(0x6F, 0xA0, 0xFF)), TextCyan = Solid(Cyan), TextGray = Solid(Gray), TextAmber = Solid(Amber), TextRed = Solid(Red);
     public static readonly Brush TextGreen = Solid(Green), TextWhite = Solid(White), TextMagenta = Solid(Magenta);
     public static readonly Brush ThrottleFill = Solid(Green, 0.85), BrakeFill = Solid(Red, 0.85), HudBack = Solid(Cyan, 0.08);
     public static readonly Brush PanelFill = Solid(Color.FromRgb(4, 8, 14), 0.9), RadarFill = Solid(Color.FromRgb(2, 14, 8), 0.85);

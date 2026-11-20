@@ -46,16 +46,17 @@ internal static class Overlays
     public static void DrawWarnings(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
         double k = l.K;
-        double pulse = (w.Time * 3) % 1 < 0.5 ? 1 : 0.5;
-        dc.PushOpacity(pulse);
+        bool bright = (w.Time * 3) % 1 < 0.5;
         double y = WarningsTop(bossBar) * k;
         foreach (var warning in Warnings.Collect(w))
         {
+            bool police = warning.Kind is WarningKind.PoliceAlongside or WarningKind.PoliceBehind;
+            dc.PushOpacity(bright ? 1 : police ? 0.7 : 0.5);   // the police text stays easier to read in its dim half
             if (warning.ShowArrow) DrawEdgeArrow(dc, l, warning.Side);
             l.Centered(dc, warning.Text, y, 18, WarningBrush(warning.Kind));
+            dc.Pop();
             y += WarningRow * k;
         }
-        dc.Pop();
     }
 
     /// <summary>Top of the first warning line in HUD units: 108, or just under the boss bar while it shows.</summary>
@@ -75,6 +76,7 @@ internal static class Overlays
         WarningKind.WreckAhead or WarningKind.HazardAhead => Neon.TextOrange,
         WarningKind.PoliceAlongside or WarningKind.PoliceBehind => Neon.TextLightBlue,
         WarningKind.SpeedTrapAhead => Neon.TextAmber,
+        WarningKind.RoadblockAhead => Neon.TextRed,
         _ => Neon.TextRed,
     };
 
