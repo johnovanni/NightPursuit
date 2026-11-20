@@ -1,0 +1,111 @@
+{
+  "id": "mission-02",
+  "title": "Harbour Lights",
+  "briefing": "The syndicate moves its cargo through the old harbour after midnight. Their gunners ride along now and shoot back through the rear glass. Break the convoy's guard and bring down the Iron Gull before it reaches the docks.",
+  "road": {
+    "seed": 12,
+    "minRadius": 220,
+    "maxRadius": 800,
+    "hillAmplitude": 8
+  },
+  "approachLength": 6500,
+  "loadout": {
+    "oil": 5,
+    "smoke": 2,
+    "caltrops": 1,
+    "missiles": 1,
+    "strikes": 0
+  },
+  "traffic": {
+    "carsPerKm": 4
+  },
+  "police": {
+    "presence": 1
+  },
+  "bonus": 1500,
+  "waves": [
+    {
+      "atDistance": 400,
+      "kind": "Runner",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 1300,
+      "kind": "Blocker",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2200,
+      "kind": "Gunner",
+      "count": 1,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 3000,
+      "kind": "Pursuer",
+      "count": 1,
+      "spawnOffset": -250
+    },
+    {
+      "atDistance": 3800,
+      "kind": "Runner",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 4700,
+      "kind": "Gunner",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 5500,
+      "kind": "Blocker",
+      "count": 2,
+      "spawnOffset": 500
+    }
+  ],
+  "crates": [
+    {
+      "atDistance": 1500,
+      "lane": 1,
+      "item": "Missile",
+      "amount": 1
+    },
+    {
+      "atDistance": 2800,
+      "lane": -1,
+      "item": "Smoke",
+      "amount": 1
+    },
+    {
+      "atDistance": 4200,
+      "lane": 0,
+      "item": "Oil",
+      "amount": 2
+    },
+    {
+      "atDistance": 5800,
+      "lane": 1,
+      "item": "Armor",
+      "amount": 1
+    }
+  ],
+  "boss": {
+    "name": "Iron Gull",
+    "health": 220,
+    "look": "Twin",
+    "phases": [
+      {
+        "behaviour": "Blocker",
+        "endsBelow": 0.55
+      },
+      {
+        "behaviour": "Gunner",
+        "endsBelow": 0
+      }
+    ]
+  }
+}

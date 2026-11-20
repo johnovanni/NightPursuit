@@ -1,0 +1,128 @@
+{
+  "id": "mission-04",
+  "title": "Neon Mile",
+  "briefing": "The city expressway never sleeps, and tonight the police are already watching you. Armored cars shrug off your guns, so save a missile or steer them into a wreck. The Grey Warden waits at the end of the mile.",
+  "road": {
+    "seed": 27,
+    "minRadius": 260,
+    "maxRadius": 900,
+    "hillAmplitude": 10
+  },
+  "approachLength": 7500,
+  "loadout": {
+    "oil": 5,
+    "smoke": 2,
+    "caltrops": 2,
+    "missiles": 2,
+    "strikes": 1
+  },
+  "traffic": {
+    "carsPerKm": 7
+  },
+  "police": {
+    "presence": 1.5,
+    "startingHeat": 30
+  },
+  "bonus": 2500,
+  "waves": [
+    {
+      "atDistance": 400,
+      "kind": "Blocker",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 1300,
+      "kind": "Armored",
+      "count": 1,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2100,
+      "kind": "Runner",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 2900,
+      "kind": "Gunner",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 3700,
+      "kind": "Armored",
+      "count": 1,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 4500,
+      "kind": "Pursuer",
+      "count": 2,
+      "spawnOffset": -250
+    },
+    {
+      "atDistance": 5300,
+      "kind": "Dropper",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 6300,
+      "kind": "Armored",
+      "count": 2,
+      "spawnOffset": 500
+    }
+  ],
+  "crates": [
+    {
+      "atDistance": 1000,
+      "lane": 1,
+      "item": "Missile",
+      "amount": 1
+    },
+    {
+      "atDistance": 2500,
+      "lane": -1,
+      "item": "Missile",
+      "amount": 1
+    },
+    {
+      "atDistance": 3500,
+      "lane": 0,
+      "item": "Smoke",
+      "amount": 1
+    },
+    {
+      "atDistance": 5000,
+      "lane": 1,
+      "item": "Strike",
+      "amount": 1
+    },
+    {
+      "atDistance": 6800,
+      "lane": -1,
+      "item": "Armor",
+      "amount": 1
+    }
+  ],
+  "boss": {
+    "name": "Grey Warden",
+    "health": 300,
+    "look": "Twin",
+    "phases": [
+      {
+        "behaviour": "Blocker",
+        "endsBelow": 0.6
+      },
+      {
+        "behaviour": "Armored",
+        "endsBelow": 0.3
+      },
+      {
+        "behaviour": "Gunner",
+        "endsBelow": 0
+      }
+    ]
+  }
+}

@@ -1,0 +1,121 @@
+{
+  "id": "mission-03",
+  "title": "Glass Canyon",
+  "briefing": "The canyon road climbs through tight bends and blind crests. The syndicate's droppers will leave oil and spikes on every corner. Keep your line, keep your nerve, and run down the Red Lantern at the summit.",
+  "road": {
+    "seed": 19,
+    "minRadius": 140,
+    "maxRadius": 500,
+    "hillAmplitude": 26
+  },
+  "approachLength": 7000,
+  "loadout": {
+    "oil": 5,
+    "smoke": 2,
+    "caltrops": 2,
+    "missiles": 1,
+    "strikes": 0
+  },
+  "traffic": {
+    "carsPerKm": 2
+  },
+  "police": {
+    "presence": 0.5
+  },
+  "bonus": 2000,
+  "waves": [
+    {
+      "atDistance": 400,
+      "kind": "Runner",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 1200,
+      "kind": "Dropper",
+      "count": 1,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2000,
+      "kind": "Blocker",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2900,
+      "kind": "Pursuer",
+      "count": 2,
+      "spawnOffset": -250
+    },
+    {
+      "atDistance": 3800,
+      "kind": "Dropper",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 4700,
+      "kind": "Gunner",
+      "count": 1,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 5500,
+      "kind": "Runner",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 6300,
+      "kind": "Dropper",
+      "count": 2,
+      "spawnOffset": 500
+    }
+  ],
+  "crates": [
+    {
+      "atDistance": 1600,
+      "lane": 0,
+      "item": "Caltrops",
+      "amount": 1
+    },
+    {
+      "atDistance": 3200,
+      "lane": 1,
+      "item": "Missile",
+      "amount": 1
+    },
+    {
+      "atDistance": 4500,
+      "lane": -1,
+      "item": "Smoke",
+      "amount": 1
+    },
+    {
+      "atDistance": 6000,
+      "lane": 0,
+      "item": "Armor",
+      "amount": 1
+    }
+  ],
+  "boss": {
+    "name": "Red Lantern",
+    "health": 260,
+    "look": "Dome",
+    "phases": [
+      {
+        "behaviour": "Dropper",
+        "endsBelow": 0.65
+      },
+      {
+        "behaviour": "Pursuer",
+        "endsBelow": 0.3
+      },
+      {
+        "behaviour": "Runner",
+        "endsBelow": 0
+      }
+    ]
+  }
+}

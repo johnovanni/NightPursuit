@@ -1,0 +1,153 @@
+{
+  "id": "mission-06",
+  "title": "Last Light",
+  "briefing": "The syndicate's chief drives the mountain road home before dawn. Every car they have left is out tonight, and the police are close behind. This is the last run. Bring down the Obsidian Crown.",
+  "road": {
+    "seed": 53,
+    "minRadius": 160,
+    "maxRadius": 650,
+    "hillAmplitude": 22
+  },
+  "approachLength": 9000,
+  "loadout": {
+    "oil": 5,
+    "smoke": 3,
+    "caltrops": 2,
+    "missiles": 2,
+    "strikes": 1
+  },
+  "traffic": {
+    "carsPerKm": 5
+  },
+  "police": {
+    "presence": 2,
+    "startingHeat": 25
+  },
+  "bonus": 4000,
+  "waves": [
+    {
+      "atDistance": 400,
+      "kind": "Blocker",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 1200,
+      "kind": "Gunner",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2000,
+      "kind": "Dropper",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2800,
+      "kind": "Armored",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 3600,
+      "kind": "Pursuer",
+      "count": 3,
+      "spawnOffset": -250
+    },
+    {
+      "atDistance": 4400,
+      "kind": "Runner",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 5200,
+      "kind": "Gunner",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 6000,
+      "kind": "Armored",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 6800,
+      "kind": "Dropper",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 7600,
+      "kind": "Pursuer",
+      "count": 3,
+      "spawnOffset": -250
+    },
+    {
+      "atDistance": 8300,
+      "kind": "Armored",
+      "count": 2,
+      "spawnOffset": 500
+    }
+  ],
+  "crates": [
+    {
+      "atDistance": 1500,
+      "lane": 1,
+      "item": "Missile",
+      "amount": 2
+    },
+    {
+      "atDistance": 3000,
+      "lane": -1,
+      "item": "Smoke",
+      "amount": 1
+    },
+    {
+      "atDistance": 4200,
+      "lane": 0,
+      "item": "Armor",
+      "amount": 1
+    },
+    {
+      "atDistance": 5600,
+      "lane": 1,
+      "item": "Strike",
+      "amount": 1
+    },
+    {
+      "atDistance": 7000,
+      "lane": -1,
+      "item": "Missile",
+      "amount": 1
+    },
+    {
+      "atDistance": 8000,
+      "lane": 0,
+      "item": "Armor",
+      "amount": 1
+    }
+  ],
+  "boss": {
+    "name": "Obsidian Crown",
+    "health": 400,
+    "look": "Dome",
+    "phases": [
+      {
+        "behaviour": "Gunner",
+        "endsBelow": 0.66
+      },
+      {
+        "behaviour": "Dropper",
+        "endsBelow": 0.33
+      },
+      {
+        "behaviour": "Pursuer",
+        "endsBelow": 0,
+        "missiles": true
+      }
+    ]
+  }
+}
