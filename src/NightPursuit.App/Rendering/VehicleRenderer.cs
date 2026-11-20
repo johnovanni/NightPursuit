@@ -219,12 +219,24 @@ public static class VehicleRenderer
         }
         body.Freeze();
 
-        if (boss is { Shield: > 0 })   // a pulsing cyan outline under the white one while it cannot be hurt
+        var edge = new List<Point>(shape.Length * 2);
+        for (int i = 0; i < shape.Length; i++) edge.Add(P(-shape[i].X, shape[i].Y));       // up the left side
+        for (int i = shape.Length - 1; i >= 0; i--) edge.Add(P(shape[i].X, shape[i].Y));   // across the roof and down the right
+        // Light from the upper right: a gap just past the right shoulder of the roof, and a small one low on the left.
+        double total = 0, toShoulder = 0;
+        for (int i = 1; i < edge.Count; i++)
         {
-            var shield = Math.Sin(boss.Shield * 25) > 0 ? Neon.ShieldBright : Neon.ShieldDim;
-            dc.DrawGeometry(Neon.Black, shield.Glow, body);
-            dc.DrawGeometry(null, shield.Core, body);
-            if (fins is not null) { dc.DrawGeometry(null, shield.Glow, fins); dc.DrawGeometry(null, shield.Core, fins); }
+            total += (edge[i] - edge[i - 1]).Length;
+            if (i == shape.Length) toShoulder = total;
+        }
+        double sh = total > 0 ? toShoulder / total : 0.6;
+        if (boss is { Shield: > 0 })   // a pulsing cyan open edge under the white one while it cannot be hurt
+        {
+            bool bright = Math.Sin(boss.Shield * 25) > 0;
+            var shieldColour = LineArt.ColorOf(bright ? Neon.ShieldBright : Neon.ShieldDim);
+            // Both shield pens are the same cyan; the pulse is carried by the strength (dim phase at 0.45).
+            var shieldPen = LineArt.Outline(shieldColour, bright ? fade : fade * 0.45);
+            LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), shieldPen);
         }
         // Black fills hide what is behind; only the presenting edges are stroked. There is no line along the bottom of
         // the body (the road meets it there) and none along the base of a fin (the body hides it).
@@ -239,17 +251,6 @@ public static class VehicleRenderer
             }
         }
         dc.DrawGeometry(Neon.Black, null, body);
-        var edge = new List<Point>(shape.Length * 2);
-        for (int i = 0; i < shape.Length; i++) edge.Add(P(-shape[i].X, shape[i].Y));       // up the left side
-        for (int i = shape.Length - 1; i >= 0; i--) edge.Add(P(shape[i].X, shape[i].Y));   // across the roof and down the right
-        // Light from the upper right: a gap just past the right shoulder of the roof, and a small one low on the left.
-        double total = 0, toShoulder = 0;
-        for (int i = 1; i < edge.Count; i++)
-        {
-            total += (edge[i] - edge[i - 1]).Length;
-            if (i == shape.Length) toShoulder = total;
-        }
-        double sh = total > 0 ? toShoulder / total : 0.6;
         LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outlinePen);
         tyres.Draw(dc, detailPen);
         tread.Draw(dc, LineArt.Detail(colour, fade * 0.55));
@@ -327,7 +328,7 @@ public static class VehicleRenderer
                 break;
         }
         detail.Draw(dc, detailPen);
-        if (IsPolice(kind)) LightBar(dc, P, shape[^1], time, s);
+        if (IsPolice(kind)) LightBar(dc, P, shape[^1], time, s, fade);
 
         switch (kind)
         {
@@ -347,20 +348,30 @@ public static class VehicleRenderer
         switch (boss is null ? kind : boss.Phase.Behaviour)
         {
             case AgentKind.Gunner:
-                // The gun port: dim while it rides along (or is blinded by smoke), glowing while it aims, white during the burst.
-                double port = Math.Max(4, (boss is null ? 0.42 : 0.3) * s);
-                var portBrush = !GunnerDriver.IsAiming(car) ? Neon.PortDim
-                              : car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst } ? Neon.PortBurst : Neon.PortGlow;
-                var pc = P(0, boss is null ? 1.06 : 0.84);
-                var portRect = new Rect(pc.X - port / 2, pc.Y - port / 2, port, port);
-                if (!ReferenceEquals(portBrush, Neon.PortDim)) dc.DrawRectangle(portBrush, Neon.GunnerCar.Glow, portRect);
-                dc.DrawRectangle(portBrush, pen.Core, portRect);
+                // The gun port: a line across the window's open bottom. Dim while it rides along (or is blinded by smoke),
+                // bright while it aims, and a second white line above it during the burst.
+                bool aiming = GunnerDriver.IsAiming(car);
+                double py = boss is null ? 0.9 : 0.84, half = 0.3;
+                var portLine = new LineBatch();
+                portLine.Line(P(-half, py), P(half, py));
+                if (!aiming) portLine.Draw(dc, LineArt.Detail(LineArt.ColorOf(Neon.GunnerCar), fade * 0.5));
+                else
+                {
+                    portLine.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.PortGlow), fade));
+                    if (car.DriverState is GunnerDriver.State { Phase: GunnerPhase.Burst })
+                    {
+                        var burst = new LineBatch();
+                        var (bl, br) = (P(-half, py), P(half, py));
+                        burst.Line(new Point(bl.X, bl.Y - 0.08 * s), new Point(br.X, br.Y - 0.08 * s));
+                        burst.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.PortBurst), fade));
+                    }
+                }
                 break;
             case AgentKind.Dropper:
                 // The chute under the bumper: a down chevron, bright and filled while arming.
                 bool arming = DropperDriver.IsArming(car);
-                if (boss is null) Chute(dc, P, 0, 0.4, arming, pen);
-                else foreach (int side in Projector.Sides) Chute(dc, P, side * 0.5, 0.22, arming, pen);
+                if (boss is null) Chute(dc, P, 0, 0.4, arming, colour, fade);
+                else foreach (int side in Projector.Sides) Chute(dc, P, side * 0.5, 0.22, arming, colour, fade);
                 break;
         }
 
@@ -368,8 +379,9 @@ public static class VehicleRenderer
         {
             // A full-width tail strip trimmed in gold, and a central exhaust ring.
             var strip = new Rect(P(-0.94, 0.66), P(0.94, 0.5));
-            dc.DrawRectangle(Neon.TailLight, Neon.BossTrim.Core, strip);
-            dc.DrawEllipse(null, pen.Core, P(0, 0.33), Math.Max(2, 0.15 * s), Math.Max(1.5, 0.1 * s));
+            dc.DrawRectangle(Neon.TailLight, null, strip);
+            LineArt.Draw(dc, new RectangleGeometry(strip), LineArt.Detail(LineArt.ColorOf(Neon.BossTrim), fade));
+            LineArt.Draw(dc, new EllipseGeometry(P(0, 0.33), Math.Max(2, 0.15 * s), Math.Max(1.5, 0.1 * s)), detailPen);
             if (boss is { ArmorOpen: true })   // the open armour: a jagged line across the back
             {
                 var jag = new LineBatch();
@@ -382,7 +394,7 @@ public static class VehicleRenderer
                     jag.Line(prev, next);
                     prev = next;
                 }
-                jag.Draw(dc, Neon.OpenArmor);
+                jag.Draw(dc, LineArt.Detail(LineArt.ColorOf(Neon.OpenArmor), fade));
             }
         }
         else
@@ -402,15 +414,15 @@ public static class VehicleRenderer
     /// Both halves glow. Drawn after the body fill, so the outline cannot hide it. <paramref name="roof"/> is the outline's
     /// last point (the roof's half-width fraction and height).
     /// </summary>
-    static void LightBar(DrawingContext dc, Func<double, double, Point> P, (double X, double Y) roof, double time, double s)
+    static void LightBar(DrawingContext dc, Func<double, double, Point> P, (double X, double Y) roof, double time, double s, double fade)
     {
         double half = 0.6 * roof.X, top = roof.Y + Math.Max(0.12, 3.0 / s);   // at least 3 px tall at any distance
         foreach (int side in Projector.Sides)
         {
             var rect = new Rect(P(side < 0 ? -half : 0, roof.Y), P(side < 0 ? 0 : half, top));
             var pen = Neon.LightPen(time, side);
-            dc.DrawRectangle(Neon.LightFill(time, side), pen.Glow, rect);
-            dc.DrawRectangle(null, pen.Core, rect);
+            dc.DrawRectangle(Neon.LightFill(time, side), null, rect);
+            LineArt.Draw(dc, new RectangleGeometry(rect), LineArt.Detail(LineArt.ColorOf(pen), fade));
         }
     }
 
@@ -418,7 +430,7 @@ public static class VehicleRenderer
     /// A dropper's chute: a down chevron centred on <paramref name="x"/> (a fraction of the half-width), from just above
     /// the road to under the bumper; bright and filled while <paramref name="arming"/>.
     /// </summary>
-    static void Chute(DrawingContext dc, Func<double, double, Point> P, double x, double halfWidth, bool arming, NeonPen pen)
+    static void Chute(DrawingContext dc, Func<double, double, Point> P, double x, double halfWidth, bool arming, Color colour, double fade)
     {
         var chute = new StreamGeometry();
         using (var c = chute.Open())
@@ -430,10 +442,10 @@ public static class VehicleRenderer
         chute.Freeze();
         if (arming)
         {
-            dc.DrawGeometry(Neon.ChuteFill, Neon.ChuteGlow.Glow, chute);
-            dc.DrawGeometry(null, Neon.ChuteGlow.Core, chute);
+            dc.DrawGeometry(Neon.ChuteFill, null, chute);
+            LineArt.Draw(dc, chute, LineArt.Detail(LineArt.ColorOf(Neon.ChuteGlow), fade));
         }
-        else dc.DrawGeometry(null, pen.Core, chute);
+        else LineArt.Draw(dc, chute, LineArt.Detail(colour, fade));
     }
 
     /// <summary>One reusable point buffer per outline length: drawing happens on the UI thread only, and PolyLineTo copies the points.</summary>
