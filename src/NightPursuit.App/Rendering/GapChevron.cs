@@ -57,8 +57,8 @@ internal static class GapChevron
         }
         g.Freeze();
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, p.ClipAt(ahead))));
-        dc.DrawGeometry(Fill, Neon.GapPen.Glow, g);
-        dc.DrawGeometry(null, Neon.GapPen.Core, g);
+        dc.DrawGeometry(Fill, null, g);
+        LineArt.Draw(dc, g, LineArt.Outline(Neon.Green, LineArt.Fade(ahead)));
         if (label)
         {
             double size = Math.Clamp(0.9 * p.Ppm(depth), 9, 26);

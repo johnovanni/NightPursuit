@@ -82,6 +82,9 @@ internal static class RoadsideRenderer
         if (!p.ToScreen(nearD, x0, 0, out var bl, out double depth) || !p.ToScreen(nearD, x1, 0, out var br, out _)
             || !p.ToScreen(nearD, x0, BarrierHeight, out var tl, out _) || !p.ToScreen(nearD, x1, BarrierHeight, out var tr, out _)) return;
 
+        double fade = LineArt.Fade(nearD);
+        var outline = LineArt.Outline(Neon.Red, fade);
+
         // The side facing the camera, when it stands outside the box's width.
         if (p.CamLateral < x0 || p.CamLateral > x1)
         {
@@ -89,9 +92,10 @@ internal static class RoadsideRenderer
             double sx = left ? x0 : x1;
             if (p.ToScreen(farD, sx, 0, out var fb, out _) && p.ToScreen(farD, sx, BarrierHeight, out var ft, out _))
             {
-                var side = Polygon(left ? bl : br, fb, ft, left ? tl : tr);
-                dc.DrawGeometry(Neon.Black, Neon.BarrierPen.Glow, side);
-                dc.DrawGeometry(null, Neon.BarrierPen.Core, side);
+                var nb = left ? bl : br;
+                var nt = left ? tl : tr;
+                dc.DrawGeometry(Neon.Black, null, Polygon(nb, fb, ft, nt));
+                LineArt.Draw(dc, LineArt.Polyline(new[] { fb, ft, nt, nb }), outline);   // open: no line along the foot
             }
         }
 
@@ -109,8 +113,7 @@ internal static class RoadsideRenderer
             dc.DrawGeometry(Neon.StripeWhite, null, Polygon(At(u + pair / 2, 0), At(u + pair, 0), At(u + pair + slant, 1), At(u + pair / 2 + slant, 1)));
         }
         dc.Pop();
-        dc.DrawGeometry(null, Neon.BarrierPen.Glow, face);
-        dc.DrawGeometry(null, Neon.BarrierPen.Core, face);
+        LineArt.Draw(dc, LineArt.Polyline(new[] { bl, tl, tr, br }), outline);   // open: no line along the foot
 
         // The light bar on top: two halves swapping blue and red on the shared clock, at least 3 px tall at any distance.
         double s = p.Ppm(depth), lift = Math.Max(0.2, 3.0 / s);
@@ -119,9 +122,9 @@ internal static class RoadsideRenderer
             double a = centre + (half < 0 ? -Roadblock.BarrierHalfWidth : 0), b = centre + (half < 0 ? 0 : Roadblock.BarrierHalfWidth);   // the whole barrier width
             if (!p.ToScreen(nearD, a, BarrierHeight, out var lo, out _) || !p.ToScreen(nearD, b, BarrierHeight + lift, out var hi, out _)) continue;
             var rect = new Rect(lo, hi);
-            var pen = Neon.LightPen(time, half);
-            dc.DrawRectangle(Neon.LightFill(time, half), pen.Glow, rect);
-            dc.DrawRectangle(null, pen.Core, rect);
+            var pen = LineArt.Detail(LineArt.ColorOf(Neon.LightPen(time, half)), fade);
+            dc.DrawRectangle(Neon.LightFill(time, half), null, rect);
+            LineArt.Draw(dc, new RectangleGeometry(rect), pen);
         }
     }
 
@@ -142,12 +145,14 @@ internal static class RoadsideRenderer
 
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
         dc.PushOpacity(fade);
-        dc.DrawLine(Neon.Post.Core, foot, tip);
+        double lineFade = LineArt.Fade(dz);
+        var postPen = LineArt.Scenery(Neon.Gray, lineFade);
+        LineArt.Draw(dc, LineArt.Lines(new[] { (foot, tip) }), postPen);
 
         var sign = new Rect(lo, hi);
-        var pen = trap.Caught ? Neon.SignCaughtPen : Neon.SignPen;
-        dc.DrawRectangle(trap.Caught ? Neon.SignCaughtFill : Neon.SignFill, pen.Glow, sign);
-        dc.DrawRectangle(null, pen.Core, sign);
+        var pen = LineArt.Outline(trap.Caught ? Neon.Red : Neon.Amber, lineFade);
+        dc.DrawRectangle(trap.Caught ? Neon.SignCaughtFill : Neon.SignFill, null, sign);
+        LineArt.Draw(dc, new RectangleGeometry(sign), pen);
         double size = Math.Max(6, 0.6 * s);
         var text = new FormattedText(trap.LimitMph.ToString("0", CultureInfo.InvariantCulture), CultureInfo.InvariantCulture,
                                      FlowDirection.LeftToRight, Font, size, trap.Caught ? Neon.TextRed : Neon.TextAmber, 1.0);
@@ -167,9 +172,10 @@ internal static class RoadsideRenderer
         {
             var box = new Rect(cl, ch);
             double mid = box.Y + box.Height / 2, lens = Math.Max(1, box.Height * 0.25);
-            dc.DrawRectangle(Neon.Black, Neon.SignPen.Core, box);
+            dc.DrawRectangle(Neon.Black, null, box);
+            LineArt.Draw(dc, new RectangleGeometry(box), LineArt.Detail(Neon.Amber, lineFade));
             dc.DrawEllipse(Neon.TextAmber, null, new Point(box.X + box.Width / 2, mid), lens, lens);
-            dc.DrawLine(Neon.Post.Core, new Point(toward < 0 ? sign.X : sign.Right, mid), new Point(toward < 0 ? box.Right : box.X, mid));
+            LineArt.Draw(dc, LineArt.Lines(new[] { (new Point(toward < 0 ? sign.X : sign.Right, mid), new Point(toward < 0 ? box.Right : box.X, mid)) }), postPen);
         }
         dc.Pop();
         dc.Pop();

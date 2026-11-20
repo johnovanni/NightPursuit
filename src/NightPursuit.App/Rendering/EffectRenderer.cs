@@ -25,7 +25,7 @@ public static class EffectRenderer
             var batch = new LineBatch();
             batch.Line(tail, head);
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-            batch.Draw(dc, t.Hostile ? Neon.EnemyTracer : Neon.Tracer);
+            batch.Draw(dc, LineArt.Outline(t.Hostile ? LineArt.ColorOf(Neon.EnemyTracer) : Neon.Amber, LineArt.Fade(dz)));
             dc.Pop();
         }
     }
@@ -49,7 +49,7 @@ public static class EffectRenderer
             dc.DrawRectangle(BeamFill, null, new Rect(g.X - half, -60, half * 2, g.Y + 60));
             var core = new LineBatch();
             core.Line(new Point(g.X, g.Y), new Point(g.X, -60));
-            core.Draw(dc, Neon.StrikeBeam);
+            core.Draw(dc, LineArt.Scenery(LineArt.ColorOf(Neon.StrikeBeam), LineArt.Fade(dz)));
             dc.Pop();
         }
         if (hasExclude) dc.Pop();
@@ -69,7 +69,7 @@ public static class EffectRenderer
                 batch.Line(c + dir * r * 0.35 * len, c + dir * r * len);
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
             dc.PushOpacity(Math.Max(0, 1 - x.Age / Explosion.Life));
-            batch.Draw(dc, Neon.Boom);
+            batch.Draw(dc, LineArt.Outline(Neon.Orange, LineArt.Fade(dz)));
             dc.Pop();
             dc.Pop();
         }
@@ -92,6 +92,6 @@ public static class EffectRenderer
             double a = i * Math.PI / 3 + w.Time * 7;
             flash.Line(m, m + new Vector(Math.Cos(a), Math.Sin(a)) * 12 * k);
         }
-        flash.Draw(dc, Neon.Tracer);
+        flash.Draw(dc, LineArt.Outline(Neon.Amber, 1));
     }
 }

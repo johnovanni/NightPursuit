@@ -179,12 +179,12 @@ internal static class ArsenalRenderer
             double fin = Math.Max(2, (head - tail).Length * 0.25);
             body.Line(tail, new Point(tail.X - fin, tail.Y + fin * 0.6));
             body.Line(tail, new Point(tail.X + fin, tail.Y + fin * 0.6));
-            body.Draw(dc, Neon.PlayerMissile);
+            body.Draw(dc, LineArt.Outline(LineArt.ColorOf(Neon.PlayerMissile), LineArt.Fade(dz)));
             var fl = new LineBatch();
             fl.Line(tail, flame);
             fl.Line(new Point(tail.X - fin * 0.4, tail.Y), flame);
             fl.Line(new Point(tail.X + fin * 0.4, tail.Y), flame);
-            fl.Draw(dc, flick > 0.5 ? Neon.FlameOuter : Neon.FlameInner);
+            fl.Draw(dc, LineArt.Detail(LineArt.ColorOf(flick > 0.5 ? Neon.FlameOuter : Neon.FlameInner), LineArt.Fade(dz)));
             dc.Pop();
         }
 
@@ -205,10 +205,10 @@ internal static class ArsenalRenderer
             double fin = Math.Max(3, (head - tail).Length * 0.3);
             body.Line(tail, new Point(tail.X - fin, tail.Y - fin * 0.6));
             body.Line(tail, new Point(tail.X + fin, tail.Y - fin * 0.6));
-            body.Draw(dc, Neon.EnemyMissile);
+            var missilePen = LineArt.Outline(Neon.Red, LineArt.Fade(dz));
+            body.Draw(dc, missilePen);
             var mid = new Point((head.X + tail.X) / 2, (head.Y + tail.Y) / 2);
-            dc.DrawEllipse(null, Neon.EnemyMissile.Glow, mid, ring, ring);
-            dc.DrawEllipse(null, Neon.EnemyMissile.Core, mid, ring, ring);
+            LineArt.Draw(dc, new EllipseGeometry(mid, ring, ring), missilePen);
             dc.Pop();
         }
     }
@@ -240,15 +240,14 @@ internal static class ArsenalRenderer
                 prev = pt;
             }
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-            line.Draw(dc, Neon.StrikeBeam);
+            line.Draw(dc, LineArt.Scenery(LineArt.ColorOf(Neon.StrikeBeam), LineArt.Fade(d)));
             dc.Pop();
         }
 
         foreach (var car in w.Agents)
-            if (w.InStrikeRange(car)) CarBrackets(dc, p, car, Neon.StrikeBeam, 0.35);
+            if (w.InStrikeRange(car)) CarBrackets(dc, p, car, LineArt.ColorOf(Neon.StrikeBeam), 0.35);
     }
 
-    static readonly NeonPen LockPen = Neon.Pen(Neon.Green, 1, 2);
     static readonly Typeface LockFont = new(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
 
     /// <summary>Corner brackets and "LOCK" on the car a missile would lock onto, while there is a missile to fire.</summary>
@@ -257,7 +256,7 @@ internal static class ArsenalRenderer
         if (w.Loadout.Missiles.Charges <= 0 || w.Player.State == VehicleState.Wrecked) return;
         var target = w.FindMissileTarget();
         if (target is null) return;
-        if (CarBrackets(dc, p, target, LockPen, 0.45) is not Rect r) return;
+        if (CarBrackets(dc, p, target, Neon.Green, 0.45) is not Rect r) return;
         // Drawn in the shaken world layer, so it sizes itself from the box rather than through HudLayout.
         var ft = new FormattedText("LOCK", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, LockFont,
                                    Math.Clamp(r.Width * 0.3, 12, 20), Neon.TextGreen, 1.0);
@@ -265,7 +264,7 @@ internal static class ArsenalRenderer
     }
 
     /// <summary>Four corner brackets around a car (arm length is <paramref name="arm"/> of the box's shorter side); returns the box, or null when hidden.</summary>
-    static Rect? CarBrackets(DrawingContext dc, Projector p, AgentCar car, NeonPen pen, double arm)
+    static Rect? CarBrackets(DrawingContext dc, Projector p, AgentCar car, Color colour, double arm)
     {
         if (car.State == VehicleState.Wrecked) return null;
         double dz = p.Ahead(car);
@@ -287,7 +286,7 @@ internal static class ArsenalRenderer
                 b.Line(new Point(x, y), new Point(x, y + sy * a));
             }
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-        b.Draw(dc, pen);
+        b.Draw(dc, LineArt.Outline(colour, 1));
         dc.Pop();
         return box;
     }
