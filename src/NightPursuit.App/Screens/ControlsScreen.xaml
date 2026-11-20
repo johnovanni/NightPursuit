@@ -1,0 +1,12 @@
+<!-- The controls help: the shared help lines, then how to leave. A passive view; keys reach it only through ScreenFlow. -->
+<UserControl x:Class="NightPursuit.App.Screens.ControlsScreen"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False" IsTabStop="False"
+             FontFamily="{DynamicResource NeonFont}">
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel x:Name="LinesPanel" />
+        <TextBlock HorizontalAlignment="Center" Margin="0,18,0,0" Text="ENTER OR ESC  BACK"
+                   FontSize="{DynamicResource TextBody}" Foreground="{DynamicResource TextCyan}" />
+    </StackPanel>
+</UserControl>

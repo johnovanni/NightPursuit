@@ -25,7 +25,7 @@ public static class ScreenSnapshots
     const double Dt = 1.0 / 120;
     const double DriveSeconds = 12;   // as the --scene default: far enough along that the frozen road behind a screen is real road
 
-    static readonly string[] ScreenNames = { "title", "settings", "pause", "quit", "briefing", "briefing-all" };
+    static readonly string[] ScreenNames = { "title", "settings", "pause", "quit", "briefing", "briefing-all", "controls", "complete", "gameover", "ended", "finished", "initials", "highscores" };
     const string BriefingAll = "briefing-all";
     static readonly string[] TextSizeNames = { "normal", "large", "largest" };
 
@@ -143,7 +143,65 @@ public static class ScreenSnapshots
                     Expect(flow, Screen.QuitConfirm, screen);
                 }
                 break;
+            case "controls":
+                Play(flow, view, practice);
+                flow.HandleGameAction(new GameAction(ActionKind.ToggleHelp));   // F1 in play: pauses and opens the controls
+                Expect(flow, Screen.Controls, screen);
+                break;
+            case "complete":
+                Play(flow, view, practice);
+                ForceStage(flow, GameStage.MissionComplete, practice ? 0 : 3, 31250);
+                break;
+            case "gameover":
+                Play(flow, view, practice);
+                ForceStage(flow, GameStage.GameOver, practice ? 0 : 2, 7200);
+                break;
+            case "ended":
+                Play(flow, view, practice);
+                flow.HandleGameAction(new GameAction(ActionKind.Pause));
+                flow.Update(ControlFrame.Empty, 0);
+                Choose(flow, "quit");
+                Choose(flow, "yes");   // "YES, QUIT"
+                Expect(flow, Screen.GameOver, screen);
+                break;
+            case "finished":
+                Play(flow, view, practice);
+                ForceStage(flow, GameStage.Finished, practice ? 0 : 5, 61000);
+                break;
+            case "initials":
+            case "highscores":
+                Play(flow, view, practice);
+                ForceStage(flow, GameStage.GameOver, practice ? 0 : 2, 30000);   // a score that makes rank 4 of the sample table
+                flow.Handle(new MenuKey(MenuInput.Confirm));
+                Expect(flow, Screen.EnterInitials, screen);
+                flow.Handle(new MenuKey(MenuInput.Letter, 'M'));
+                flow.Handle(new MenuKey(MenuInput.Letter, 'J'));
+                flow.Handle(new MenuKey(MenuInput.Left));   // MJA, cursor on the J
+                if (screen == "highscores")
+                {
+                    flow.Handle(new MenuKey(MenuInput.Confirm));
+                    Expect(flow, Screen.HighScores, screen);
+                }
+                break;
         }
+    }
+
+    /// <summary>
+    /// Puts the playing game into a result stage as the player would see it, without playing it: the diagnostic sets the game's own
+    /// state (stage, mission index, score, a sample bonus), then lets the flow notice it on its next update.
+    /// </summary>
+    static void ForceStage(ScreenFlow flow, GameStage stage, int missionIndex, int score)
+    {
+        var game = flow.Game!;
+        const BindingFlags Any = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+        typeof(Game).GetProperty(nameof(Game.MissionIndex), Any)!.SetValue(game, missionIndex);
+        typeof(Game).GetField("_score", Any)!.SetValue(game, score);
+        typeof(Game).GetField("_spareCars", Any)!.SetValue(game, 2);
+        if (stage == GameStage.MissionComplete)
+            typeof(Game).GetProperty(nameof(Game.LastBonus), Any)!.SetValue(game, MissionBonus.For(game.Mission, 62.7, carLost: false));
+        typeof(Game).GetProperty(nameof(Game.Stage), Any)!.SetValue(game, stage);
+        flow.Update(ControlFrame.Empty, 0);
+        Expect(flow, stage switch { GameStage.MissionComplete => Screen.MissionComplete, GameStage.GameOver => Screen.GameOver, _ => Screen.Finished }, stage.ToString());
     }
 
     /// <summary>
@@ -210,6 +268,7 @@ public static class ScreenSnapshots
         view.ShowHelp = flow.ShowIntroHelp && flow.Current == Screen.Play;
         view.ShakeEnabled = flow.Settings.ScreenShake;
         view.Notice = flow.Current == Screen.Play ? flow.Notice : null;
+        view.Covered = flow.Current != Screen.Play;
         var host = new ScreenHost();
         host.Show(flow);
         var grid = new Grid { Width = width, Height = height, Background = Brushes.Black };

@@ -26,6 +26,9 @@ public sealed class GameLoop
     // Space and pad A both confirm a screen and fire: after a screen hands over to play, the guns stay off until both are let go.
     bool _fireLatch;
     bool _closing;
+    // A result screen ignores Confirm until the confirm/fire controls have been released once (a player still firing as the mission ends).
+    readonly ReleaseFirstGate _resultGate = new();
+    Screen _lastScreen;
 
     public GameLoop(Window window, ScreenFlow flow, GameView view, ScreenHost host, InputHub input)
     {
@@ -34,6 +37,7 @@ public sealed class GameLoop
         _view = view;
         _host = host;
         _input = input;
+        _lastScreen = flow.Current;
         _host.Show(flow);   // the first screen is up before the first frame
         CompositionTarget.Rendering += OnFrame;
     }
@@ -63,6 +67,7 @@ public sealed class GameLoop
 
         // Read first: polling the pad is what queues its press-edge actions and menu keys, and they must act this frame.
         var held = _input.Read(_window.IsActive);
+        _resultGate.Update(held.Fire || held.PadFire || _input.EnterHeld);   // Space, pad A, Enter
         bool startedOnScreen = _flow.Current != Screen.Play;
         if (!startedOnScreen)
         {
@@ -72,7 +77,12 @@ public sealed class GameLoop
         }
         else
         {
-            foreach (var k in _input.DrainMenu()) _flow.Handle(k);
+            bool holdConfirm = _resultGate.Waiting && IsResultScreen(_flow.Current);
+            foreach (var k in _input.DrainMenu())
+            {
+                if (holdConfirm && k.Input == MenuInput.Confirm) continue;
+                _flow.Handle(k);
+            }
             foreach (var _ in _input.Drain()) { }   // dropped: on a screen, keys are menu keys
         }
 
@@ -84,11 +94,17 @@ public sealed class GameLoop
         }
 
         _flow.Update(held, seconds);   // Core caps a long stall at 0.25 s
+        if (_flow.Current != _lastScreen)
+        {
+            _lastScreen = _flow.Current;
+            if (IsResultScreen(_lastScreen)) _resultGate.Begin();
+        }
 
         var run = _flow.Game?.Run;
         _view.Run = run;
         _view.ShowHelp = _flow.ShowIntroHelp && _flow.Current == Screen.Play;
         _view.ShakeEnabled = _flow.Settings.ScreenShake;
+        _view.Covered = _flow.Current != Screen.Play;
         _view.Notice = _flow.Current == Screen.Play ? _flow.Notice : null;
         if (run is not null)
         {
@@ -106,6 +122,8 @@ public sealed class GameLoop
             _window.Close();
         }
     }
+
+    static bool IsResultScreen(Screen s) => s is Screen.MissionComplete or Screen.GameOver or Screen.Finished;
 
     static ControlFrame WithoutFire(ControlFrame f) => new()
     {

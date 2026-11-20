@@ -36,6 +36,9 @@ public sealed class GameView : FrameworkElement
     /// <summary>A one-line notice from the screen flow (such as a failed save) shown in play, or null.</summary>
     public string? Notice { get; set; }
 
+    /// <summary>A screen covers the road (the game loop sets it): the frozen world's announcement and busted countdown are left out, so no stale text shows through.</summary>
+    public bool Covered { get; set; }
+
     /// <summary>Milliseconds the latest <see cref="OnRender"/> spent recording its draw calls (read by the --perf diagnostic).</summary>
     public double LastRenderMilliseconds { get; private set; }
 
@@ -95,8 +98,11 @@ public sealed class GameView : FrameworkElement
         bool bossBar = BossBar.Showing(run) is not null;
         Overlays.DrawWarnings(dc, _layout, world, bossBar);
         Overlays.DrawMessages(dc, _layout, world, bossBar);
-        Overlays.DrawAnnouncement(dc, _layout, world, bossBar);
-        Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
+        if (!Covered)
+        {
+            Overlays.DrawAnnouncement(dc, _layout, world, bossBar);
+            Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
+        }
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
         Overlays.DrawState(dc, _layout, run);   // after the help, so the respawn countdown is never hidden under it

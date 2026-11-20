@@ -20,7 +20,8 @@ internal static class Overlays
 
     static readonly int[] LeftOnly = { -1 }, RightOnly = { 1 };
 
-    static readonly string[] HelpLines =
+    /// <summary>The controls help, shared by the intro box here and <see cref="Screens.ControlsScreen"/>. Key-help lines keep their mixed case.</summary>
+    internal static IReadOnlyList<string> HelpLines { get; } = new[]
     {
         "NIGHT PURSUIT  -  CONTROLS",
         "",
@@ -30,11 +31,12 @@ internal static class Overlays
         "           Steer into a car's side to knock it into a spin",
         "SPEED      C cruise     F2 ramp pedal     F3 speed lever",
         "           1-0 lever presets     mouse wheel moves the lever",
-        "GAME       P / Esc pause   R restart (when paused or finished)   F1 this help",
+        "GAME       P / Esc pause   F1 controls (pauses)   R restart (practice only)",
         "HEAT       hurting civilians or police raises heat; drive clean to cool off",
         "GAMEPAD    right trigger gas     left trigger brake     left stick steer",
         "           A guns   B drop   X next rear   RB missile   LB strike   Y cruise",
-        "           D-pad up/down lever   Start pause   Back restart",
+        "           D-pad up/down lever   Start pause   restart: pause menu (practice)",
+        "MENUS      A select   B back   Start resume",
         "",
         "Press gas to start.  F1 shows this again.",
     };
@@ -198,7 +200,7 @@ internal static class Overlays
     public static void DrawHelp(DrawingContext dc, HudLayout l)
     {
         double k = l.K, lineH = 22 * k, pad = 22 * k, margin = 10 * k;
-        double top = l.Height * 0.28, height = HelpLines.Length * lineH + 30 * k;
+        double top = l.Height * 0.28, height = HelpLines.Count * lineH + 30 * k;
         double left = WeaponPanel.Bounds(l).Right + margin, right = l.Width - margin;
         var radar = Radar.Bounds(l);
         if (top + height > radar.Top) right = Math.Min(right, radar.Left - margin);
@@ -217,7 +219,7 @@ internal static class Overlays
         dc.DrawRectangle(Neon.PanelFill, null, r);
         LineArt.Brackets(dc, r, 14 * k, LineArt.Gauge);
         double y = r.Y + 16 * k;
-        for (int i = 0; i < HelpLines.Length; i++)
+        for (int i = 0; i < HelpLines.Count; i++)
         {
             l.Text(dc, HelpLines[i], r.X + 22 * k, y, i == 0 ? 17 : 14.5, i == 0 ? Neon.TextAmber : Neon.TextWhite, bold: i == 0);
             y += lineH;

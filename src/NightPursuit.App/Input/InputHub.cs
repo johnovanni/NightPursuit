@@ -18,6 +18,9 @@ public sealed class InputHub
 
     public bool PadConnected => _pad.Connected;
 
+    /// <summary>Enter is held now (it confirms screens but is not part of the control frame).</summary>
+    public bool EnterHeld => _keys.EnterHeld;
+
     /// <summary>Returns true when the key belongs to the game (so WPF should not use it for focus etc.).</summary>
     public bool OnKeyDown(Key key, bool isRepeat)
     {

@@ -85,7 +85,7 @@ internal static class Hud
         l.Text(dc, $"CONTROL  {w.Scheme.Name}", 16 * k, y, 18, Neon.TextCyan, bold: true);
         y += 26 * k;
         foreach (var line in w.Scheme.HelpLines) { l.Text(dc, line, 16 * k, y, 13.5, Neon.TextGray); y += 18 * k; }
-        l.Text(dc, "F1 help  P pause  R restart when paused", 16 * k, y + 4 * k, 13, Neon.TextGray);
+        l.Text(dc, "F1 controls  P pause", 16 * k, y + 4 * k, 13, Neon.TextGray);
     }
 
     /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, boss or distance, no-grip and puncture timers, the heat meter), so scenery can keep clear of it.</summary>

@@ -1,0 +1,19 @@
+<!-- Enter initials for a new high score. The cursor letter has brackets and an underline as well as cyan (NFR-3). A passive view. -->
+<UserControl x:Class="NightPursuit.App.Screens.InitialsScreen"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Focusable="False" IsTabStop="False"
+             FontFamily="{DynamicResource NeonFont}">
+    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <TextBlock x:Name="RankText" HorizontalAlignment="Center" FontWeight="Bold"
+                   FontSize="{DynamicResource TextHeading}" Foreground="{DynamicResource TextAmber}" />
+        <TextBlock x:Name="ScoreText" HorizontalAlignment="Center" Margin="0,12,0,0"
+                   FontSize="{DynamicResource TextHeading}" Foreground="{DynamicResource TextWhite}" />
+        <StackPanel x:Name="LettersPanel" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,28,0,0" />
+        <TextBlock HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="1100" Margin="0,36,0,0"
+                   Text="TYPE LETTERS, OR UP/DOWN TO CHANGE AND LEFT/RIGHT TO MOVE.  ENTER SAVES."
+                   FontSize="{DynamicResource TextBody}" Foreground="{DynamicResource TextGray}" />
+        <TextBlock x:Name="NoticeText" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="1100"
+                   Margin="0,16,0,0" FontSize="{DynamicResource TextBody}" Foreground="{DynamicResource TextAmber}" />
+    </StackPanel>
+</UserControl>

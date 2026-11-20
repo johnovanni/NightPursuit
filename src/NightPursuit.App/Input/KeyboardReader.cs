@@ -15,6 +15,8 @@ public sealed class KeyboardReader
     public bool Gas => Held(Key.Up, Key.W);
     public bool Brake => Held(Key.Down, Key.S);
     public bool Fire => Held(Key.Space);
+    /// <summary>Enter is held (Space, the other confirm key, is <see cref="Fire"/>).</summary>
+    public bool EnterHeld => Held(Key.Enter);
 
     bool Held(Key a, Key? b = null) => _held.Contains(a) || (b is Key k && _held.Contains(k));
 }
