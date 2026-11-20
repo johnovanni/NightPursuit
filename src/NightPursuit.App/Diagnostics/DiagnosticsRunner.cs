@@ -47,7 +47,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police" };
 
     static string _logPath = "diagnostics.log";
 
@@ -130,6 +130,8 @@ public static class DiagnosticsRunner
             view.Effects.Absorb(run.World);
             view.Effects.Update(Dt);
         }
+        if (scene == "traffic") AdvanceToLightPhase(run, view, 0);   // the two scenes show opposite light-bar phases
+        else if (scene == "police") AdvanceToLightPhase(run, view, 1);
         if (scene == "close-cars") PlaceCloseCars(run.World, view.Effects);
         else if (scene == "offroad") PlaceOffRoad(run);
         else if (scene == "uphill") PlaceUphill(run, width);
@@ -142,6 +144,8 @@ public static class DiagnosticsRunner
         else if (scene == "boss-mirror") { PlaceOnOpenRoad(run.World); PlaceBossMirror(run, view.Effects, mission); }
         else if (scene == "missile-warning") { PlaceOnOpenRoad(run.World); PlaceMissileWarning(run, view.Effects, mission); }
         else if (scene == "boss-lock") { PlaceOnOpenRoad(run.World); PlaceBossLock(run, view.Effects, mission); }
+        else if (scene == "traffic") { PlaceOnOpenRoad(run.World); PlaceTraffic(run.World, view.Effects); }
+        else if (scene == "police") { PlaceOnOpenRoad(run.World); PlacePolice(run.World, view.Effects); }
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
 
         view.Measure(new Size(width, height));
@@ -695,6 +699,66 @@ public static class DiagnosticsRunner
     /// beside it (to tell the two apart), an Armored 55 m ahead in the next lane, a punctured Runner 120 m ahead, and an
     /// Armored 30 m behind (for the mirror and the radar).
     /// </summary>
+    /// <summary>Steps the run on (at most 0.4 s) until the light-bar clock reads <paramref name="phase"/>.</summary>
+    static void AdvanceToLightPhase(MissionRun run, GameView view, int phase)
+    {
+        for (int i = 0; i < 60 && Neon.LightPhase(run.World.Time) != phase; i++)
+        {
+            run.Update(Autopilot.Next(run.World), Dt);
+            view.Effects.Absorb(run.World);
+            view.Effects.Update(Dt);
+        }
+    }
+
+    /// <summary>
+    /// Twelve civilians, all three shapes (sedan, hatchback, van by car id) in all three lanes: nine 30 to 400 m ahead and three
+    /// behind, so the mirror shows them too.
+    /// </summary>
+    static void PlaceTraffic(World w, EffectList effects)
+    {
+        var p = w.Player;
+        ClearForScene(w, effects);
+        (double Ahead, double Lane)[] spots =
+        {
+            (30, 5), (45, -5), (60, 0), (85, 5), (120, -5), (170, 0), (240, 5), (320, -5), (400, 0),   // nine ahead
+            (-30, 0), (-50, 5), (-75, -5),                                                              // three behind, for the mirror
+        };
+        foreach (var (ahead, lane) in spots)
+            w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Civilian, p.Distance + ahead, lane, p.Speed));
+        // One patrol car among them (so this scene's light bar shows the other phase than the police scene's).
+        w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.PolicePatrol, p.Distance + 22, -5, p.Speed));
+    }
+
+    /// <summary>
+    /// Heat 80: a cruiser in front and a patrol car alongside on the left (the box-in), an interceptor alongside on the right,
+    /// the armored SUV pair 48 m ahead (outer lanes), a cruiser and a patrol car behind for the mirror, and one civilian for contrast.
+    /// </summary>
+    static void PlacePolice(World w, EffectList effects)
+    {
+        var p = w.Player;
+        ClearForScene(w, effects);
+        w.SetHeat(80, "scene");
+        void Add(AgentKind kind, double ahead, double lane) => w.Agents.Add(AgentCar.Create(w.NextId(), kind, p.Distance + ahead, lane, p.Speed));
+        Add(AgentKind.PoliceCruiser, 24, 0);
+        Add(AgentKind.PolicePatrol, 13, -5);
+        Add(AgentKind.Interceptor, 16, 5);
+        Add(AgentKind.ArmoredSuv, 48, -5);
+        Add(AgentKind.ArmoredSuv, 48, 5);
+        Add(AgentKind.PoliceCruiser, -20, 0);
+        Add(AgentKind.PolicePatrol, -45, 5);
+        Add(AgentKind.Civilian, 70, 5);
+    }
+
+    static void ClearForScene(World w, EffectList effects)
+    {
+        w.Agents.Clear();
+        w.Hazards.Clear();
+        w.Tracers.Clear();
+        w.Missiles.Clear();
+        w.EnemyMissiles.Clear();
+        effects.Clear();
+    }
+
     static void PlaceEnemies(World w, EffectList effects)
     {
         var p = w.Player;

@@ -68,6 +68,16 @@ internal static class Mirror
             double cw = e.Stats.Width * s * scale, ch = e.Stats.Height * s * scale;
             var pen = VehicleRenderer.PenFor(e.Kind);
             dc.DrawRectangle(Neon.Black, pen.Core, new Rect(g.X - cw / 2, g.Y - ch, cw, ch));
+            if (KindRules.FactionOf(e.Kind) == Faction.Police)   // a two-colour top line, flashing like the light bar
+            {
+                double topY = g.Y - ch;
+                foreach (int side in Projector.Sides)
+                {
+                    var half = new LineBatch();
+                    half.Line(new Point(side < 0 ? g.X - cw / 2 : g.X, topY), new Point(side < 0 ? g.X : g.X + cw / 2, topY));
+                    half.Draw(dc, Neon.LightPen(w.Time, side));
+                }
+            }
             if (e.Kind == AgentKind.Boss)   // the gold-trimmed tail strip
                 dc.DrawRectangle(Neon.TailLight, Neon.BossTrim.Core, new Rect(g.X - cw * 0.46, g.Y - ch * 0.45, cw * 0.92, ch * 0.22));
             double lw = Math.Max(2, 0.3 * s);

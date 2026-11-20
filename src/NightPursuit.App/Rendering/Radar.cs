@@ -11,7 +11,7 @@ namespace NightPursuit.App.Rendering;
 /// <summary>
 /// Top-down radar, bottom right. Each kind has its own shape as well as its colour: runner diamond (magenta),
 /// blocker square (amber), pursuer triangle (red, pulsing), gunner ring with a dot (orange-red), dropper
-/// down-triangle (teal), armored hexagon (steel blue), boss pulsing double ring with a gold inner ring (white); wrecks are X, oil slicks circles, you are the green arrow.
+/// down-triangle (teal), civilian small grey dot, police a white-outlined square with a dark bar flashing blue/red (larger for the armored SUV), armored hexagon (steel blue), boss pulsing double ring with a gold inner ring (white); wrecks are X, oil slicks circles, you are the green arrow.
 /// </summary>
 internal static class Radar
 {
@@ -99,7 +99,16 @@ internal static class Radar
                     dc.DrawEllipse(null, Neon.RadarBossOuter.Core, at, u * (ring - 0.5), u * (ring - 0.5));
                     dc.DrawEllipse(null, Neon.OpenArmor.Core, at, u * 0.8, u * 0.8);
                     break;
-                default:
+                case AgentKind.Civilian:   // a small filled grey dot
+                    dc.DrawEllipse(Neon.RadarCivilian, null, at, u * 0.6, u * 0.6);
+                    break;
+                case AgentKind.PolicePatrol or AgentKind.PoliceCruiser or AgentKind.Interceptor:
+                    PoliceMark(dc, w.Time, at, u);
+                    break;
+                case AgentKind.ArmoredSuv:   // the same mark, larger
+                    PoliceMark(dc, w.Time, at, u * 1.4);
+                    break;
+                case AgentKind.Pursuer:
                     double s = pulse ? u * 1.3 : u;
                     Poly(dc, Neon.TextRed, Neon.RadarPursuer, new Point(at.X, at.Y - s), new Point(at.X + s, at.Y + s), new Point(at.X - s, at.Y + s));
                     break;
@@ -153,6 +162,17 @@ internal static class Radar
             pts[i] = new Point(c.X + r * Math.Cos(a), c.Y + r * Math.Sin(a));
         }
         return pts;
+    }
+
+    /// <summary>
+    /// A police car: a square filled blue or red on the shared light-bar clock, with a white outline and a dark bar across it.
+    /// The Blocker is a plain amber square, so the outline and bar (not the colour) tell the two apart.
+    /// </summary>
+    static void PoliceMark(DrawingContext dc, double time, Point at, double half)
+    {
+        var fill = Neon.LightPhase(time) == 0 ? Neon.LightBlueFill : Neon.LightRedFill;
+        dc.DrawRectangle(fill, Neon.RadarPolice.Core, new Rect(at.X - half, at.Y - half, half * 2, half * 2));
+        dc.DrawRectangle(Neon.Black, null, new Rect(at.X - half * 0.6, at.Y - half * 0.18, half * 1.2, half * 0.36));
     }
 
     static void Cross(DrawingContext dc, Point at, double u)

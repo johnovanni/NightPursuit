@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
 
@@ -27,24 +28,34 @@ public static class VehicleRenderer
     {
         var items = Items;
         items.Clear();
-        foreach (var car in w.Agents) items.Add(new DrawItem(p.Ahead(car), car, null));
+        foreach (var car in w.Agents) items.Add(new DrawItem(p.Ahead(car), car, null, 0));
         foreach (var h in w.Hazards)
-            if (h is Wreck wreck) items.Add(new DrawItem(p.Ahead(wreck), null, wreck));
+            if (h is Wreck wreck) items.Add(new DrawItem(p.Ahead(wreck), null, wreck, 0));
+        foreach (var rb in w.RollingRoadblocks)
+        {
+            if (!rb.Formed) continue;
+            double nearest = double.NaN;   // the nearer SUV that is still a car; the chevron goes with them
+            foreach (var suv in rb.Cars)
+                if (suv.State != VehicleState.Wrecked) nearest = double.IsNaN(nearest) ? p.Ahead(suv) : Math.Min(nearest, p.Ahead(suv));
+            if (!double.IsNaN(nearest)) items.Add(new DrawItem(GapChevron.PlaceAt(nearest), null, null, rb.OpenLane + 1));
+        }
         items.Sort(FarToNear);
         foreach (var item in items)
         {
-            if (item.Car is not null) DrawRear(dc, p, item.Car);
-            else HazardRenderer.DrawWreck(dc, p, item.Wreck!);
+            if (item.Car is not null) DrawRear(dc, p, item.Car, w.Time);
+            else if (item.Wreck is not null) HazardRenderer.DrawWreck(dc, p, item.Wreck);
+            else GapChevron.Draw(dc, p, item.Distance, Track.LaneCentres[item.GapLane - 1]);
         }
         items.Clear();   // do not keep cars alive between frames
     }
 
-    readonly record struct DrawItem(double Distance, AgentCar? Car, Wreck? Wreck);
+    /// <summary>One thing to draw. A gap chevron has neither car nor wreck; <c>GapLane</c> is its lane index + 1 (0 for the others).</summary>
+    readonly record struct DrawItem(double Distance, AgentCar? Car, Wreck? Wreck, int GapLane);
 
     static readonly List<DrawItem> Items = new();   // reused every frame (drawing happens on the UI thread only)
     static readonly Comparison<DrawItem> FarToNear = static (a, b) => b.Distance.CompareTo(a.Distance);
 
-    public static void DrawRear(DrawingContext dc, Projector p, AgentCar car)
+    public static void DrawRear(DrawingContext dc, Projector p, AgentCar car, double time)
     {
         // A car blown up by something other than gunfire stays in the list for a moment; the explosion covers it.
         if (car.State == VehicleState.Wrecked) return;
@@ -58,7 +69,7 @@ public static class VehicleRenderer
         if (clip <= 0 || g.Y - roof > clip) return;   // hidden behind a hill
 
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-        Body(dc, car, p.SpinOf(car), g, s);
+        Body(dc, car, p.SpinOf(car), g, s, time);
         if (car.Kind == AgentKind.Boss && dz < BossTagDistance) BossTag(dc, g.X, g.Y - roof - 34 - 0.35 * s, s);
         if (car.Armor < car.Stats.Armor && dz < 220)
         {
@@ -79,6 +90,8 @@ public static class VehicleRenderer
         AgentKind.Dropper => Neon.DropperCar,
         AgentKind.Armored => Neon.ArmoredCar,
         AgentKind.Boss => Neon.BossCar,
+        AgentKind.Civilian => Neon.CivilianCar,
+        AgentKind.PolicePatrol or AgentKind.PoliceCruiser or AgentKind.Interceptor or AgentKind.ArmoredSuv => Neon.PoliceCar,
         _ => Neon.RunnerCar,
     };
 
@@ -92,7 +105,28 @@ public static class VehicleRenderer
     static readonly (double X, double Y)[] BossShape = { (1, 0.224), (1, 0.62), (0.88, 0.8), (0.55, 1.02) };   // long and low
     static readonly (double X, double Y)[] BossFin = { (0.92, 0.7), (0.84, 1.5), (0.68, 1.5), (0.62, 0.95) };
 
-    static (double X, double Y)[] ShapeOf(AgentKind kind) => kind switch
+    // Civilians: a sedan with a trunk deck and a narrow cabin, a hatchback with one long sloping back, a tall flat van.
+    static readonly (double X, double Y)[] CivilianSedan = { (1, 0.224), (1, 0.68), (0.88, 0.72), (0.68, 1.45) };
+    static readonly (double X, double Y)[] CivilianHatch = { (1, 0.224), (1, 0.8), (0.84, 1.45) };
+    static readonly (double X, double Y)[] CivilianVan = { (1, 0.224), (1, 1.38), (0.96, 1.45) };
+    // Police: a sedan, a low long interceptor with a wide stance, a tall boxy armored SUV with shoulders. The last point is the roof.
+    static readonly (double X, double Y)[] PoliceSedan = { (1, 0.224), (1, 0.72), (0.9, 0.8), (0.72, 1.45) };
+    static readonly (double X, double Y)[] InterceptorShape = { (1, 0.224), (1, 0.58), (0.92, 0.7), (0.62, 1.25) };
+    static readonly (double X, double Y)[] SuvShape = { (1, 0.224), (1, 1.5), (0.92, 1.6), (0.88, 1.9) };
+
+    /// <summary>Police kinds carry the roof light bar.</summary>
+    static bool IsPolice(AgentKind kind) => KindRules.FactionOf(kind) == Faction.Police;
+
+    static (double X, double Y)[] ShapeOf(AgentCar car) => car.Kind switch
+    {
+        AgentKind.Civilian => (car.Id % 3) switch { 0 => CivilianSedan, 1 => CivilianHatch, _ => CivilianVan },
+        AgentKind.PolicePatrol or AgentKind.PoliceCruiser => PoliceSedan,
+        AgentKind.Interceptor => InterceptorShape,
+        AgentKind.ArmoredSuv => SuvShape,
+        _ => ShapeOfEnemy(car.Kind),
+    };
+
+    static (double X, double Y)[] ShapeOfEnemy(AgentKind kind) => kind switch
     {
         AgentKind.Blocker => BlockerShape,
         AgentKind.Pursuer => PursuerShape,
@@ -100,14 +134,15 @@ public static class VehicleRenderer
         AgentKind.Dropper => DropperShape,
         AgentKind.Armored => ArmoredShape,
         AgentKind.Boss => BossShape,
-        _ => RunnerShape,
+        AgentKind.Runner => RunnerShape,
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no enemy outline for this kind"),
     };
 
     const double PunctureWobbleDegrees = 6, PunctureWobbleHz = 1.5;   // the same 1.5 Hz sway the car steers with (World.PuncturedIntent)
     static readonly double[] PlateHeights = { 0.78, 1.1 };
     static readonly Typeface TagFont = new(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
 
-    static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s)
+    static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s, double time)
     {
         bool spinning = car.State == VehicleState.Spinning;
         double tilt = spinning ? Math.Sin(spinAngle) * 25 : 0;
@@ -144,7 +179,7 @@ public static class VehicleRenderer
         }
 
         // Body and cabin as one filled outline, so it hides the road lines behind it.
-        var shape = ShapeOf(kind);
+        var shape = ShapeOf(car);
         var body = new StreamGeometry();
         using (var c = body.Open())
         {
@@ -204,8 +239,24 @@ public static class VehicleRenderer
                 break;
             case AgentKind.Boss:
                 break;
-            default:   // Runner and Pursuer: a window, and a rear spoiler on the Pursuer
-                double bodyTop = kind == AgentKind.Pursuer ? 0.62 : 0.78;
+            case AgentKind.Civilian when car.Id % 3 == 2:   // the van: two rear doors and a window line
+                detail.Line(new Point(g.X, g.Y - 0.5 * s), new Point(g.X, g.Y - roof + 0.1 * s));
+                detail.Line(P(-0.7, 1.12), P(-0.12, 1.12));
+                detail.Line(P(0.12, 1.12), P(0.7, 1.12));
+                break;
+            case AgentKind.ArmoredSuv:   // a slit window under the roof, and a rear rail
+                detail.Line(P(-0.7, 1.35), P(0.7, 1.35));
+                detail.Line(P(-0.7, 1.62), P(0.7, 1.62));
+                detail.Line(P(-0.7, 1.35), P(-0.7, 1.62));
+                detail.Line(P(0.7, 1.35), P(0.7, 1.62));
+                detail.Line(P(-0.9, 0.95), P(0.9, 0.95));
+                break;
+            default:   // Runner, Pursuer, sedans and hatchbacks: a window, and a rear spoiler on the Pursuer and Interceptor
+                double bodyTop = kind switch
+                {
+                    AgentKind.Pursuer => 0.62, AgentKind.Interceptor => 0.58, AgentKind.PolicePatrol or AgentKind.PoliceCruiser => 0.72,
+                    AgentKind.Civilian => car.Id % 3 == 0 ? 0.68 : 0.8, _ => 0.78,
+                };
                 double inset = 0.22;
                 double winBottom = g.Y - bodyTop * s - 0.06 * s, winTop = g.Y - roof + 0.1 * s;
                 double wb = w / 2 * (1 - inset * 0.4) - 0.12 * s, wt = w / 2 * (1 - inset) - 0.12 * s;
@@ -213,14 +264,15 @@ public static class VehicleRenderer
                 detail.Line(new Point(g.X + wb, winBottom), new Point(g.X + wt, winTop));
                 detail.Line(new Point(g.X + wt, winTop), new Point(g.X - wt, winTop));
                 detail.Line(new Point(g.X - wt, winTop), new Point(g.X - wb, winBottom));
-                if (kind == AgentKind.Pursuer)
+                if (kind is AgentKind.Pursuer or AgentKind.Interceptor)
                 {
-                    double y = g.Y - 0.62 * s - 0.12 * s;
+                    double y = g.Y - bodyTop * s - 0.12 * s;
                     detail.Line(new Point(g.X - w / 2 - 0.05 * s, y), new Point(g.X + w / 2 + 0.05 * s, y));
                 }
                 break;
         }
         detail.Draw(dc, pen);
+        if (IsPolice(kind)) LightBar(dc, P, shape[^1], time, s);
 
         switch (kind)
         {
@@ -288,6 +340,23 @@ public static class VehicleRenderer
         if (car.Punctured) TyreSpark(dc, car, g, w, wheel);   // after the body fill, or the outline would hide it
 
         dc.Pop();
+    }
+
+    /// <summary>
+    /// The police light bar: 60% of the roof width, in two halves that swap blue and red on <see cref="Neon.LightPhase"/>.
+    /// Both halves glow. Drawn after the body fill, so the outline cannot hide it. <paramref name="roof"/> is the outline's
+    /// last point (the roof's half-width fraction and height).
+    /// </summary>
+    static void LightBar(DrawingContext dc, Func<double, double, Point> P, (double X, double Y) roof, double time, double s)
+    {
+        double half = 0.6 * roof.X, top = roof.Y + Math.Max(0.12, 3.0 / s);   // at least 3 px tall at any distance
+        foreach (int side in Projector.Sides)
+        {
+            var rect = new Rect(P(side < 0 ? -half : 0, roof.Y), P(side < 0 ? 0 : half, top));
+            var pen = Neon.LightPen(time, side);
+            dc.DrawRectangle(Neon.LightFill(time, side), pen.Glow, rect);
+            dc.DrawRectangle(null, pen.Core, rect);
+        }
     }
 
     /// <summary>
