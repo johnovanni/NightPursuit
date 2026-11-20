@@ -14,6 +14,8 @@ public sealed class WorldView(World world)
     public IReadOnlyList<Hazard> Hazards => world.Hazards;
     public IRng Rng => world.Rng;
     public HeatLevel HeatLevel => world.Heat.Level;
+    /// <summary>The rolling roadblocks on the road (Manhunt), each with its SUVs and, once formed, its open lane.</summary>
+    public IReadOnlyList<RollingRoadblock> RollingRoadblocks => world.RollingRoadblocks;
     /// <summary>True when the player's guns fired a tracer this step.</summary>
     public bool PlayerFiring => world.PlayerFiredThisStep;
     public double Time => world.Time;

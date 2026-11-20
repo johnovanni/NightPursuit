@@ -13,6 +13,9 @@ namespace NightPursuit.Core.Police;
 /// roadblocks ahead of the player; below Patrol it places nothing (what is already there stays until it is culled).
 /// At Pursuit or above (call 13) police cars within 600 m chase you, cruisers come from behind until there are enough
 /// chasers, and every step the chasers get their box-in roles; when the level drops below Pursuit they back off.
+/// At Manhunt (call 14) interceptors come from behind and a pair of armored SUVs forms a rolling roadblock ahead of you;
+/// below Manhunt they back off. The police in the window never exceed 6, filled in priority order: the SUVs, the
+/// interceptors, the cruisers, then the patrol cars (F12).
 /// Every random draw comes from <see cref="World.TrafficRng"/>, so a mission without police never draws.
 /// </summary>
 public sealed class PoliceDispatcher(PoliceDefinition def)
@@ -42,10 +45,27 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     /// <summary>The cruise speed chasers fall back to when they back off, m/s.</summary>
     const double BackOffSpeed = 25;
 
+    /// <summary>At Manhunt, at most this many interceptors (one per presence).</summary>
+    const int MaxInterceptors = 2;
+    /// <summary>
+    /// The second SUV of a pair starts this far behind the first, in the same lane: beyond the 25 m a car keeps clear of
+    /// a car ahead at the same speed, so it does not swing out to pass its partner, metres.
+    /// </summary>
+    const double SuvSpacing = 35;
+    /// <summary>A pair forms once both SUVs are at least this far ahead of you, metres.</summary>
+    const double FormAhead = 60;
+    /// <summary>
+    /// No pair is sent while a parked roadblock lies ahead of you or less than this far behind you (the SUVs would meet it
+    /// on the way), and no roadblock is parked while a rolling one is on the road: one roadblock at a time, metres.
+    /// </summary>
+    const double RoadblockClearBehind = 300;
+
     bool _started;
     bool _atPatrol;
     double _nextSpawn;
     double _nextChaser;
+    double _nextInterceptor;
+    double _nextPair;
 
     /// <summary>The player's distance at which the next speed trap is placed (700 m ahead of it).</summary>
     public double NextTrapAt { get; private set; }
@@ -58,7 +78,12 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         if (boss) w.Hazards.RemoveAll(h => h is Roadblock);   // the same step the boss appears, and for as long as it lasts
 
         bool pursuit = w.Heat.Level >= HeatLevel.Pursuit;
-        if (!pursuit) BackOff(w);
+        bool manhunt = w.Heat.Level >= HeatLevel.Manhunt;
+        bool backingOff = false;
+        if (!manhunt) backingOff |= BackOffManhunt(w);
+        if (!pursuit) backingOff |= BackOff(w);
+        if (backingOff) w.Publish(new Message(w.Time, "POLICE BACKING OFF", Tone.Good));
+        if (boss) BreakUpRollingRoadblocks(w);   // no roadblock of either kind in a boss fight
 
         bool patrol = w.Heat.Level >= HeatLevel.Patrol;
         bool entered = patrol && !_atPatrol;
@@ -75,6 +100,8 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         }
 
         int target = Math.Min(MaxPolice, (int)Math.Round(def.Presence * 2.0, MidpointRounding.AwayFromZero));
+        // In priority order (F12): the Manhunt cars before the patrol cars and cruisers, so they get the room first.
+        if (manhunt) SendManhunt(w, all: first, boss);
         if (first) Seed(w, target);
         else TopUp(w, target);
         if (pursuit)
@@ -83,6 +110,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
             SendChasers(w, all: first);   // starting at Pursuit or above, all the chasers are seeded on the first step (F10)
             AssignRoles(w);
         }
+        if (manhunt) FormRollingRoadblocks(w);
         RemoveSurplus(w);
 
         PlaceTrap(w);
@@ -91,7 +119,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
 
     void Seed(World w, int target)
     {
-        for (int i = 0; i < target; i++)
+        for (int i = 0; i < target && Count(w) < MaxPolice; i++)
         {
             double offset = SpawnSpots.SeedOffset(w, i, target, SeedFrom, SeedTo, SeedClear);
             Place(w, w.Player.Distance + offset);
@@ -146,12 +174,16 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
 
     static bool IsChaser(AgentCar a) => a.Driver is ChaseDriver && a.State != VehicleState.Wrecked;
 
-    /// <summary>Every police car on patrol within 600 m starts chasing you (as Trail).</summary>
+    /// <summary>
+    /// Every police car on patrol within 600 m starts chasing you (as Trail); an interceptor or SUV that has backed off
+    /// does not (they only take part at Manhunt).
+    /// </summary>
     static void StartChasing(World w)
     {
         foreach (var a in w.Agents)
         {
             if (!KindRules.IsPolice(a.Kind) || !ReferenceEquals(a.Driver, PatrolDriver.Instance) || a.State == VehicleState.Wrecked) continue;
+            if (IsManhuntKind(a.Kind)) continue;
             if (Math.Abs(a.Distance - w.Player.Distance) > ChaseRange) continue;
             a.Driver = ChaseDriver.Instance;
             a.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
@@ -178,6 +210,18 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     /// <summary>One cruiser 150-250 m behind you at your speed + 15, in a free lane that leaves a lane free near you (your own lane first).</summary>
     static bool SpawnChaser(World w)
     {
+        if (SpawnBehind(w, AgentKind.PoliceCruiser) is not { } car) return false;
+        car.Driver = ChaseDriver.Instance;
+        car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+        return true;
+    }
+
+    /// <summary>
+    /// A police car of <paramref name="kind"/> 150-250 m behind you at your speed + 15 (F10), in a free lane that leaves a
+    /// lane free near you (your own lane first), added to the world; null when no lane is free.
+    /// </summary>
+    static AgentCar? SpawnBehind(World w, AgentKind kind)
+    {
         var p = w.Player;
         double distance = p.Distance - (ChaserBehindMin + (ChaserBehindMax - ChaserBehindMin) * w.TrafficRng.NextDouble());
         double home = DriverHelpers.NearestLane(p.Lateral);
@@ -185,13 +229,176 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         foreach (double lane in Track.LaneCentres.OrderBy(l => Math.Abs(l - home)))
         {
             if (!SpawnSpots.IsFree(w, distance, lane) || !PoliceLanes.LeavesALaneFree(view, lane, VehicleStats.PoliceCruiser.Width)) continue;
-            var car = AgentCar.Create(w.NextId(), AgentKind.PoliceCruiser, distance, lane, p.Speed + ChaserFaster);
-            car.Driver = ChaseDriver.Instance;
-            car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+            var car = AgentCar.Create(w.NextId(), kind, distance, lane, p.Speed + ChaserFaster);
             w.Agents.Add(car);
-            return true;
+            return car;
         }
+        return null;
+    }
+
+    // ---- Manhunt (call 14) ----
+
+    static bool IsManhuntKind(AgentKind kind) => kind is AgentKind.Interceptor or AgentKind.ArmoredSuv;
+
+    static bool IsInterceptor(AgentCar a) => a.Driver is InterceptorDriver && a.State != VehicleState.Wrecked;
+
+    /// <summary>
+    /// The Manhunt cars, highest priority first: the rolling roadblock pair (presence 1 or more; not in a boss fight), then
+    /// min(2, round(presence)) interceptors. One spawn every 0.25 s each, or all at once when <paramref name="all"/>.
+    /// </summary>
+    void SendManhunt(World w, bool all, bool boss)
+    {
+        if (def.Presence >= 1 && !boss) SendPair(w, all);
+        SendInterceptors(w, all);
+    }
+
+    /// <summary>
+    /// One pair of armored SUVs on <see cref="RollingRoadblockDriver"/> when there is none, both 150-250 m behind you (F10)
+    /// at your speed + 15, one 35 m behind the other in the lane farthest from yours. Not while a parked roadblock is near.
+    /// </summary>
+    void SendPair(World w, bool all)
+    {
+        if (w.RollingRoadblocks.Count > 0 || (!all && w.Time < _nextPair) || ParkedRoadblockNear(w)) return;
+        _nextPair = w.Time + SpawnInterval;
+        if (!MakeRoom(w, 2, RankOfSuv)) return;
+        var p = w.Player;
+        // The lead SUV 150-215 m behind, so the second one, 35 m behind it, is still within 250 m (F10).
+        double distance = p.Distance - (ChaserBehindMin + (ChaserBehindMax - ChaserBehindMin - SuvSpacing) * w.TrafficRng.NextDouble());
+        double home = DriverHelpers.NearestLane(p.Lateral);
+        foreach (double lane in Track.LaneCentres.OrderByDescending(l => Math.Abs(l - home)))
+        {
+            if (!SpawnSpots.IsFree(w, distance, lane) || !SpawnSpots.IsFree(w, distance - SuvSpacing, lane)) continue;
+            double speed = p.Speed + RollingRoadblockDriver.OvertakeFaster;
+            var lead = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, distance, lane, speed);
+            var second = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, distance - SuvSpacing, lane, speed);
+            var block = new RollingRoadblock(lead, second);
+            for (int slot = 0; slot < block.Cars.Count; slot++)
+            {
+                var car = block.Cars[slot];
+                car.Driver = RollingRoadblockDriver.Instance;
+                car.DriverState = new RollingRoadblockDriver.State(block, slot);
+                w.Agents.Add(car);
+            }
+            w.RollingRoadblockList.Add(block);
+            return;
+        }
+    }
+
+    /// <summary>Interceptors from behind, like cruisers, until min(2, round(presence)) are on the road; each starts on a random side.</summary>
+    void SendInterceptors(World w, bool all)
+    {
+        int want = Math.Min(MaxInterceptors, (int)Math.Round(def.Presence, MidpointRounding.AwayFromZero));
+        int have = w.Agents.Count(IsInterceptor);
+        if (have >= want || (!all && w.Time < _nextInterceptor)) return;
+        _nextInterceptor = w.Time + SpawnInterval;
+        for (; have < want; have++)
+        {
+            if (!MakeRoom(w, 1, RankOfInterceptor)) return;
+            if (SpawnBehind(w, AgentKind.Interceptor) is not { } car) return;
+            car.Driver = InterceptorDriver.Instance;
+            car.Side = w.TrafficRng.Next(2) == 0 ? -1 : 1;
+            if (!all) return;
+        }
+    }
+
+    const int RankOfSuv = 0, RankOfInterceptor = 1, RankOfChaser = 2, RankOfPatrol = 3;
+
+    /// <summary>Call 14's priority: a rolling-roadblock SUV 0, an interceptor 1, a chaser 2, anything else (on patrol) 3.</summary>
+    static int Rank(AgentCar a) => a.Driver switch
+    {
+        RollingRoadblockDriver => RankOfSuv,
+        InterceptorDriver => RankOfInterceptor,
+        ChaseDriver => RankOfChaser,
+        _ => RankOfPatrol,
+    };
+
+    /// <summary>
+    /// Room for <paramref name="needed"/> more police within the cap of 6: while there is not, the lowest-priority police
+    /// car below <paramref name="rank"/> that you could not see is removed. False when there is still no room (the spawn
+    /// waits; F12: never above 6).
+    /// </summary>
+    static bool MakeRoom(World w, int needed, int rank)
+    {
+        int count = Count(w);
+        while (count + needed > MaxPolice)
+        {
+            int index = -1;
+            for (int i = w.Agents.Count - 1; i >= 0; i--)
+            {
+                var a = w.Agents[i];
+                if (!InWindow(w, a) || Rank(a) <= rank) continue;
+                double d = a.Distance - w.Player.Distance;
+                if (d <= OutOfSightAhead && d >= -OutOfSightBehind) continue;
+                if (index < 0 || Rank(a) > Rank(w.Agents[index])) index = i;
+            }
+            if (index < 0) return false;
+            w.Agents.RemoveAt(index);
+            count--;
+        }
+        return true;
+    }
+
+    /// <summary>A parked roadblock ahead of you, or less than 300 m behind you.</summary>
+    static bool ParkedRoadblockNear(World w)
+    {
+        foreach (var h in w.Hazards)
+            if (h is Roadblock && h.Distance > w.Player.Distance - RoadblockClearBehind) return true;
         return false;
+    }
+
+    /// <summary>
+    /// Forms each pair once both SUVs are at least 60 m ahead of you: the open lane is locked to the lane farthest from
+    /// yours, or a random outer lane (from <see cref="World.TrafficRng"/>) when you are in the middle (F3).
+    /// </summary>
+    static void FormRollingRoadblocks(World w)
+    {
+        var p = w.Player;
+        foreach (var rb in w.RollingRoadblocks)
+        {
+            if (rb.Formed || rb.Cars.Any(c => c.Distance - p.Distance < FormAhead)) continue;
+            int yours = Array.IndexOf(Track.LaneCentres, DriverHelpers.NearestLane(p.Lateral));
+            int last = Track.LaneCentres.Length - 1;
+            int open = yours == 0 ? last : yours == last ? 0 : w.TrafficRng.Next(2) == 0 ? 0 : last;
+            rb.Form(open);
+        }
+    }
+
+    /// <summary>Breaks up every rolling roadblock: its SUVs chase you as Trail (a boss fight has no roadblocks).</summary>
+    static void BreakUpRollingRoadblocks(World w)
+    {
+        foreach (var rb in w.RollingRoadblocks)
+            foreach (var car in rb.Cars)
+            {
+                if (car.State == VehicleState.Wrecked) continue;
+                car.Driver = ChaseDriver.Instance;
+                car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+            }
+        w.RollingRoadblockList.Clear();
+    }
+
+    /// <summary>
+    /// Below Manhunt the interceptors and SUVs back off as chasers do below Pursuit: patrol driving at 25 m/s, and the
+    /// rolling roadblocks are gone. True when at least one of them is not wrecked.
+    /// </summary>
+    static bool BackOffManhunt(World w)
+    {
+        w.RollingRoadblockList.Clear();
+        bool any = false;
+        foreach (var a in w.Agents)
+        {
+            if (!IsManhuntKind(a.Kind) || ReferenceEquals(a.Driver, PatrolDriver.Instance)) continue;
+            any |= BackOffCar(a);
+        }
+        return any;
+    }
+
+    /// <summary>Puts a car back on patrol driving at 25 m/s; true when it is not wrecked.</summary>
+    static bool BackOffCar(AgentCar a)
+    {
+        a.Driver = PatrolDriver.Instance;
+        a.DriverState = null;
+        a.CruiseSpeed = BackOffSpeed;
+        return a.State != VehicleState.Wrecked;
     }
 
     /// <summary>
@@ -258,21 +465,15 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     }
 
     /// <summary>
-    /// Below Pursuit every chaser goes back to patrol driving at 25 m/s, with one "POLICE BACKING OFF" message when at least
-    /// one of them is not wrecked.
+    /// Below Pursuit every chaser goes back to patrol driving at 25 m/s. True when at least one of them is not wrecked
+    /// (then one "POLICE BACKING OFF" message goes out).
     /// </summary>
-    static void BackOff(World w)
+    static bool BackOff(World w)
     {
         bool any = false;
         foreach (var a in w.Agents)
-        {
-            if (a.Driver is not ChaseDriver) continue;
-            a.Driver = PatrolDriver.Instance;
-            a.DriverState = null;
-            a.CruiseSpeed = BackOffSpeed;
-            any |= a.State != VehicleState.Wrecked;
-        }
-        if (any) w.Publish(new Message(w.Time, "POLICE BACKING OFF", Tone.Good));
+            if (a.Driver is ChaseDriver) any |= BackOffCar(a);
+        return any;
     }
 
     void PlaceTrap(World w)
@@ -288,10 +489,10 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     void PlaceRoadblock(World w)
     {
         if (w.Player.Distance < NextRoadblockAt) return;
-        if (w.Hazards.Any(h => h is Roadblock))
+        if (w.Hazards.Any(h => h is Roadblock) || w.RollingRoadblocks.Count > 0)
         {
-            // Due, but the last one is still there: the schedule moves along with you, so when this one is placed it is
-            // still a full 800 m ahead, never nearer.
+            // Due, but the last one (parked or rolling) is still there: the schedule moves along with you, so when this
+            // one is placed it is still a full 800 m ahead, never nearer.
             NextRoadblockAt = w.Player.Distance;
             return;
         }

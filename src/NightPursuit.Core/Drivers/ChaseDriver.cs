@@ -19,7 +19,10 @@ public enum ChaseRole { Trail, Front, Side }
 /// below 3 m/s, so it rolls on past you if you stop. It never steers within 2.7 m of you.</item>
 /// </list>
 /// Within 150 m (or 5 s) before a roadblock, Front and Side act as Trail, so no police car is stopped in the gap. A Side
-/// whose lane would cover the third lane near you stands down to Trail (pre-flight F2). Every lane goes through
+/// that would have to move into the third lane near you to take its place stands down to Trail (pre-flight F2); one
+/// already in its lane is held back by speed instead (<see cref="PoliceLanes.SpeedCap"/>). While a rolling roadblock is
+/// forming, or a formed one is within 80 m of you, Side acts as Trail (call 14), so the SUVs and the box never fill three
+/// lanes and the SUVs have room to pass you. Every lane goes through
 /// <see cref="PoliceLanes.MayEnter"/>. It never rams: alongside it never steers into your line, and from behind in your
 /// line it waits at your speed - 3. Blinded, the World drives it with <see cref="BlindDriver"/>, so smoke breaks a box-in.
 /// No target speed is below 0 (F4).
@@ -34,6 +37,8 @@ public sealed class ChaseDriver : IDriver
         /// <summary>-1 or +1: the side of you the box is on (Side's lane, and the side Front passes you on). The dispatcher keeps it the same for all chasers.</summary>
         public int Side { get; set; } = 1;
         public AvoidMemory Avoid { get; } = new();
+        /// <summary>The rolling roadblock it made room for: while that one is on the road it does not take the Side role back.</summary>
+        public RollingRoadblock? MadeRoomFor { get; internal set; }
         /// <summary>The role it last drove as: <see cref="Role"/>, or Trail when it dropped back near a roadblock or stood down.</summary>
         public ChaseRole ActingAs { get; private set; }
 
@@ -91,7 +96,8 @@ public sealed class ChaseDriver : IDriver
         var role = s.Role;
         bool roadblock = RoadblockNear(self, view);
         if (role != ChaseRole.Trail && roadblock) role = ChaseRole.Trail;
-        if (role == ChaseRole.Side && !PoliceLanes.MayEnter(view, self, boxLane)) role = ChaseRole.Trail;   // stands down (F2)
+        if (role == ChaseRole.Side && (MakesRoomForRollingRoadblock(view, s) || !PoliceLanes.MayEnter(view, self, boxLane)))
+            role = ChaseRole.Trail;   // makes room for a rolling roadblock (call 14), or stands down (F2)
         s.Acted(role);
 
         var (speed, lateral) = role switch
@@ -192,7 +198,7 @@ public sealed class ChaseDriver : IDriver
     /// True when moving sideways toward <paramref name="lateral"/> would run into another car beside it: one within the two
     /// half widths + 0.3 m of that line, between the car's line and it, and level with it (within the half lengths + 4 m).
     /// </summary>
-    static bool CarBeside(AgentCar self, WorldView view, double lateral)
+    internal static bool CarBeside(AgentCar self, WorldView view, double lateral)
     {
         if (Math.Abs(lateral - self.Lateral) < Same) return false;
         double lo = Math.Min(self.Lateral, lateral), hi = Math.Max(self.Lateral, lateral);
@@ -229,6 +235,31 @@ public sealed class ChaseDriver : IDriver
         if (Array.IndexOf(Track.LaneCentres, lane) >= 0) return lane;
         s.Side = -s.Side;
         return home + s.Side * LaneSpacing;
+    }
+
+    /// <summary>While an SUV of a rolling roadblock is this close to you (along the road), Side acts as Trail, metres.</summary>
+    const double RollingRoadblockReach = 80;
+
+    /// <summary>
+    /// True while the car makes room for a rolling roadblock: one is still forming (its SUVs need a lane to pass you in),
+    /// or a formed one has an SUV within 80 m of you, or the car already made room for one that is still on the road.
+    /// Once it has yielded it does not take the Side role back until that pair is gone, so it never swings back and
+    /// forth across a lane while the SUVs come and go.
+    /// </summary>
+    static bool MakesRoomForRollingRoadblock(WorldView view, State s)
+    {
+        double at = view.Player.Distance;
+        bool kept = false;
+        foreach (var rb in view.RollingRoadblocks)
+        {
+            if (ReferenceEquals(rb, s.MadeRoomFor)) kept = true;
+            bool near = !rb.Formed;
+            foreach (var car in rb.Cars)
+                near |= Math.Abs(car.Distance - at) <= RollingRoadblockReach;
+            if (near) { s.MadeRoomFor = rb; return true; }
+        }
+        if (!kept) s.MadeRoomFor = null;
+        return kept;
     }
 
     /// <summary>A roadblock ahead of you or of the car within 150 m, or within 5 s of you at your speed.</summary>
@@ -275,7 +306,7 @@ public sealed class ChaseDriver : IDriver
     /// Beside you (neither clear behind nor clear to cross in front), a car out of your line never steers into it: its
     /// line is kept the two half widths + 0.3 m from yours on the side it is on.
     /// </summary>
-    static double KeepOffPlayer(AgentCar self, PlayerCar p, double lateral)
+    internal static double KeepOffPlayer(AgentCar self, PlayerCar p, double lateral)
     {
         if (IsBehind(self, p) || CanCrossInFront(self, p) || InLine(self, p)) return lateral;
         int side = DriverHelpers.SideOf(self, p.Lateral);

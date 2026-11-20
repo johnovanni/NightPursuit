@@ -49,6 +49,12 @@ public sealed partial class World
     /// <summary>The boss's missiles in flight (at most one at a time).</summary>
     public List<EnemyMissile> EnemyMissiles { get; } = new();
     public List<Hazard> Hazards { get; } = new();
+    /// <summary>
+    /// The rolling roadblocks (Manhunt, call 14), so warnings, the radar and drawing can find the open lane. The police
+    /// dispatcher makes, forms and clears them; a broken one is dropped at once (<see cref="DropBrokenRollingRoadblocks"/>).
+    /// </summary>
+    public IReadOnlyList<RollingRoadblock> RollingRoadblocks => RollingRoadblockList;
+    internal List<RollingRoadblock> RollingRoadblockList { get; } = new();
     /// <summary>Reused by <see cref="Collisions"/> for its agent-vs-agent pass, so a step allocates nothing; empty between steps.</summary>
     internal List<AgentCar> AgentScratch { get; } = new();
     public Loadout Loadout { get; set; } = new();
@@ -117,6 +123,7 @@ public sealed partial class World
     public void StepOnce(ControlFrame input)
     {
         PlayerFiredThisStep = false;
+        DropBrokenRollingRoadblocks();   // an SUV may have been cleared away since the last step (a respawn, F12)
         CapturePrev();
         if (Player.State == VehicleState.Wrecked)
         {
@@ -171,6 +178,7 @@ public sealed partial class World
         // Cars leave the list only now, so nothing above sees the list change mid-step.
         Agents.RemoveAll(IsGone);
         _removals.Clear();
+        DropBrokenRollingRoadblocks();   // before the warnings, so none is ever shown for a broken one
 
         Player.HitFlash = Math.Max(0, Player.HitFlash - Step);
         PublishNewWarnings();
@@ -250,6 +258,26 @@ public sealed partial class World
             a.ContactCooldown = Math.Max(0, a.ContactCooldown - Step);
             a.HitHeatCooldown = Math.Max(0, a.HitHeatCooldown - Step);
             a.AgentContactCooldown = Math.Max(0, a.AgentContactCooldown - Step);
+        }
+    }
+
+    /// <summary>
+    /// Drops every rolling roadblock whose pair can no longer work (<see cref="RollingRoadblock.IsBroken"/>: an SUV wrecked,
+    /// blinded or gone, or a lane blocked ahead); each of its SUVs still on the road chases you as Trail instead.
+    /// </summary>
+    void DropBrokenRollingRoadblocks()
+    {
+        for (int i = RollingRoadblockList.Count - 1; i >= 0; i--)
+        {
+            var rb = RollingRoadblockList[i];
+            if (!rb.IsBroken(Agents, Hazards)) continue;
+            RollingRoadblockList.RemoveAt(i);
+            foreach (var car in rb.Cars)
+            {
+                if (car.State == VehicleState.Wrecked || !Agents.Contains(car)) continue;
+                car.Driver = ChaseDriver.Instance;
+                car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+            }
         }
     }
 

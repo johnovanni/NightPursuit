@@ -19,8 +19,9 @@ namespace NightPursuit.Core.Police;
 /// <item>A car's own lane is never refused while it is not changing lane: a move that covers no lane the car does not
 /// already cover is always allowed. If that lane makes three, the car is held back by speed instead (it falls back
 /// behind you, or pulls away ahead).</item>
-/// <item>Cars on patrol (<see cref="PatrolDriver"/>) are neutral traffic: the rule never moves or holds them (HT-3), but
-/// they count as coverage, so chasing cars yield to them.</item>
+/// <item>Below Pursuit, cars on patrol (<see cref="PatrolDriver"/>) are neutral traffic: the rule never moves or holds them
+/// (HT-3), but they count as coverage, so chasing cars yield to them. At Pursuit and above every police car near you is
+/// held to it: the only ones still on patrol driving there are interceptors and SUVs falling back after a Manhunt.</item>
 /// <item>The rule never steers a car into another car, into you, or into a wreck or roadblock (<see cref="AllowedLateral"/>).</item>
 /// </list>
 /// </summary>
@@ -41,6 +42,11 @@ public static class PoliceLanes
     /// you (you brake at about 15 m/s²), and the room it keeps beyond 45 m.
     /// </summary>
     const double HeldBrake = 8, PlayerBrake = 16, StopMargin = 5;
+    /// <summary>
+    /// How far from you (along the road) the other police count when a car changes lane or is held back, at least:
+    /// far enough for a car coming in about 35 m/s faster than you to be slowed in time (50 + 35²/16 m), metres.
+    /// </summary>
+    const double ApproachReach = 130;
     const int AllLanes = 0b111;
 
     /// <summary>True when <paramref name="car"/>'s body overlaps the lane centred at <paramref name="laneCentre"/>.</summary>
@@ -62,20 +68,30 @@ public static class PoliceLanes
     /// <summary>How far from you a car that would make the third lane is held, metres: 55 m plus <see cref="BrakingRoom"/>.</summary>
     public static double HoldBeyond(double playerSpeed) => HoldDistance + BrakingRoom(playerSpeed);
 
+    /// <summary>How far from you the other police count for a lane change and for holding a car back: <see cref="HoldBeyond"/>, and at least 130 m.</summary>
+    public static double LaneChangeReach(double playerSpeed) => Math.Max(HoldBeyond(playerSpeed), ApproachReach);
+
     /// <summary>
     /// <paramref name="wanted"/>, unless <paramref name="self"/>'s body would make the third lane covered with the police
     /// within 45 m: then it is held beyond <see cref="HoldBeyond"/>. Behind you it drives no faster than it can still stop
     /// there (at 5 m/s²), and within it at your speed - 4 (never below 0); ahead of you, at least as fast, mirrored, and
     /// your speed + 4 within it. Behind you it is also never faster than it could stop short of 45 m from if you braked
     /// as hard as you can. This holds an approaching car outside 45 m, and inside 45 m it moves a car that keeps its
-    /// lane out of the way (its lane is never taken from it). Front is held like any chaser. A patrol car is never held.
+    /// lane out of the way (its lane is never taken from it). Front is held like any chaser. A patrol car is never held
+    /// below Pursuit. The car's body counts where it is and, given <paramref name="toward"/>, everywhere on its way there,
+    /// so a car that starts moving into the third lane while still far away is already slowed on the braking curve. A
+    /// car farther out also counts the police nearer to you than itself out to <see cref="LaneChangeReach"/>, so of two
+    /// cars coming in at once the farther one yields in good time, not only when the nearer one crosses 45 m (the nearer
+    /// one is never held by it).
     /// </summary>
-    public static double SpeedCap(WorldView view, AgentCar self, double wanted)
+    public static double SpeedCap(WorldView view, AgentCar self, double wanted, double? toward = null)
     {
-        if (IsPatrol(self)) return wanted;
+        if (IsNeutral(view, self)) return wanted;
         var p = view.Player;
         double dz = self.Distance - p.Distance;
-        if ((OthersMask(view, self) | MaskAt(self.Lateral, self.Stats.Width)) != AllLanes) return wanted;
+        double width = self.Stats.Width;
+        int body = toward is double to ? PathMask(self.Lateral, to, Reach(width)) : MaskAt(self.Lateral, width);
+        if ((HeldAgainst(view, self) | body) != AllLanes) return wanted;
         double room = Math.Abs(dz) - HoldBeyond(p.Speed);
         double margin = room <= 0 ? -HoldSlower : Math.Sqrt(2 * HoldBrake * room);
         if (dz >= 0) return Math.Max(wanted, p.Speed - margin);
@@ -86,28 +102,42 @@ public static class PoliceLanes
     }
 
     /// <summary>
-    /// Whether <paramref name="self"/> may steer to <paramref name="lateral"/> (a lane centre or any line). Inside 45 m:
-    /// no moment on the way may cover all three lanes, or, if three are covered already within 45 m, it must end in lanes
-    /// the other police there cover. Out to <see cref="HoldBeyond"/>: where it ends up must leave a lane free. Farther
-    /// away: always. For a lane change the other police count out to <see cref="HoldBeyond"/>, not just 45 m, so a car
-    /// never moves into the third lane just as another one comes within 45 m. A move that covers no lane the car does not
-    /// already cover (keeping its lane, or finishing a lane change) is always allowed (<see cref="SpeedCap"/> deals with
-    /// the lanes it already covers), and a patrol car is never refused.
+    /// Whether <paramref name="self"/> may steer to <paramref name="lateral"/> (a lane centre or any line). Inside 45 m
+    /// (or when it could come within 45 m before it has got there): no moment on the way may cover all three lanes with
+    /// the other police out to <see cref="HoldBeyond"/>, or, if three are covered already within 45 m, it must end in
+    /// lanes the other police there cover. Farther out, to <see cref="LaneChangeReach"/>: where it ends up must leave a
+    /// lane free with the other police out to there. Farther away: always. So a car never moves into the third lane just
+    /// as another one comes within 45 m, nor makes the third lane for a car already coming in too fast to be held back.
+    /// A move that covers no lane the car does not already cover (keeping its lane, or finishing a lane change) is always
+    /// allowed (<see cref="SpeedCap"/> deals with the lanes it already covers), and a patrol car is never refused below
+    /// Pursuit.
     /// </summary>
     public static bool MayEnter(WorldView view, AgentCar self, double lateral)
     {
-        if (IsPatrol(self)) return true;
+        if (IsNeutral(view, self)) return true;
         var p = view.Player;
-        double dz = Math.Abs(self.Distance - p.Distance), hold = HoldBeyond(p.Speed);
-        if (dz > hold) return true;
+        double dz = Math.Abs(self.Distance - p.Distance), reach = LaneChangeReach(p.Speed);
         double width = self.Stats.Width;
         if ((PathMask(self.Lateral, lateral, Reach(width)) & ~MaskAt(self.Lateral, width)) == 0) return true;
-        int others = OthersMask(view, self, hold);
+        if (dz > reach) return true;
         int there = MaskAt(lateral, width);
-        if (dz > CountRange) return (others | there) != AllLanes;
+        if (dz > CountRange && !ReachesCountRangeDuring(self, p, lateral, dz))
+            return (OthersMask(view, self, reach) | there) != AllLanes;
         int counted = OthersMask(view, self);
         if ((counted | MaskAt(self.Lateral, width)) == AllLanes) return (there & ~counted) == 0;
-        return !PathCoversAll(others, self.Lateral, lateral, Reach(width));
+        return !PathCoversAll(OthersMask(view, self, HoldBeyond(p.Speed)), self.Lateral, lateral, Reach(width));
+    }
+
+    /// <summary>
+    /// True when <paramref name="self"/>, closing on you, could come within 45 m (plus 5 m) before it has moved across
+    /// to <paramref name="lateral"/> at its side speed: then every moment of the move counts, not just where it ends up.
+    /// </summary>
+    static bool ReachesCountRangeDuring(AgentCar self, PlayerCar p, double lateral, double dz)
+    {
+        double closing = self.Distance < p.Distance ? self.Speed - p.Speed : p.Speed - self.Speed;
+        if (closing <= 0) return false;
+        double seconds = Math.Abs(lateral - self.Lateral) / self.Stats.SideSpeed;
+        return dz - closing * seconds <= CountRange + StopMargin;
     }
 
     /// <summary>True when a police car of <paramref name="width"/> at <paramref name="lateral"/> near you would leave a lane free (for spawning).</summary>
@@ -118,21 +148,25 @@ public static class PoliceLanes
     /// Where a car goes when the line it wants is refused: its current lane if it is allowed and no wreck or roadblock
     /// blocks it; otherwise the nearest other lane that is allowed, clear of wrecks and roadblocks, and clear of other cars
     /// and of you (as a keep-clear lane change needs); otherwise it keeps its current lane, and <see cref="SpeedCap"/>
-    /// holds it back. So the rule never steers a car into another car, into you, or into a blocker.
+    /// holds it back, or, when a wreck or roadblock blocks that lane, it keeps its own line (its driver stops it short).
+    /// So the rule never steers a car into another car, into you, or toward a blocker.
     /// </summary>
     public static double AllowedLateral(WorldView view, AgentCar self)
     {
         double current = DriverHelpers.NearestLane(self.Lateral);
-        if (MayEnter(view, self, current) && IsClear(view, self, current)) return current;
+        bool currentClear = IsClear(view, self, current);
+        if (currentClear && MayEnter(view, self, current)) return current;
         double? best = null;
         foreach (double lane in Track.LaneCentres)
             if (lane != current && MayEnter(view, self, lane) && IsClear(view, self, lane) && DriverHelpers.LaneClearOfCars(self, view, lane)
                 && (best is null || Math.Abs(lane - self.Lateral) < Math.Abs(best.Value - self.Lateral)))
                 best = lane;
-        return best ?? current;
+        return best ?? (currentClear ? current : self.Lateral);
     }
 
-    static bool IsPatrol(AgentCar car) => ReferenceEquals(car.Driver, PatrolDriver.Instance);
+    /// <summary>A car on patrol driving below Pursuit: neutral traffic the rule never moves or holds.</summary>
+    static bool IsNeutral(WorldView view, AgentCar car) =>
+        ReferenceEquals(car.Driver, PatrolDriver.Instance) && view.HeatLevel < HeatLevel.Pursuit;
 
     /// <summary>No wreck or roadblock ahead that the car would have to steer round at <paramref name="lateral"/>.</summary>
     static bool IsClear(WorldView view, AgentCar self, double lateral) =>
@@ -140,14 +174,14 @@ public static class PoliceLanes
 
     /// <summary>
     /// The World's pass over a police car's final intent, every step: a refused line becomes <see cref="AllowedLateral"/>,
-    /// the speed goes through <see cref="SpeedCap"/>, and no target speed is below 0 (F4). A patrol car's intent is left
-    /// exactly as its driver made it.
+    /// the speed goes through <see cref="SpeedCap"/> (counting the lanes on its way to that line), and no target speed is
+    /// below 0 (F4). Below Pursuit a patrol car's intent is left exactly as its driver made it.
     /// </summary>
     public static DriveIntent Restrain(WorldView view, AgentCar self, DriveIntent intent)
     {
-        if (IsPatrol(self)) return intent;
+        if (IsNeutral(view, self)) return intent;
         double lateral = MayEnter(view, self, intent.TargetLateral) ? intent.TargetLateral : AllowedLateral(view, self);
-        double speed = Math.Max(0, SpeedCap(view, self, intent.TargetSpeed));
+        double speed = Math.Max(0, SpeedCap(view, self, intent.TargetSpeed, lateral));
         return intent with { TargetSpeed = speed, TargetLateral = lateral };
     }
 
@@ -173,6 +207,24 @@ public static class PoliceLanes
             if (ReferenceEquals(a, except) || a.State != VehicleState.Driving || !KindRules.IsPolice(a.Kind)) continue;
             if (Math.Abs(a.Distance - at) > range) continue;
             mask |= MaskAt(a.Lateral, a.Stats.Width);
+        }
+        return mask;
+    }
+
+    /// <summary>
+    /// The lanes <see cref="SpeedCap"/> holds <paramref name="self"/> against: those of the Driving police within 45 m of
+    /// you, and of those out to <see cref="LaneChangeReach"/> that are nearer to you than <paramref name="self"/>.
+    /// </summary>
+    static int HeldAgainst(WorldView view, AgentCar self)
+    {
+        var p = view.Player;
+        double own = Math.Abs(self.Distance - p.Distance), reach = LaneChangeReach(p.Speed);
+        int mask = 0;
+        foreach (var a in view.Agents)
+        {
+            if (ReferenceEquals(a, self) || a.State != VehicleState.Driving || !KindRules.IsPolice(a.Kind)) continue;
+            double d = Math.Abs(a.Distance - p.Distance);
+            if (d <= CountRange || (d < own && d <= reach)) mask |= MaskAt(a.Lateral, a.Stats.Width);
         }
         return mask;
     }

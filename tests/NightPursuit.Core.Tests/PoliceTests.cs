@@ -702,4 +702,436 @@ public class PoliceTests
         Assert.True(all.Count >= 3, $"only {all.Count} traps");
         for (int i = 1; i < all.Count; i++) Assert.Equal(1500, all[i].Distance - all[i - 1].Distance, 6);
     }
+
+    // ---- Task 9: Manhunt ----
+
+    static bool IsInterceptor(AgentCar a) => a.Driver is InterceptorDriver;
+
+    /// <summary>Police that are not wrecked, within the dispatcher's window (500 m behind to 1500 m ahead of you).</summary>
+    static int LivePoliceInWindow(World w) =>
+        w.Agents.Count(a => KindRules.IsPolice(a.Kind) && a.State != VehicleState.Wrecked
+                            && a.Distance - w.Player.Distance is >= -500 and <= 1500);
+
+    /// <summary>The first formed rolling roadblock, or null.</summary>
+    static RollingRoadblock? FormedPair(World w) => w.RollingRoadblocks.FirstOrDefault(r => r.Formed);
+
+    /// <summary>Within <paramref name="range"/> (default 45 m, the three-lane rule's range) of you along the road.</summary>
+    static bool Near(World w, AgentCar a, double range = PoliceLanes.CountRange) => Math.Abs(a.Distance - w.Player.Distance) <= range;
+
+    [Fact]
+    public void Manhunt_brings_interceptors_that_ram()
+    {
+        var w = PursuitWorld(95);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+        var seen = new HashSet<int>();
+        int rams = 0;
+        for (int i = 0; i < 60 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(95);
+            int before = w.Events.Count;
+            Hold(w, 50, 0, dispatcher);                // held at 50 m/s in the centre lane, never steering
+            foreach (var c in w.Agents.Where(a => a.Kind == AgentKind.Interceptor))
+                if (seen.Add(c.Id))
+                {
+                    Assert.InRange(c.Distance - w.Player.Distance, -250, -150);   // behind, like the cruisers (F10)
+                    Assert.True(IsInterceptor(c));
+                }
+            Assert.True(w.Agents.Count(a => IsInterceptor(a) && a.State != VehicleState.Wrecked) <= 1, "min(2, round(1)) is 1 interceptor");
+            // F17: the hit is the interceptor's when its contact cooldown was set on this very step.
+            var events = w.Events.Skip(before).ToList();
+            bool hit = events.Any(e => e is PlayerDamaged { Reason: "SIDESWIPED" })
+                       && w.Agents.Any(a => a.Kind == AgentKind.Interceptor && Math.Abs(a.ContactCooldown - 0.25) < 1e-9);
+            if (!hit) continue;
+            rams++;
+            Assert.DoesNotContain(events, e => e is HeatChanged { Amount: > 0 });   // police ramming you gives no heat
+        }
+        Assert.NotEmpty(seen);
+        Assert.True(rams >= 1, "no interceptor ever sideswiped you");
+    }
+
+    [Fact]
+    public void Rolling_roadblock_always_leaves_a_lane_open()
+    {
+        // Presence 1 at heat 95, you in the centre lane at up to 45 m/s (never driving into a car ahead), for up to 120 s.
+        var w = PursuitWorld(95);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+        RollingRoadblock? rb = null;
+        int open = -1;
+        double formedAt = 0;
+        bool sideNear = false, pairNear = false;
+        for (int i = 0; i < 120 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(95);
+            HoldCareful(w, 45, 0, dispatcher);
+            w.Hazards.RemoveAll(h => h is Roadblock);   // a player held in its lane cannot take a parked roadblock's gap
+            var p = w.Player;
+            if (rb is null)
+            {
+                rb = FormedPair(w);
+                if (rb is null) continue;
+                open = rb.OpenLane;
+                formedAt = w.Time;
+                Assert.NotEqual(1, open);                               // you are in the middle: a random outer lane
+                Assert.All(rb.Cars, c => Assert.True(c.Distance - p.Distance >= 60, "formed before both were 60 m ahead"));
+            }
+            Assert.Contains(rb, w.RollingRoadblocks);                  // nothing broke it here
+            Assert.Equal(open, rb.OpenLane);                           // locked
+            double gap = Track.LaneCentres[open];
+            // No police car covers the gap within 60 m of you.
+            foreach (var c in Police(w).Where(c => c.State == VehicleState.Driving && Near(w, c, 60)))
+                Assert.False(PoliceLanes.Covers(c, gap), $"{c.Kind} in the gap {c.Distance - p.Distance:0} m from you at {w.Time:0.00} s");
+            // While the pair is within 80 m of you the Side car acts as Trail.
+            if (rb.Cars.Any(c => Near(w, c, 80)))
+                foreach (var c in Police(w).Where(c => ChaseDriver.RoleOf(c) == ChaseRole.Side && c.Blinded <= 0))
+                {
+                    sideNear = true;
+                    Assert.Equal(ChaseRole.Trail, ((ChaseDriver.State)c.DriverState!).ActingAs);
+                }
+            if (w.Time - formedAt < 4) continue;                       // still moving into their lanes
+            var lanes = rb.Cars.Select(c => DriverHelpers.NearestLane(c.Lateral)).ToList();
+            Assert.Equal(5, Math.Abs(lanes[0] - lanes[1]), 9);          // side by side in adjacent lanes
+            Assert.DoesNotContain(gap, lanes);
+            Assert.All(rb.Cars, c => Assert.False(PoliceLanes.Covers(c, gap)));
+            pairNear |= rb.Cars.All(c => c.Distance - p.Distance is > 0 and <= 45);
+        }
+        Assert.NotNull(rb);
+        Assert.True(pairNear, "the formed pair never came within 45 m ahead of you, so the test proves nothing");
+        Assert.True(sideNear, "no Side car was near the pair, so the stand-down is untested");
+    }
+
+    /// <summary>
+    /// Manhunt with presence 1 at heat 95 and only the rolling roadblock on the road (every other police car is taken
+    /// off each step): you hold <paramref name="speed"/> on your line. Steps until the pair has formed; then
+    /// <paramref name="each"/> runs after every step (with the step count since forming) for up to <paramref name="seconds"/>
+    /// s, until it returns false.
+    /// </summary>
+    static RollingRoadblock OnlyTheRollingRoadblock(World w, double speed, double seconds, Func<RollingRoadblock, int, bool> each)
+    {
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+        RollingRoadblock? rb = null;
+        for (int i = 0, after = 0; i < 120 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(95);
+            Hold(w, speed, w.Player.Lateral, dispatcher);
+            w.Agents.RemoveAll(a => KindRules.IsPolice(a.Kind) && a.Driver is not RollingRoadblockDriver);
+            w.Hazards.RemoveAll(h => h is Roadblock);
+            rb ??= FormedPair(w);
+            if (rb is null) continue;
+            if (++after > seconds * 120 || !each(rb, after)) break;
+        }
+        Assert.NotNull(rb);
+        return rb;
+    }
+
+    [Fact]
+    public void Rolling_roadblock_slows_to_your_speed_minus_6()
+    {
+        var w = PursuitWorld(95);
+        double within = -1;
+        int checkedSteps = 0;
+        OnlyTheRollingRoadblock(w, 45, 30, (rb, _) =>
+        {
+            var p = w.Player;
+            var gaps = rb.Cars.Select(c => c.Distance - p.Distance).ToList();
+            if (gaps.Min() - (p.Stats.Length + rb.Cars[0].Stats.Length) / 2 < 3) return false;   // about to touch you
+            if (gaps.All(g => g is > 0 and <= 40))
+            {
+                if (within < 0) within = w.Time;
+                if (w.Time - within >= 1)                              // F22: from 1 s after you came within 40 m
+                {
+                    checkedSteps++;
+                    Assert.All(rb.Cars, c => Assert.True(c.Speed <= p.Speed - 6 + 0.5, $"SUV at {c.Speed:0.00} m/s, you at {p.Speed:0.00}"));
+                }
+            }
+            return true;
+        });
+        Assert.True(checkedSteps >= 120, $"only {checkedSteps} steps checked");
+    }
+
+    [Fact]
+    public void Rolling_roadblock_gap_is_locked_when_it_forms()
+    {
+        // You change lane after the pair forms: into the gap, which makes another lane the one farthest from yours.
+        var w = PursuitWorld(95);
+        int open = -1, moves = 0;
+        int[] lanes = new int[2];
+        bool reached = false;
+        OnlyTheRollingRoadblock(w, 40, 15, (rb, after) =>
+        {
+            var p = w.Player;
+            if (after == 1)
+            {
+                open = rb.OpenLane;
+                lanes = new[] { rb.LaneOf(0), rb.LaneOf(1) };
+            }
+            double target = Track.LaneCentres[open];
+            if (Math.Abs(target - p.Lateral) > 1e-9)
+            {
+                p.Lateral += Math.Clamp(target - p.Lateral, -3 * Step, 3 * Step);   // 3 m/s sideways
+                moves++;
+            }
+            reached |= DriverHelpers.NearestLane(p.Lateral) == target;
+            Assert.Equal(open, rb.OpenLane);
+            Assert.Equal(lanes[0], rb.LaneOf(0));
+            Assert.Equal(lanes[1], rb.LaneOf(1));
+            return true;
+        });
+        Assert.True(moves > 0 && reached, "you never changed lane");
+        Assert.NotEqual(1, open);   // you were in the middle: an outer gap, so from it the farthest lane is the other outer one
+    }
+
+    [Fact]
+    public void Manhunt_never_exceeds_6_police_nearby()
+    {
+        var run = Run(2, 100);
+        var w = run.World;
+        int peak = 0;
+        bool pair = false, twoInterceptors = false;
+        for (int i = 0; i < 90 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(100);
+            Tick(run, 50, autopilot: true);
+            int n = LivePoliceInWindow(w);
+            Assert.True(n <= 6, $"{n} police in the window at {w.Time:0.00} s");
+            peak = Math.Max(peak, n);
+            pair |= w.Agents.Count(a => a.Driver is RollingRoadblockDriver) == 2;
+            twoInterceptors |= w.Agents.Count(a => IsInterceptor(a) && a.State != VehicleState.Wrecked) == 2;
+        }
+        Assert.Equal(6, peak);
+        Assert.True(pair, "no rolling roadblock pair");
+        Assert.True(twoInterceptors, "never two interceptors (min(2, round(2)))");
+    }
+
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(0)]
+    [InlineData(5)]
+    public void Police_never_fill_all_three_lanes_in_a_manhunt(double playerLane)
+    {
+        // Task 8's theory at Manhunt (heat 95, presence 2, everything seeded from the start): cruisers, interceptors and
+        // the rolling roadblock, you held in your lane at up to 40 m/s, 60 s. Never three lanes covered by steering.
+        var w = PursuitWorld(95);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(2, 95));
+        var check = new ManhuntLanes(w);
+        w.Player.Lateral = playerLane;
+        for (int i = 0; i < 60 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(95);
+            int before = w.Events.Count;
+            HoldCareful(w, 40, playerLane, dispatcher);
+            w.Hazards.RemoveAll(h => h is Roadblock);
+            check.Step(before);
+        }
+        check.AssertMeaningful();
+    }
+
+    /// <summary>
+    /// The three-lane check for the Manhunt theories. Interceptors ram by design, and a collision shoves a car sideways
+    /// whatever its steering says (Task 8's stress check found the same), so a step is excused only while a police car
+    /// within 45 m of you is being shoved (|PushVel| &gt; 0.3) or spun, or within 1.5 s of a contact with you; every
+    /// other step must have at most two lanes covered, and the excused steps must stay under 3 s of the minute.
+    /// <see cref="AssertMeaningful"/> also checks the formed pair and an interceptor really came within 45 m of you.
+    /// </summary>
+    sealed class ManhuntLanes(World w)
+    {
+        readonly WorldView _view = new(w);
+        double _lastContact = double.NegativeInfinity;
+        int _excused;
+        bool _pairNear, _interceptorNear;
+
+        public void Step(int eventsBefore)
+        {
+            if (w.Events.Skip(eventsBefore).Any(e => e is PlayerDamaged)) _lastContact = w.Time;
+            _pairNear |= FormedPair(w) is { } rb && rb.Cars.Any(c => Near(w, c));
+            _interceptorNear |= w.Agents.Any(a => IsInterceptor(a) && a.State == VehicleState.Driving && Near(w, a));
+            if (PoliceLanes.CoveredLanes(_view, null) <= 2) return;
+            bool shoved = w.Time - _lastContact <= 1.5 || Police(w).Any(c => Near(w, c)
+                && (Math.Abs(c.PushVel) > 0.3 || c.State == VehicleState.Spinning));
+            Assert.True(shoved, $"three lanes covered at {w.Time:0.00} s with no collision to explain it");
+            _excused++;
+        }
+
+        public void AssertMeaningful()
+        {
+            Assert.True(_excused * World.Step < 3, $"three lanes covered after collisions for {_excused * World.Step:0.00} s");
+            Assert.True(_pairNear, "no SUV of a formed pair ever came within 45 m of you");
+            Assert.True(_interceptorNear, "no interceptor ever came within 45 m of you");
+        }
+    }
+
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(0)]
+    [InlineData(5)]
+    public void Police_never_fill_all_three_lanes_in_a_manhunt_while_you_brake_hard(double playerLane)
+    {
+        // Carried from the Task 8 review (c): the braking variant at Manhunt, with the rolling roadblock and interceptors.
+        var w = PursuitWorld(95);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(2, 95));
+        var check = new ManhuntLanes(w);
+        w.Player.Lateral = playerLane;
+        w.Player.Speed = 55;
+        double phase = 0;
+        bool braking = false;
+        int brakes = 0;
+        for (int i = 0; i < 60 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(95);
+            double v = w.Player.Speed;
+            phase += Step;
+            if (braking)
+            {
+                v = Math.Max(8, v - 15 * Step);
+                if (v <= 8) { braking = false; phase = 0; }
+            }
+            else
+            {
+                v = Math.Min(60, v + 6 * Step);
+                if (v >= 60 || phase >= 8) { braking = true; brakes++; }
+            }
+            int before = w.Events.Count;
+            HoldCareful(w, v, playerLane, dispatcher);
+            w.Hazards.RemoveAll(h => h is Roadblock);
+            check.Step(before);
+        }
+        Assert.True(brakes >= 4, $"only {brakes} hard brakes");
+        check.AssertMeaningful();
+    }
+
+    [Fact]
+    public void A_broken_rolling_roadblock_is_dropped_and_its_other_suv_trails()
+    {
+        // Wrecked, blinded, or gone from the road (a respawn clear or a cull, F12): the record goes at once, and the other
+        // SUV chases as Trail, so no ghost roadblock is left.
+        foreach (var breakIt in new Action<World, AgentCar>[]
+                 {
+                     (w, car) => w.Destroy(car, KillCause.Rammed),
+                     (w, car) => car.Blinded = 1,
+                     (w, car) => w.Agents.Remove(car),
+                 })
+        {
+            var w = PursuitWorld(95);
+            var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+            Hold(w, 40, 0, dispatcher);
+            var rb = Assert.Single(w.RollingRoadblocks);
+            var (gone, other) = (rb.Cars[0], rb.Cars[1]);
+            breakIt(w, gone);
+            Hold(w, 40, 0);
+            Assert.DoesNotContain(rb, w.RollingRoadblocks);
+            Assert.IsType<ChaseDriver>(other.Driver);
+            Assert.Equal(ChaseRole.Trail, ChaseDriver.RoleOf(other));
+        }
+    }
+
+    [Fact]
+    public void A_wreck_in_a_formed_suvs_lane_breaks_the_rolling_roadblock()
+    {
+        // The pair cannot hold a lane with a wreck in it (it would have to swerve into the gap): it breaks up at once and
+        // both SUVs chase as Trail, which steers round the wreck and stops short of it.
+        var w = PursuitWorld(95);
+        AgentCar[] cars = [];
+        var rb = OnlyTheRollingRoadblock(w, 45, 3, (r, _) => { cars = r.Cars.ToArray(); return true; });
+        Assert.Contains(rb, w.RollingRoadblocks);
+        var lead = rb.Cars[0];
+        w.Hazards.Add(new Wreck { Distance = lead.Distance + 60, Lateral = Track.LaneCentres[rb.LaneOf(0)], Width = 1.9, Length = 4.4 });
+        Hold(w, 45, w.Player.Lateral);
+        Assert.Empty(w.RollingRoadblocks);
+        Assert.All(cars, c => Assert.Equal(ChaseRole.Trail, ChaseDriver.RoleOf(c)));
+    }
+
+    [Fact]
+    public void Manhunt_cars_back_off_below_manhunt()
+    {
+        var w = PursuitWorld(95);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+        for (int i = 0; i < 5 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(95);
+            HoldCareful(w, 40, 0, dispatcher);
+        }
+        var manhunt = w.Agents.Where(a => a.Kind is AgentKind.Interceptor or AgentKind.ArmoredSuv).ToList();
+        Assert.Contains(manhunt, IsInterceptor);
+        Assert.Contains(manhunt, a => a.Driver is RollingRoadblockDriver);
+        int start = w.Events.Count;
+        w.Heat.Set(75);                                            // Pursuit: the cruisers keep chasing
+        for (int i = 0; i < 3 * 120; i++) HoldCareful(w, 40, 0, dispatcher);
+        Assert.Empty(w.RollingRoadblocks);
+        Assert.All(manhunt.Where(w.Agents.Contains), a =>
+        {
+            Assert.Same(PatrolDriver.Instance, a.Driver);          // they never rejoin the chase at Pursuit
+            Assert.Equal(25, a.CruiseSpeed);
+        });
+        Assert.Contains(Police(w), IsChasing);
+        Assert.Single(w.Events.Skip(start).OfType<Message>(), m => m.Text == "POLICE BACKING OFF");
+    }
+
+    [Fact]
+    public void Allowed_lateral_never_steers_toward_a_blocker()
+    {
+        // Carried from the Task 8 review (a): its own lane is blocked by a wreck ahead and the other lanes have cars beside
+        // it, so there is no lane to offer: it keeps its line (and stops short of the wreck), not the blocked lane's centre.
+        var w = PursuitWorld();
+        var car = Chaser(w, ChaseRole.Trail, -60, 0.6, 30);
+        foreach (double lane in new[] { -5.0, 5.0 })
+            w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Civilian, car.Distance, lane, 30));
+        w.Hazards.Add(new Wreck { Distance = car.Distance + 50, Lateral = 0, Width = 1.9, Length = 4.4 });
+        Assert.Equal(0.6, PoliceLanes.AllowedLateral(new WorldView(w), car), 9);
+    }
+
+    [Fact]
+    public void Manhunt_sends_the_suv_pair_from_behind()
+    {
+        // F10: both 150-250 m behind you at your speed + 15, one behind the other in the lane farthest from yours.
+        foreach (int seed in new[] { 1, 2, 3, 4, 5 })
+        {
+            var w = PursuitWorld(95);
+            w.TrafficRng = new SeededRng(seed);
+            w.Player.Lateral = 5;
+            var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+            Hold(w, 40, 5, dispatcher);
+            var rb = Assert.Single(w.RollingRoadblocks);
+            Assert.False(rb.Formed);
+            Assert.Equal(-1, rb.OpenLane);
+            Assert.All(rb.Cars, c =>
+            {
+                Assert.Equal(AgentKind.ArmoredSuv, c.Kind);
+                Assert.Equal(82, c.Stats.TopSpeed);                      // F1
+                Assert.InRange(c.Distance - w.Player.Distance, -250, -150);
+                Assert.Equal(w.Player.Speed + 15, c.Speed, 9);
+                Assert.Equal(-5, c.Lateral, 9);
+                Assert.IsType<RollingRoadblockDriver>(c.Driver);
+            });
+            Assert.True(rb.Cars[0].Distance > rb.Cars[1].Distance, "slot 0 leads");
+        }
+    }
+
+    [Fact]
+    public void Manhunt_makes_room_only_by_removing_unseen_lower_priority_police()
+    {
+        // F12 and call 14: a full window (6 patrol cars, 2 of them out of sight far ahead). The SUV pair comes first and
+        // takes the 2 unseen cars' places; the interceptor then waits, as no car in view is ever removed; once a slot
+        // frees, the interceptor gets it before a cruiser does.
+        var w = PursuitWorld(95);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+        var inView = new List<AgentCar>();
+        for (int i = 0; i < 4; i++)
+        {
+            var car = AgentCar.Create(w.NextId(), AgentKind.PolicePatrol, w.Player.Distance + 700 + 120 * i, Track.LaneCentres[i % 3], 30);
+            w.Agents.Add(car);
+            inView.Add(car);
+        }
+        for (int i = 0; i < 2; i++)
+            w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.PolicePatrol, w.Player.Distance + 1300 + 100 * i, Track.LaneCentres[i], 30));
+        Hold(w, 40, 0, dispatcher);
+        Assert.Equal(6, LivePoliceInWindow(w));
+        Assert.Single(w.RollingRoadblocks);
+        Assert.All(inView, c => Assert.Contains(c, w.Agents));
+        Assert.DoesNotContain(w.Agents, IsInterceptor);
+        Assert.DoesNotContain(w.Agents, a => a.Kind == AgentKind.PoliceCruiser);
+        w.Agents.Remove(inView[3]);
+        for (int i = 0; i < 60; i++) Hold(w, 40, 0, dispatcher);
+        Assert.Equal(6, LivePoliceInWindow(w));
+        Assert.Single(w.Agents, IsInterceptor);
+        Assert.DoesNotContain(w.Agents, a => a.Kind == AgentKind.PoliceCruiser);
+    }
 }
