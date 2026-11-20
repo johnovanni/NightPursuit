@@ -9,7 +9,8 @@ public enum PursuerPhase { Approach, Attack, Retreat }
 public sealed class PursuerDriver : IDriver
 {
     const double RetreatClearance = 20;
-    const double LaneLimit = 6.5;
+    /// <summary>How far from the road centre a pursuer (and an interceptor) steers at most, metres.</summary>
+    internal const double LaneLimit = 6.5;
 
     public sealed class State
     {

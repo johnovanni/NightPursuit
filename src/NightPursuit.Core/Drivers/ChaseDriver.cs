@@ -22,7 +22,8 @@ public enum ChaseRole { Trail, Front, Side }
 /// that would have to move into the third lane near you to take its place stands down to Trail (pre-flight F2); one
 /// already in its lane is held back by speed instead (<see cref="PoliceLanes.SpeedCap"/>). While a rolling roadblock is
 /// forming, or a formed one is within 80 m of you, Side acts as Trail (call 14), so the SUVs and the box never fill three
-/// lanes and the SUVs have room to pass you. Every lane goes through
+/// lanes and the SUVs have room to pass you; and while a formed pair is within 80 m, Front acts as Trail too (the pair is
+/// the front of the box, and Front would otherwise pass you through its open lane or sit between you and the SUVs). Every lane goes through
 /// <see cref="PoliceLanes.MayEnter"/>. It never rams: alongside it never steers into your line, and from behind in your
 /// line it waits at your speed - 3. Blinded, the World drives it with <see cref="BlindDriver"/>, so smoke breaks a box-in.
 /// No target speed is below 0 (F4).
@@ -98,6 +99,9 @@ public sealed class ChaseDriver : IDriver
         if (role != ChaseRole.Trail && roadblock) role = ChaseRole.Trail;
         if (role == ChaseRole.Side && (MakesRoomForRollingRoadblock(view, s) || !PoliceLanes.MayEnter(view, self, boxLane)))
             role = ChaseRole.Trail;   // makes room for a rolling roadblock (call 14), or stands down (F2)
+        // A formed rolling roadblock within 80 m is the front of the box now: Front drops back as Trail, so it never passes
+        // you through the gap the pair leaves and never sits between you and the SUVs.
+        if (role == ChaseRole.Front && RollingRoadblock.GapToKeepClear(view.RollingRoadblocks, p.Distance) >= 0) role = ChaseRole.Trail;
         s.Acted(role);
 
         var (speed, lateral) = role switch
@@ -136,7 +140,10 @@ public sealed class ChaseDriver : IDriver
         // Near a roadblock a car beside or ahead of you drops back faster, so it is behind you before the barrier.
         double dropBack = roadblock && !behind ? RoadblockDropBack : TrailDropBack;
         double speed = Approach(p.Speed, dz, wanted, TrailGain, dropBack, CloseUp);
-        double lateral = behind ? home : DriverHelpers.PassingLane(self, p, boxLane).Lateral;
+        // From beside or ahead of you it gets out of your way in the box lane, never in a rolling roadblock's open lane.
+        int gap = RollingRoadblock.GapToKeepClear(view.RollingRoadblocks, p.Distance);
+        double? dropLane = gap >= 0 && boxLane == Track.LaneCentres[gap] ? OtherSideLane(home, boxLane) : boxLane;
+        double lateral = behind ? home : DriverHelpers.PassingLane(self, p, dropLane).Lateral;
         return (speed, lateral);
     }
 
@@ -226,6 +233,13 @@ public sealed class ChaseDriver : IDriver
             if (best is null || other.Distance < best.Distance) best = other;
         }
         return best;
+    }
+
+    /// <summary>The lane beside yours on the other side from <paramref name="boxLane"/>, or null when there is none.</summary>
+    static double? OtherSideLane(double home, double boxLane)
+    {
+        double lane = 2 * home - boxLane;
+        return Array.IndexOf(Track.LaneCentres, lane) >= 0 ? lane : null;
     }
 
     /// <summary>The lane beside yours on the box side; with no lane there (you are in an outer lane), the box changes side.</summary>

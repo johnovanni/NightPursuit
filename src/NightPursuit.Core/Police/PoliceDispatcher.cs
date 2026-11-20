@@ -47,6 +47,10 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
 
     /// <summary>At Manhunt, at most this many interceptors (one per presence).</summary>
     const int MaxInterceptors = 2;
+    /// <summary>Half a lane, metres: you are in a lane when within this of its centre.</summary>
+    const double LaneHalfWidth = 2.5;
+    /// <summary>A formed SUV that has been in the open lane this long (pushed there, or stuck) breaks the pair up, seconds.</summary>
+    const double InGapLimit = 2;
     /// <summary>
     /// The second SUV of a pair starts this far behind the first, in the same lane: beyond the 25 m a car keeps clear of
     /// a car ahead at the same speed, so it does not swing out to pass its partner, metres.
@@ -59,6 +63,9 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     /// on the way), and no roadblock is parked while a rolling one is on the road: one roadblock at a time, metres.
     /// </summary>
     const double RoadblockClearBehind = 300;
+    /// <summary>After a pair breaks, no new one is sent for this long, seconds; and never more than this many SUVs on the road.</summary>
+    const double PairRetry = 20;
+    const int MaxSuvs = 2;
 
     bool _started;
     bool _atPatrol;
@@ -66,6 +73,8 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     double _nextChaser;
     double _nextInterceptor;
     double _nextPair;
+    /// <summary>The pair this dispatcher last sent, while it is on the road (to notice when it breaks).</summary>
+    RollingRoadblock? _pair;
 
     /// <summary>The player's distance at which the next speed trap is placed (700 m ahead of it).</summary>
     public double NextTrapAt { get; private set; }
@@ -79,6 +88,11 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
 
         bool pursuit = w.Heat.Level >= HeatLevel.Pursuit;
         bool manhunt = w.Heat.Level >= HeatLevel.Manhunt;
+        if (_pair is not null && !w.RollingRoadblocks.Contains(_pair))
+        {
+            if (manhunt) _nextPair = w.Time + PairRetry;   // it broke: the next pair waits 20 s
+            _pair = null;
+        }
         bool backingOff = false;
         if (!manhunt) backingOff |= BackOffManhunt(w);
         if (!pursuit) backingOff |= BackOff(w);
@@ -253,25 +267,35 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     }
 
     /// <summary>
-    /// One pair of armored SUVs on <see cref="RollingRoadblockDriver"/> when there is none, both 150-250 m behind you (F10)
-    /// at your speed + 15, one 35 m behind the other in the lane farthest from yours. Not while a parked roadblock is near.
+    /// One pair of armored SUVs on <see cref="RollingRoadblockDriver"/> when there is none and no other SUV is on the road,
+    /// both 150-250 m behind you (F10) at your speed + 15, one 35 m behind the other. The random outer lane it may leave
+    /// open is drawn now (<see cref="RollingRoadblock.PlannedOpen"/>), and the pair starts in a lane that is neither yours
+    /// nor the one it would leave open (another lane only if that one is not free). Not while a parked roadblock is near,
+    /// and not within 20 s of a pair breaking.
     /// </summary>
     void SendPair(World w, bool all)
     {
         if (w.RollingRoadblocks.Count > 0 || (!all && w.Time < _nextPair) || ParkedRoadblockNear(w)) return;
+        if (w.Agents.Count(a => a.Kind == AgentKind.ArmoredSuv && a.State != VehicleState.Wrecked) + 2 > MaxSuvs) return;
         _nextPair = w.Time + SpawnInterval;
         if (!MakeRoom(w, 2, RankOfSuv)) return;
         var p = w.Player;
         // The lead SUV 150-215 m behind, so the second one, 35 m behind it, is still within 250 m (F10).
         double distance = p.Distance - (ChaserBehindMin + (ChaserBehindMax - ChaserBehindMin - SuvSpacing) * w.TrafficRng.NextDouble());
+        int plannedOpen = w.TrafficRng.Next(2) == 0 ? 0 : Track.LaneCentres.Length - 1;
         double home = DriverHelpers.NearestLane(p.Lateral);
-        foreach (double lane in Track.LaneCentres.OrderByDescending(l => Math.Abs(l - home)))
+        int yours = Array.IndexOf(Track.LaneCentres, home), last = Track.LaneCentres.Length - 1;
+        int predicted = yours == 0 ? last : yours == last ? 0 : plannedOpen;
+        var lanes = Enumerable.Range(0, Track.LaneCentres.Length)
+            .OrderBy(i => i == predicted || i == yours ? 1 : 0).ThenByDescending(i => Math.Abs(Track.LaneCentres[i] - home))
+            .Select(i => Track.LaneCentres[i]);
+        foreach (double lane in lanes)
         {
             if (!SpawnSpots.IsFree(w, distance, lane) || !SpawnSpots.IsFree(w, distance - SuvSpacing, lane)) continue;
             double speed = p.Speed + RollingRoadblockDriver.OvertakeFaster;
             var lead = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, distance, lane, speed);
             var second = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, distance - SuvSpacing, lane, speed);
-            var block = new RollingRoadblock(lead, second);
+            var block = new RollingRoadblock(lead, second, plannedOpen);
             for (int slot = 0; slot < block.Cars.Count; slot++)
             {
                 var car = block.Cars[slot];
@@ -280,6 +304,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
                 w.Agents.Add(car);
             }
             w.RollingRoadblockList.Add(block);
+            _pair = block;
             return;
         }
     }
@@ -348,31 +373,38 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
 
     /// <summary>
     /// Forms each pair once both SUVs are at least 60 m ahead of you: the open lane is locked to the lane farthest from
-    /// yours, or a random outer lane (from <see cref="World.TrafficRng"/>) when you are in the middle (F3).
+    /// yours, or, when you are in the middle, the random outer lane drawn when the pair was sent (F3). A formed pair with an
+    /// SUV in its open lane for 2 s (pushed there, or stuck) is broken up: both SUVs chase as Trail.
     /// </summary>
     static void FormRollingRoadblocks(World w)
     {
         var p = w.Player;
         foreach (var rb in w.RollingRoadblocks)
+            if (!rb.Formed && rb.Cars.All(c => c.Distance - p.Distance >= FormAhead)) rb.Form(p.Lateral);
+        for (int i = w.RollingRoadblockList.Count - 1; i >= 0; i--)
         {
-            if (rb.Formed || rb.Cars.Any(c => c.Distance - p.Distance < FormAhead)) continue;
-            int yours = Array.IndexOf(Track.LaneCentres, DriverHelpers.NearestLane(p.Lateral));
-            int last = Track.LaneCentres.Length - 1;
-            int open = yours == 0 ? last : yours == last ? 0 : w.TrafficRng.Next(2) == 0 ? 0 : last;
-            rb.Form(open);
+            var rb = w.RollingRoadblockList[i];
+            if (!rb.Formed) continue;
+            double gap = Track.LaneCentres[rb.OpenLane];
+            rb.InGapSeconds = rb.Cars.Any(c => PoliceLanes.Covers(c, gap)) ? rb.InGapSeconds + World.Step : 0;
+            if (rb.InGapSeconds < InGapLimit - 1e-9) continue;
+            w.RollingRoadblockList.RemoveAt(i);   // it can no longer hold the gap open: both SUVs chase as Trail
+            foreach (var car in rb.Cars) MakeTrail(car);
         }
+    }
+
+    static void MakeTrail(AgentCar car)
+    {
+        if (car.State == VehicleState.Wrecked) return;
+        car.Driver = ChaseDriver.Instance;
+        car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
     }
 
     /// <summary>Breaks up every rolling roadblock: its SUVs chase you as Trail (a boss fight has no roadblocks).</summary>
     static void BreakUpRollingRoadblocks(World w)
     {
         foreach (var rb in w.RollingRoadblocks)
-            foreach (var car in rb.Cars)
-            {
-                if (car.State == VehicleState.Wrecked) continue;
-                car.Driver = ChaseDriver.Instance;
-                car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
-            }
+            foreach (var car in rb.Cars) MakeTrail(car);
         w.RollingRoadblockList.Clear();
     }
 
@@ -443,6 +475,13 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         var box = side ?? front;
         if (box is null) return;
         int boxSide = StateOf(box).Side;
+        // With a rolling roadblock on the road the box is on the side away from the lane it leaves open (or will).
+        if (w.RollingRoadblocks.Count > 0)
+        {
+            var rb = w.RollingRoadblocks[0];
+            double gap = Track.LaneCentres[rb.Formed ? rb.OpenLane : rb.PredictedOpen(p.Lateral)];
+            if (Math.Abs(gap - p.Lateral) > LaneHalfWidth) boxSide = Math.Sign(p.Lateral - gap);
+        }
         foreach (var a in w.Agents)
             if (IsChaser(a) && a.DriverState is ChaseDriver.State s) s.Side = boxSide;
     }

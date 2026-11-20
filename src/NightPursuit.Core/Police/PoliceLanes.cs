@@ -50,7 +50,10 @@ public static class PoliceLanes
     const int AllLanes = 0b111;
 
     /// <summary>True when <paramref name="car"/>'s body overlaps the lane centred at <paramref name="laneCentre"/>.</summary>
-    public static bool Covers(AgentCar car, double laneCentre) => Math.Abs(car.Lateral - laneCentre) < Reach(car.Stats.Width);
+    public static bool Covers(AgentCar car, double laneCentre) => Covers(car.Lateral, car.Stats.Width, laneCentre);
+
+    /// <summary>True when a car of <paramref name="width"/> at <paramref name="lateral"/> would overlap the lane centred at <paramref name="laneCentre"/>.</summary>
+    public static bool Covers(double lateral, double width, double laneCentre) => Math.Abs(lateral - laneCentre) < Reach(width);
 
     /// <summary>The number of lanes covered by Driving police cars within 45 m of you, <paramref name="except"/> left out.</summary>
     public static int CoveredLanes(WorldView view, AgentCar? except)
