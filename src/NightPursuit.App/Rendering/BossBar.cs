@@ -38,7 +38,9 @@ internal static class BossBar
         NoteDamage(w);
         double k = l.K;
         var box = new Rect(l.HalfWidth - Width / 2 * k, Top * k, Width * k, Height * k);
-        dc.DrawRectangle(Neon.PanelFill, null, new Rect(box.X - 4 * k, box.Y - 2 * k, box.Width + 8 * k, box.Height + 4 * k));
+        var panel = new Rect(box.X - 4 * k, box.Y - 2 * k, box.Width + 8 * k, box.Height + 4 * k);
+        dc.DrawRectangle(Neon.PanelFill, null, panel);
+        LineArt.Brackets(dc, panel, 14 * k, LineArt.Gauge);
 
         int n = boss.PhaseIndex + 1, m = boss.Definition.Phases.Count;
         l.Text(dc, $"{boss.Definition.Name.ToUpperInvariant()}  PHASE {n}/{m}: {boss.Phase.Behaviour.ToString().ToUpperInvariant()}",
@@ -58,7 +60,8 @@ internal static class BossBar
         double percentWidth = 54 * k;
         var bar = new Rect(box.X, box.Y + 18 * k, box.Width - percentWidth, 12 * k);
         bool flash = w.Time - _lastDamage is >= 0 and <= FlashSeconds;
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, bar);
+        dc.DrawRectangle(Neon.HudBack, null, bar);
+        LineArt.Box(dc, bar, LineArt.Gauge);
         double frac = Math.Clamp(boss.HealthFraction, 0, 1);
         dc.DrawRectangle(flash ? Neon.TextWhite : Neon.TextRed, null, new Rect(bar.X, bar.Y, bar.Width * frac, bar.Height));
         if (boss.Shield > 0) dc.DrawRectangle(null, new Pen(Neon.TextCyan, 2 * k), bar);

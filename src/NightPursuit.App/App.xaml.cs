@@ -2,7 +2,6 @@ using System.IO;
 using System.Windows;
 using System.Windows.Threading;
 using NightPursuit.App.Diagnostics;
-using NightPursuit.App.Rendering;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
 

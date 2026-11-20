@@ -16,7 +16,6 @@ internal static class HeatMeterView
     static readonly Brush[] Dim = Levels.Select(v => Neon.Solid(Colour(v), 0.22)).ToArray();
     static readonly Brush[] Fill = Levels.Select(v => Neon.Solid(Colour(v), 0.95)).ToArray();
     static readonly Brush[] Text = Levels.Select(v => Neon.Solid(Colour(v))).ToArray();
-    static readonly Pen Outline = Neon.Hud.Core;
     static readonly Pen FlashOutline = MakePen(Neon.White, 3);
     static readonly Pen Tick = MakePen(Neon.White, 1);
 
@@ -58,7 +57,8 @@ internal static class HeatMeterView
         }
         // A rise: the outline goes bright and thick, blinking twice a second.
         bool flash = heat.RiseFlash > 0 && (int)(w.Time * 4) % 2 == 0;
-        dc.DrawRectangle(null, flash ? FlashOutline : Outline, bar);
+        if (flash) dc.DrawRectangle(null, FlashOutline, bar);
+        else LineArt.Box(dc, bar, LineArt.Gauge);
     }
 
     static Pen MakePen(Color c, double width)

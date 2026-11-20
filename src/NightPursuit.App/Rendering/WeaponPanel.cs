@@ -29,7 +29,8 @@ internal static class WeaponPanel
     {
         double k = l.K;
         var b = Bounds(l);
-        dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, b);
+        dc.DrawRectangle(Neon.PanelFill, null, b);
+        LineArt.Brackets(dc, b, 14 * k, LineArt.Gauge);
         double x = b.X + 10 * k, right = b.Right - 10 * k, y = b.Y + 6 * k;
         var lo = w.Loadout;
 
@@ -38,7 +39,8 @@ internal static class WeaponPanel
         if (guns.Locked) l.Text(dc, "GUNS LOCKED", x, y, 13, Neon.TextRed, bold: true);
         else l.Text(dc, "GUN HEAT", x, y, 13, Neon.TextGray);
         var heat = new Rect(x, y + 18 * k, right - x, 8 * k);
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, heat);
+        dc.DrawRectangle(Neon.HudBack, null, heat);
+        LineArt.Box(dc, heat, LineArt.Gauge);
         dc.DrawRectangle(guns.Locked ? Neon.TextRed : Neon.TextAmber, null, new Rect(heat.X, heat.Y, heat.Width * Math.Clamp(guns.Heat, 0, 1), heat.Height));
         y += 36 * k;
 
@@ -74,7 +76,8 @@ internal static class WeaponPanel
         {
             l.Text(dc, $"TARGETING {strike.SweepLeft:0.0} s", right, y, 13, Neon.TextAmber, TextAlignment.Right, true);
             var bar = new Rect(x, y + 18 * k, right - x, 8 * k);
-            dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, bar);
+            dc.DrawRectangle(Neon.HudBack, null, bar);
+            LineArt.Box(dc, bar, LineArt.Gauge);
             double done = 1 - Math.Clamp(strike.SweepLeft / SatelliteStrike.SweepSeconds, 0, 1);
             dc.DrawRectangle(Neon.TextAmber, null, new Rect(bar.X, bar.Y, bar.Width * done, bar.Height));
         }

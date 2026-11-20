@@ -103,6 +103,35 @@ internal static class LineArt
         return d;
     }
 
+    /// <summary>The pen of HUD frames and gauge outlines: light cyan detail.</summary>
+    public static ArtPen Gauge => Detail(Neon.Cyan, 1);
+
+    /// <summary>Two lines at each corner of <paramref name="r"/>, each <paramref name="arm"/> long, along its edges: a panel's frame.</summary>
+    public static void Brackets(DrawingContext dc, Rect r, double arm, ArtPen pen)
+    {
+        arm = Math.Min(arm, Math.Min(r.Width, r.Height) / 2);
+        var geo = new StreamGeometry();
+        using (var c = geo.Open())
+        {
+            foreach (var (corner, dx, dy) in new[] { (r.TopLeft, 1, 1), (r.TopRight, -1, 1), (r.BottomLeft, 1, -1), (r.BottomRight, -1, -1) })
+            {
+                c.BeginFigure(new Point(corner.X + dx * arm, corner.Y), false, false);
+                c.LineTo(corner, true, false);
+                c.LineTo(new Point(corner.X, corner.Y + dy * arm), true, false);
+            }
+        }
+        geo.Freeze();
+        Draw(dc, geo, pen);
+    }
+
+    /// <summary>A full box in a line-art pen: a gauge's outline.</summary>
+    public static void Box(DrawingContext dc, Rect r, ArtPen pen)
+    {
+        var geo = new RectangleGeometry(r);
+        geo.Freeze();
+        Draw(dc, geo, pen);
+    }
+
     public static void Draw(DrawingContext dc, Geometry g, ArtPen pen)
     {
         dc.DrawGeometry(null, pen.Halo, g);

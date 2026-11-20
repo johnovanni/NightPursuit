@@ -23,7 +23,8 @@ internal static class Radar
         var view = cam.View;
         double k = l.K;
         var r = Bounds(l);
-        dc.DrawRectangle(Neon.RadarFill, Neon.RadarLine.Core, r);
+        dc.DrawRectangle(Neon.RadarFill, null, r);
+        LineArt.Brackets(dc, r, 14 * k, LineArt.Detail(LineArt.ColorOf(Neon.RadarLine), 1));
         dc.PushClip(new RectangleGeometry(r));
 
         double px = r.X + r.Width / 2, py = r.Bottom - 80 * k;

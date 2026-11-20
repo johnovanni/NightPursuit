@@ -93,7 +93,9 @@ internal static class Overlays
         double messagesBottom = MessagesTop(l, bossBar) + MessageRows(l, bossBar) * MessageRow * k + 4 * k;
         double top = Math.Max(l.Height * 0.50, messagesBottom), boxWidth = Math.Max(0, Math.Min(l.Width - 20, 640 * k)), boxHeight = (detail ? 82 : 56) * k;
         dc.PushOpacity(fade);
-        dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, new Rect(l.HalfWidth - boxWidth / 2, top, boxWidth, boxHeight));
+        var box = new Rect(l.HalfWidth - boxWidth / 2, top, boxWidth, boxHeight);
+        dc.DrawRectangle(Neon.PanelFill, null, box);
+        LineArt.Brackets(dc, box, 14 * k, LineArt.Gauge);
         l.Centered(dc, a.Title, top + 6 * k, 34, Neon.TextAmber);
         if (detail) l.Centered(dc, a.Detail, top + 52 * k, 18, Neon.TextCyan);
         dc.Pop();
@@ -107,7 +109,9 @@ internal static class Overlays
     {
         if (!w.Busted.Counting) return;
         double k = l.K, top = l.Height * 0.70, boxWidth = Math.Max(0, Math.Min(l.Width - 20, 470 * k));
-        dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, new Rect(l.HalfWidth - boxWidth / 2, top - 8 * k, boxWidth, 88 * k));
+        var box = new Rect(l.HalfWidth - boxWidth / 2, top - 8 * k, boxWidth, 88 * k);
+        dc.DrawRectangle(Neon.PanelFill, null, box);
+        LineArt.Brackets(dc, box, 14 * k, LineArt.Gauge);
         l.Centered(dc, $"BUSTED IN {w.Busted.SecondsLeft}", top, 44, Neon.TextRed);
         l.Centered(dc, "SPEED UP TO BREAK FREE", top + 56 * k, 18, Neon.TextAmber);
     }
@@ -213,7 +217,8 @@ internal static class Overlays
             double width = Math.Min(l.Width - 20, 800 * k);
             r = new Rect(l.HalfWidth - width / 2, top, width, height);
         }
-        dc.DrawRectangle(Neon.PanelFill, Neon.Hud.Core, r);
+        dc.DrawRectangle(Neon.PanelFill, null, r);
+        LineArt.Brackets(dc, r, 14 * k, LineArt.Gauge);
         double y = r.Y + 16 * k;
         for (int i = 0; i < HelpLines.Length; i++)
         {

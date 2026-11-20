@@ -35,16 +35,13 @@ internal static class Neon
     public static readonly Brush Black = Solid(Colors.Black);
 
     // Road and scenery.
-    public static readonly NeonPen RoadNear = Pen(Cyan), RoadMid = Pen(Cyan, 0.55), RoadFar = Pen(Cyan, 0.25);
-    public static readonly NeonPen LaneNear = Pen(Blue, 0.9, 1.3), LaneMid = Pen(Blue, 0.5, 1.0), LaneFar = Pen(Blue, 0.22, 1.0);
-    public static readonly NeonPen Post = Pen(Gray, 0.6, 1.2), Lamp = Pen(Amber, 0.9, 2.2);
-    public static readonly NeonPen Sky = Pen(Indigo, 0.8, 1.2), Moon = Pen(White, 0.6, 1.2);
+    public static readonly NeonPen Moon = Pen(White, 0.6, 1.2);
     public static readonly Brush Star = Solid(White, 0.55);
 
     // Vehicles, hazards and effects.
     public static readonly NeonPen RunnerCar = Pen(Magenta), BlockerCar = Pen(Amber), PursuerCar = Pen(Red), CarFlash = Pen(White, 1, 2.4);
-    public static readonly NeonPen Tracer = Pen(Amber, 1, 2), Oil = Pen(Purple, 0.9, 1.4), Boom = Pen(Orange, 1, 2);
-    public static readonly NeonPen WreckBody = Pen(Orange, 0.45, 1.4), FlameOuter = Pen(Orange, 1, 2), FlameInner = Pen(Amber, 1, 1.4);
+    public static readonly NeonPen Tracer = Pen(Amber, 1, 2), Oil = Pen(Purple, 0.9, 1.4);
+    public static readonly NeonPen FlameOuter = Pen(Orange, 1, 2), FlameInner = Pen(Amber, 1, 1.4);
     public static readonly Brush OilFill = Solid(Purple, 0.16), TailLight = Solid(Red), BarBack = Solid(Colors.Black, 0.7);
 
     // Civilians and police.
@@ -52,10 +49,9 @@ internal static class Neon
     public static readonly NeonPen LightBluePen = Pen(LightBlue, 1, 2.4), LightRedPen = Pen(LightRed, 1, 2.4);
     public static readonly Brush LightBlueFill = Solid(LightBlue), LightRedFill = Solid(LightRed);
     public static readonly Brush RadarCivilian = Solid(CivilianGray);
-    public static readonly NeonPen RadarPolice = Pen(White, 1, 1.5), GapPen = Pen(Green, 1, 2);
+    public static readonly NeonPen RadarPolice = Pen(White, 1, 1.5);
 
     // Roadblocks and speed traps.
-    public static readonly NeonPen BarrierPen = Pen(Red, 0.9, 1.6), SignPen = Pen(Amber, 1, 2), SignCaughtPen = Pen(Red, 1, 2.4);
     public static readonly Brush StripeRed = Solid(Red, 0.85), StripeWhite = Solid(White, 0.85);
     public static readonly Brush SignFill = Solid(Amber, 0.1), SignCaughtFill = Solid(Red, 0.35);
     public static readonly NeonPen RadarBarrier = Pen(Red, 1, 3.2), RadarGap = Pen(Green, 1, 2);
@@ -86,16 +82,16 @@ internal static class Neon
     public static readonly NeonPen HostileOutline = Pen(Red, 0.8, 1.6, DashStyles.Dash);
     public static readonly NeonPen RadarGunner = Pen(OrangeRed, 1, 1.8), RadarDropper = Pen(Teal, 1, 1.5), RadarArmored = Pen(SteelBlue, 1, 1.5), RadarBossOuter = Pen(White, 1, 1.8);
     public static readonly NeonPen ShieldBright = Pen(Cyan, 1, 3.4), ShieldDim = Pen(Cyan, 0.45, 2.4), OpenArmor = Pen(Gold, 1, 1.8), ChuteGlow = Pen(Teal, 1, 3.4);
-    public static readonly Brush PortGlow = Solid(OrangeRed), PortBurst = Solid(White), PortDim = Solid(OrangeRed, 0.35);
+    public static readonly Brush PortGlow = Solid(OrangeRed), PortBurst = Solid(White);
     public static readonly Brush ChuteFill = Solid(Teal, 0.9), TextGold = Solid(Gold), TextTeal = Solid(Teal), TextOrangeRed = Solid(OrangeRed), TextSteel = Solid(Steel), TextSteelBlue = Solid(SteelBlue);
     public static readonly Brush SmokeFill = Solid(Gray, 0.22), CrateFill = Solid(Cyan, 0.12);
 
     // Cockpit and HUD.
-    public static readonly NeonPen Hood = Pen(Green, 0.8, 1.6), Gun = Pen(Green, 1, 3);
-    public static readonly NeonPen Hud = Pen(Cyan, 0.8, 1.2), RadarLine = Pen(Green, 0.55, 1.0), MirrorRoad = Pen(Cyan, 0.6, 1.0);
-    public static readonly NeonPen RadarWreck = Pen(Orange, 1, 1.6), RadarRunner = Pen(Magenta, 1, 1.5), RadarBlocker = Pen(Amber, 1, 1.5), RadarPursuer = Pen(Red, 1, 1.5);
+    public static readonly NeonPen Hood = Pen(Green, 0.8, 1.6);
+    public static readonly NeonPen RadarLine = Pen(Green, 0.55, 1.0);
+    public static readonly NeonPen RadarWreck = Pen(Orange, 1, 1.6), RadarRunner = Pen(Magenta, 1, 1.5), RadarPursuer = Pen(Red, 1, 1.5);
     public static readonly Brush TextLightBlue = Solid(Color.FromRgb(0x6F, 0xA0, 0xFF)), TextCyan = Solid(Cyan), TextGray = Solid(Gray), TextAmber = Solid(Amber), TextRed = Solid(Red);
-    public static readonly Brush TextGreen = Solid(Green), TextWhite = Solid(White), TextMagenta = Solid(Magenta);
+    public static readonly Brush TextGreen = Solid(Green), TextWhite = Solid(White);
     public static readonly Brush ThrottleFill = Solid(Green, 0.85), BrakeFill = Solid(Red, 0.85), HudBack = Solid(Cyan, 0.08);
     public static readonly Brush PanelFill = Solid(Color.FromRgb(4, 8, 14), 0.9), RadarFill = Solid(Color.FromRgb(2, 14, 8), 0.85);
     public static readonly Brush HitEdge = Solid(Red, 0.55);

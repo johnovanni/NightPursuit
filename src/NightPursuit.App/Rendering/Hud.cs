@@ -33,7 +33,8 @@ internal static class Hud
 
         // Speed bar with the target marker.
         var bar = new Rect(hw - 170 * k, l.Height - 24 * k, 340 * k, 9 * k);
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, bar);
+        dc.DrawRectangle(Neon.HudBack, null, bar);
+        LineArt.Box(dc, bar, LineArt.Gauge);
         dc.DrawRectangle(Neon.TextAmber, null, new Rect(bar.X, bar.Y, bar.Width * Math.Clamp(p.Speed / w.Feel.MaxSpeed, 0, 1), bar.Height));
         if (scheme.TargetSpeed is double target)
         {
@@ -54,7 +55,8 @@ internal static class Hud
 
         // Steering and nose angle
         var steer = new Rect(hw + 150 * k, top + 58 * k, 150 * k, 9 * k);
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, steer);
+        dc.DrawRectangle(Neon.HudBack, null, steer);
+        LineArt.Box(dc, steer, LineArt.Gauge);
         double centre = steer.X + steer.Width / 2, sx = centre + p.Steer * steer.Width / 2;
         dc.DrawRectangle(Neon.TextCyan, null, new Rect(Math.Min(centre, sx), steer.Y, Math.Abs(sx - centre), steer.Height));
         dc.DrawRectangle(Neon.TextGray, null, new Rect(centre - 1, steer.Y - 3 * k, 2, steer.Height + 6 * k));
@@ -69,7 +71,8 @@ internal static class Hud
 
     static void DrawVerticalBar(DrawingContext dc, HudLayout l, Rect r, double value, Brush fill, string label)
     {
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, r);
+        dc.DrawRectangle(Neon.HudBack, null, r);
+        LineArt.Box(dc, r, LineArt.Gauge);
         double h = r.Height * Math.Clamp(value, 0, 1);
         dc.DrawRectangle(fill, null, new Rect(r.X, r.Bottom - h, r.Width, h));
         l.Text(dc, label, r.X + r.Width / 2, r.Bottom + 1 * l.K, 13, Neon.TextGray, TextAlignment.Center);
@@ -101,7 +104,8 @@ internal static class Hud
         // Armor: bar plus the number, red below 30 %.
         double armorFrac = Math.Clamp(p.Armor / p.Stats.Armor, 0, 1);
         var armor = new Rect(barX, 44 * k, barW, 10 * k);
-        dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, armor);
+        dc.DrawRectangle(Neon.HudBack, null, armor);
+        LineArt.Box(dc, armor, LineArt.Gauge);
         dc.DrawRectangle(armorFrac > 0.3 ? Neon.TextGreen : Neon.TextRed, null, new Rect(armor.X, armor.Y, armor.Width * armorFrac, armor.Height));
         l.Text(dc, $"ARMOR {armorFrac * 100:0}", labelX, 40 * k, 13, armorFrac > 0.3 ? Neon.TextGray : Neon.TextRed, TextAlignment.Right);
 
@@ -128,7 +132,8 @@ internal static class Hud
         {
             l.Text(dc, $"PUNCTURED {p.PunctureLeft:0.0} s", rx, yy, 15, Neon.TextOrange, TextAlignment.Right, true);
             var bar = new Rect(barX, yy + 20 * k, barW, 6 * k);
-            dc.DrawRectangle(Neon.HudBack, Neon.Hud.Core, bar);
+            dc.DrawRectangle(Neon.HudBack, null, bar);
+            LineArt.Box(dc, bar, LineArt.Gauge);
             dc.DrawRectangle(Neon.TextOrange, null, new Rect(bar.X, bar.Y, bar.Width * Math.Clamp(p.PunctureLeft / PlayerCar.PunctureSeconds, 0, 1), bar.Height));
         }
     }
