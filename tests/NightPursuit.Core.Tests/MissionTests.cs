@@ -39,6 +39,22 @@ public class MissionTests
     }
 
     [Fact]
+    public void Patrol_ground_loads()
+    {
+        var def = MissionLoader.LoadFile(Path.Combine(AppContext.BaseDirectory, "content", "missions", "patrol-ground.json"));
+        Assert.Equal("Patrol Ground", def.Title);
+        Assert.Equal(33, def.Road.Seed);
+        Assert.Equal(5000, def.ApproachLength);
+        Assert.Equal(6, def.Traffic!.CarsPerKm);
+        Assert.Equal(1.5, def.Police!.Presence);
+        Assert.Equal(85, def.Police.StartingHeat);   // pre-flight F10: 85, so Pursuit lasts long enough for the chasers to arrive
+        Assert.Equal("Night Heron", def.Boss!.Name);
+        Assert.Equal(2, def.Boss.Phases.Count);
+        Assert.Equal(2, def.Waves.Count);
+        Assert.Equal(6, def.Crates!.Count);
+    }
+
+    [Fact]
     public void Valid_json_loads_with_road_defaults()
     {
         var def = MissionLoader.Load(Valid, "m.json");

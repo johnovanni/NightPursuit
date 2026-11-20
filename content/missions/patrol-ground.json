@@ -1,0 +1,30 @@
+{
+  "id": "patrol-ground",
+  "title": "Patrol Ground",
+  "briefing": "A night-time ring road where the police already have your plate. Dodge the commuters, shake the cruisers, slip every speed trap and roadblock, and run down the lone car that is hunting you.",
+  "road": { "seed": 33 },
+  "approachLength": 5000,
+  "loadout": { "oil": 5, "smoke": 3, "caltrops": 3, "missiles": 2, "strikes": 1 },
+  "traffic": { "carsPerKm": 6 },
+  "police": { "presence": 1.5, "startingHeat": 85 },
+  "waves": [
+    { "atDistance": 800,  "kind": "Runner", "count": 2, "spawnOffset": 450 },
+    { "atDistance": 2500, "kind": "Runner", "count": 2, "spawnOffset": 600 }
+  ],
+  "crates": [
+    { "atDistance": 1000, "lane": 1,  "item": "Oil",      "amount": 2 },
+    { "atDistance": 1600, "lane": -1, "item": "Smoke",    "amount": 1 },
+    { "atDistance": 2200, "lane": 0,  "item": "Caltrops", "amount": 1 },
+    { "atDistance": 2800, "lane": 1,  "item": "Missile",  "amount": 1 },
+    { "atDistance": 3400, "lane": -1, "item": "Strike",   "amount": 1 },
+    { "atDistance": 4000, "lane": 0,  "item": "Armor",    "amount": 1 }
+  ],
+  "boss": {
+    "name": "Night Heron",
+    "health": 120,
+    "phases": [
+      { "behaviour": "Blocker", "endsBelow": 0.5 },
+      { "behaviour": "Runner",  "endsBelow": 0 }
+    ]
+  }
+}

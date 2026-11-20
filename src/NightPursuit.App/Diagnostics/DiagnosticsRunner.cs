@@ -165,14 +165,20 @@ public static class DiagnosticsRunner
 
     // ---- --stress -------------------------------------------------------------------------------------------
 
-    static readonly string[] StressMissions = { "mission-01", "proving-ground" };
+    static readonly string[] StressMissions = { "mission-01", "proving-ground", "patrol-ground" };
+    /// <summary>Every kind of car but the boss, listed out (not cast from a number), so a new kind cannot slip in unseen.</summary>
+    static readonly AgentKind[] NonBossKinds =
+    {
+        AgentKind.Runner, AgentKind.Blocker, AgentKind.Pursuer, AgentKind.Gunner, AgentKind.Dropper, AgentKind.Armored,
+        AgentKind.Civilian, AgentKind.PolicePatrol, AgentKind.PoliceCruiser, AgentKind.Interceptor, AgentKind.ArmoredSuv,
+    };
     static readonly (int W, int H)[] StressSizes = { (960, 540), (320, 200), (2560, 600) };
     static readonly double[] StressDistances = { -200, -60, -20, 3, 12, 30, 80, 200, 400, 700, 1000, 1300, 1490 };
     static readonly RunState[] StressStates =
         { RunState.Playing, RunState.Playing, RunState.Paused, RunState.Respawning, RunState.Completed, RunState.GameOver };
 
     /// <summary>
-    /// Renders every 10 m of mission 1's road and the proving ground's, each at three window sizes (and 0 x 0), with a
+    /// Renders every 10 m of mission 1's road, the proving ground's and the patrol ground's, each at three window sizes (and 0 x 0), with a
     /// crowd of every enemy kind, a boss every third frame, slicks, wrecks, smoke, caltrops, crates, missiles, tracers and
     /// explosions, cycling the screen-fixed states (run-state overlays, help, messages, hit flash, locked guns, off-road,
     /// strike sweep, banner, puncture and grip loss) by frame number. Any exception counts as a failure.
@@ -288,7 +294,7 @@ public static class DiagnosticsRunner
         {
             double d = z + StressDistances[k];
             double x = (k % 5 - 2) * 4.5;
-            var car = AgentCar.Create(w.NextId(), (AgentKind)((k + frame) % 6), d, x, 30);   // every kind but the boss (F22)
+            var car = AgentCar.Create(w.NextId(), NonBossKinds[(k + frame) % NonBossKinds.Length], d, x, 30);   // every kind but the boss (F22)
             car.Armor = car.Stats.Armor / 3;
             if (k % 4 == 0) { car.State = VehicleState.Spinning; car.SpinAngle = k; car.SnapPrev(); }
             if (k % 5 == 3) car.HitFlash = 0.1;
@@ -301,7 +307,7 @@ public static class DiagnosticsRunner
         }
 
         // A punctured car and a Gunner aiming at you.
-        var punctured = AgentCar.Create(w.NextId(), (AgentKind)(frame % 6), z + 26, p.Lateral + 4, 30);
+        var punctured = AgentCar.Create(w.NextId(), NonBossKinds[frame % NonBossKinds.Length], z + 26, p.Lateral + 4, 30);
         punctured.Punctured = true;
         punctured.PunctureSeconds = frame % 10 * 0.1;
         var gunner = AgentCar.Create(w.NextId(), AgentKind.Gunner, z + 45, p.Lateral, 30);
@@ -326,6 +332,12 @@ public static class DiagnosticsRunner
         }
         else run.Director.ReleaseBossForDiagnostics();   // no boss: the approach HUD, without the boss bar
         w.Agents.AddRange(cars);
+
+        // A speed trap and a roadblock every frame (its gap lane cycles), heat cycling 0 to 100, and every 4th frame the busted countdown 1.2 s in.
+        w.Hazards.Add(new SpeedTrap { Distance = z + 150, Lateral = (frame % 2 == 0 ? 1 : -1) * SpeedTrap.EdgeLateral, LimitMph = 60 + 10 * (frame % 3), Triggered = frame % 4 == 1, Caught = frame % 8 == 1 });
+        w.Hazards.Add(Roadblock.Place(z + 250, frame % 3));
+        w.SetHeat(frame * 7 % 101, "stress");
+        w.Busted.SetHeldForDiagnostics(frame % 4 == 0 ? 1.2 : 0);
 
         // The arsenal: 2 smoke clouds, 3 caltrops (alternately hostile), 3 crates, 2 player missiles and 1 enemy missile.
         for (int i = 0; i < 2; i++)
@@ -397,10 +409,12 @@ public static class DiagnosticsRunner
 
     const int PerfFrames = 600, PerfWarmUp = 30, PerfPlaceEvery = 60;
     const double PerfBudgetMs = 8;
+    const int PerfCars = 25, PerfExtraCivilians = 8, PerfExtraPolice = 3;
+    static readonly AgentKind[] PerfPolice = { AgentKind.PolicePatrol, AgentKind.PoliceCruiser, AgentKind.Interceptor };
 
     /// <summary>
     /// Times GameView's OnRender (the cost of recording its draw calls) over 600 frames of the close-cars scene plus
-    /// 25 more cars of every kind, the boss, smoke, crates, missiles and a strike sweep (<see cref="PlacePerfScene"/>),
+    /// 25 more cars of every non-boss kind, 8 civilians, 3 police, a roadblock, a speed trap, the boss, smoke, crates, missiles and a strike sweep (<see cref="PlacePerfScene"/>),
     /// at 1280 x 720, while the simulation moves a little between frames. The cost of rasterising into the bitmap is
     /// reported too, for information only.
     /// </summary>
@@ -456,7 +470,7 @@ public static class DiagnosticsRunner
         var (totalMean, totalP95) = Stats(total);
         bool pass = mean < PerfBudgetMs;
         var report = new System.Text.StringBuilder();
-        report.AppendLine($"perf: {onRender.Count} frames at {Width}x{Height} (after {PerfWarmUp} warm-up frames), close-cars scene + 25 cars of all six kinds, the boss, 3 smoke clouds, 4 crates, 2 missiles and a strike sweep");
+        report.AppendLine($"perf: {onRender.Count} frames at {Width}x{Height} (after {PerfWarmUp} warm-up frames), close-cars scene + {PerfCars} cars of all {NonBossKinds.Length} non-boss kinds, {PerfExtraCivilians} extra civilians, {PerfExtraPolice} police, heat 80, a roadblock at 300 m and a speed trap at 200 m, the boss, 3 smoke clouds, 4 crates, 2 missiles and a strike sweep");
         report.AppendLine($"strike sweeping in {strikeFrames} frames, boss bar showing in {bossFrames}; the autopilot drove {run.World.Player.Distance - startDistance:0} m, ended in state {run.State}");
         report.AppendLine($"OnRender: mean {mean:0.000} ms, 95th percentile {p95:0.000} ms, max {onRender.Max():0.000} ms   (budget: mean < {PerfBudgetMs} ms: {(pass ? "PASS" : "FAIL")})");
         report.AppendLine($"OnRender + rasterising into a bitmap (information only): mean {totalMean:0.000} ms, 95th percentile {totalP95:0.000} ms");
@@ -475,13 +489,21 @@ public static class DiagnosticsRunner
         PlaceCloseCars(w, view.Effects);
         w.Missiles.Clear();
         w.EnemyMissiles.Clear();
-        for (int i = 0; i < 25; i++)
+        for (int i = 0; i < PerfCars; i++)
         {
             double ahead = 20 + i * (880.0 / 24);
-            var car = AgentCar.Create(w.NextId(), (AgentKind)(i % 6), p.Distance + ahead, (i % 5 - 2) * 4.5, p.Speed);
+            var car = AgentCar.Create(w.NextId(), NonBossKinds[i % NonBossKinds.Length], p.Distance + ahead, (i % 5 - 2) * 4.5, p.Speed);
             if (i % 4 == 0) car.Armor = car.Stats.Armor / 2;
             w.Agents.Add(car);
         }
+
+        for (int i = 0; i < PerfExtraCivilians; i++)
+            w.Agents.Add(AgentCar.Create(w.NextId(), AgentKind.Civilian, p.Distance + 40 + i * 90, (i % 3 - 1) * 5, p.Speed));
+        for (int i = 0; i < PerfExtraPolice; i++)
+            w.Agents.Add(AgentCar.Create(w.NextId(), PerfPolice[i], p.Distance + 35 + i * 70, (i - 1) * 5, p.Speed));
+        w.SetHeat(80, "perf");
+        w.Hazards.Add(Roadblock.Place(p.Distance + 300, 1));
+        w.Hazards.Add(new SpeedTrap { Distance = p.Distance + 200, Lateral = SpeedTrap.EdgeLateral, LimitMph = 70 });
 
         var boss = BossCar.Create(w.NextId(), bossDef, p.Distance + 90, 5, p.Speed);
         boss.Engaged = true;

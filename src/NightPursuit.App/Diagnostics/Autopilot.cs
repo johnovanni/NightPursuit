@@ -39,10 +39,25 @@ public static class Autopilot
     {
         var p = w.Player;
         bool Clear(double lane) =>
-            !w.Hazards.Any(h => h is Wreck && h.Distance - p.Distance is > -3 and < 90 && Math.Abs(h.Lateral - lane) < 3)
+            !w.Hazards.Any(h => h is Roadblock rb && rb.Distance - p.Distance is > -4 and < 150 && rb.Blocks(lane, 1))   // take a parked roadblock's gap
+            && !RollingBlocked(w, lane)
+            && !w.Hazards.Any(h => h is Wreck && h.Distance - p.Distance is > -3 and < 90 && Math.Abs(h.Lateral - lane) < 3)
             && !w.Agents.Any(a => a.Distance - p.Distance is > -3 and < 60 && Math.Abs(a.Lateral - lane) < 3);
         foreach (double lane in Track.LaneCentres.OrderBy(l => Math.Abs(l - p.Lateral)).ThenBy(Math.Abs))
             if (Clear(lane)) return lane;
         return 0;
+    }
+
+    /// <summary>True when a formed rolling roadblock (two SUVs) is within 150 m ahead and <paramref name="lane"/> is not its open lane.</summary>
+    static bool RollingBlocked(World w, double lane)
+    {
+        var p = w.Player;
+        foreach (var rb in w.RollingRoadblocks)
+        {
+            if (!rb.Formed || rb.OpenLane < 0) continue;
+            if (!rb.Cars.Any(c => c.Distance - p.Distance is > -4 and < 150)) continue;
+            if (Math.Abs(lane - Track.LaneCentres[rb.OpenLane]) > 1) return true;
+        }
+        return false;
     }
 }
