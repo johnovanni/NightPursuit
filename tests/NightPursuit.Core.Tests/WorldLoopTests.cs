@@ -1,8 +1,8 @@
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Drivers;
-using NightPursuit.Core.Police;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
@@ -200,6 +200,36 @@ public class WorldLoopTests
         }
         Assert.NotEqual(Formed(-5), Formed(5));     // the open lane locks to RIGHT, or to LEFT
     }
+
+    [Fact]
+    public void Hash_tells_which_lane_each_rolling_roadblock_car_holds()
+    {
+        // The held lanes are fixed at form time from the cars' laterals; the cars then move, so two worlds can look alike and differ.
+        ulong Held(double lateralA, double lateralB)
+        {
+            var (w, _, _) = HashWorld();
+            var rb = w.RollingRoadblockList[0];
+            rb.Cars[0].Lateral = lateralA; rb.Cars[1].Lateral = lateralB;
+            rb.Form(0);
+            rb.Cars[0].Lateral = -5; rb.Cars[1].Lateral = 5;      // the same agent state in both worlds
+            return w.StateHash();
+        }
+        Assert.NotEqual(Held(-5, 5), Held(5, -5));
+    }
+
+    [Fact]
+    public void Hash_tells_which_cars_make_up_a_rolling_roadblock()
+    {
+        ulong Pair(bool swapped)
+        {
+            var (w, _, _) = HashWorld();
+            var old = w.RollingRoadblockList[0];
+            w.RollingRoadblockList[0] = swapped ? new RollingRoadblock(old.Cars[1], old.Cars[0], old.PlannedOpen) : old;
+            return w.StateHash();
+        }
+        Assert.NotEqual(Pair(false), Pair(true));
+    }
+
     [Fact]
     public void Hash_tells_a_sweep_part_way_from_one_just_begun()
     {

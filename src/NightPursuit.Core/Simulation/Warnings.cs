@@ -137,8 +137,7 @@ public static class Warnings
         }
         if (policeBehind is not null)
         {
-            var behind = Behind(WarningKind.PoliceBehind, "POLICE", policeBehind, p);
-            found[(int)WarningKind.PoliceBehind] = behind;
+            found[(int)WarningKind.PoliceBehind] = Behind(WarningKind.PoliceBehind, "POLICE", policeBehind, p);
         }
 
         double hazardGap = double.MaxValue, wreckGap = double.MaxValue;
