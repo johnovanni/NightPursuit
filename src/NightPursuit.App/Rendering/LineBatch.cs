@@ -22,6 +22,15 @@ internal sealed class LineBatch
         _any = true;
     }
 
+    /// <summary>SPIKE: draws the batch in a trial line-art pen.</summary>
+    public void Draw(DrawingContext dc, ArtPen pen)
+    {
+        _ctx.Close();
+        if (!_any) return;
+        _geo.Freeze();
+        LineArt.Draw(dc, _geo, pen);
+    }
+
     public void Draw(DrawingContext dc, NeonPen pen)
     {
         _ctx.Close();

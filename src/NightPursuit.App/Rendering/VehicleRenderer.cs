@@ -64,7 +64,7 @@ public static class VehicleRenderer
         if (clip <= 0 || g.Y - roof > clip) return;   // hidden behind a hill
 
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-        Body(dc, car, p.SpinOf(car), g, s, time);
+        Body(dc, car, p.SpinOf(car), g, s, time, LineArt.Fade(rear));
         if (car.Kind == AgentKind.Boss && dz < BossTagDistance) BossTag(dc, g.X, g.Y - roof - 34 - 0.35 * s, s);
         if (car.Armor < car.Stats.Armor && dz < 220)
         {
@@ -138,8 +138,9 @@ public static class VehicleRenderer
     static readonly double[] PlateHeights = { 0.78, 1.1 };
     static readonly Typeface TagFont = new(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
 
-    static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s, double time)
+    static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s, double time, double fade)
     {
+        bool art = LineArt.Restyled;
         bool spinning = car.State == VehicleState.Spinning;
         double tilt = spinning ? Math.Sin(spinAngle) * 25 : 0;
         if (car.Punctured && !spinning)
@@ -151,14 +152,30 @@ public static class VehicleRenderer
         var kind = car.Kind;
         var boss = car as BossCar;
         var pen = car.HitFlash > 0 ? (kind == AgentKind.Boss ? Neon.BossFlash : Neon.CarFlash) : PenFor(kind);
+        var colour = LineArt.ColorOf(pen);
+        var outlinePen = LineArt.Outline(colour, fade);
+        var detailPen = LineArt.Detail(colour, fade);
 
         Point P(double x, double yMetres) => new(g.X + x * w / 2, g.Y - yMetres * s);
 
         dc.PushTransform(new RotateTransform(tilt, g.X, g.Y - roof / 2));
 
         double ww = Math.Max(1, 0.3 * s * widthScale);
+        var tyres = new LineBatch();
         foreach (int side in Projector.Sides)
-            dc.DrawRectangle(Neon.Black, pen.Core, new Rect(g.X + side * (w / 2 - ww / 2) - ww / 2, g.Y - wheel, ww, wheel));
+        {
+            var tyre = new Rect(g.X + side * (w / 2 - ww / 2) - ww / 2, g.Y - wheel, ww, wheel);
+            if (!art)
+            {
+                dc.DrawRectangle(Neon.Black, pen.Core, tyre);
+                continue;
+            }
+            // Only the tyre's outer side and where it meets the road: the edges that face you.
+            dc.DrawRectangle(Neon.Black, null, tyre);
+            double outer = side < 0 ? tyre.Left : tyre.Right, inner = side < 0 ? tyre.Right : tyre.Left;
+            tyres.Line(new Point(outer, g.Y - 0.224 * s), new Point(outer, tyre.Bottom));
+            tyres.Line(new Point(outer, tyre.Bottom), new Point(inner, tyre.Bottom));
+        }
 
         // The boss's two tall rear fins stand behind the body outline.
         StreamGeometry? fins = null;
@@ -195,12 +212,44 @@ public static class VehicleRenderer
             dc.DrawGeometry(null, shield.Core, body);
             if (fins is not null) { dc.DrawGeometry(null, shield.Glow, fins); dc.DrawGeometry(null, shield.Core, fins); }
         }
-        if (fins is not null) { dc.DrawGeometry(Neon.Black, pen.Glow, fins); dc.DrawGeometry(null, pen.Core, fins); }
-        dc.DrawGeometry(Neon.Black, pen.Glow, body);
-        dc.DrawGeometry(null, pen.Core, body);
+        if (!art)
+        {
+            if (fins is not null) { dc.DrawGeometry(Neon.Black, pen.Glow, fins); dc.DrawGeometry(null, pen.Core, fins); }
+            dc.DrawGeometry(Neon.Black, pen.Glow, body);
+            dc.DrawGeometry(null, pen.Core, body);
+        }
+        else
+        {
+            // Black fills hide what is behind; only the presenting edges are stroked. There is no line along the bottom of
+            // the body (the road meets it there) and none along the base of a fin (the body hides it).
+            if (fins is not null)
+            {
+                dc.DrawGeometry(Neon.Black, null, fins);
+                foreach (int side in Projector.Sides)
+                {
+                    var fin = new Point[BossFin.Length];
+                    for (int i = 0; i < BossFin.Length; i++) fin[i] = P(side * BossFin[i].X, BossFin[i].Y);
+                    LineArt.Draw(dc, LineArt.Polyline(fin, (0.42, 0.5)), outlinePen);
+                }
+            }
+            dc.DrawGeometry(Neon.Black, null, body);
+            var edge = new List<Point>(shape.Length * 2);
+            for (int i = 0; i < shape.Length; i++) edge.Add(P(-shape[i].X, shape[i].Y));       // up the left side
+            for (int i = shape.Length - 1; i >= 0; i--) edge.Add(P(shape[i].X, shape[i].Y));   // across the roof and down the right
+            // Light from the upper right: a gap just past the right shoulder of the roof, and a small one low on the left.
+            double total = 0, toShoulder = 0;
+            for (int i = 1; i < edge.Count; i++)
+            {
+                total += (edge[i] - edge[i - 1]).Length;
+                if (i == shape.Length) toShoulder = total;
+            }
+            double sh = total > 0 ? toShoulder / total : 0.6;
+            LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outlinePen);
+        }
+        tyres.Draw(dc, detailPen);
 
         var detail = new LineBatch();
-        if (kind != AgentKind.Boss)
+        if (kind != AgentKind.Boss && !art)
         {
             double bumper = g.Y - 0.45 * s;
             detail.Line(new Point(g.X - w / 2, bumper), new Point(g.X + w / 2, bumper));
@@ -210,8 +259,8 @@ public static class VehicleRenderer
             case AgentKind.Blocker:
                 detail.Line(new Point(g.X, g.Y - 0.5 * s), new Point(g.X, g.Y - roof + 0.1 * s));   // cargo door line
                 break;
-            case AgentKind.Gunner:   // the rear window
-                detail.Line(P(-0.8, 0.9), P(0.8, 0.9));
+            case AgentKind.Gunner:   // the rear window (restyled: open at the bottom)
+                if (!art) detail.Line(P(-0.8, 0.9), P(0.8, 0.9));
                 detail.Line(P(0.8, 0.9), P(0.52, 1.22));
                 detail.Line(P(0.52, 1.22), P(-0.52, 1.22));
                 detail.Line(P(-0.52, 1.22), P(-0.8, 0.9));
@@ -219,7 +268,7 @@ public static class VehicleRenderer
             case AgentKind.Dropper:   // the tall flat hatch and its handle
                 foreach (int side in Projector.Sides) detail.Line(P(side * 0.8, 0.58), P(side * 0.8, 1.62));
                 detail.Line(P(-0.8, 1.62), P(0.8, 1.62));
-                detail.Line(P(-0.8, 0.58), P(0.8, 0.58));
+                if (!art) detail.Line(P(-0.8, 0.58), P(0.8, 0.58));
                 detail.Line(P(-0.12, 1.1), P(0.12, 1.1));
                 break;
             case AgentKind.Armored:   // two plate lines and a narrow slit window
@@ -230,8 +279,11 @@ public static class VehicleRenderer
                 }
                 detail.Line(P(-0.36, 1.2), P(0.36, 1.2));
                 detail.Line(P(-0.36, 1.32), P(0.36, 1.32));
-                detail.Line(P(-0.36, 1.2), P(-0.36, 1.32));
-                detail.Line(P(0.36, 1.2), P(0.36, 1.32));
+                if (!art)
+                {
+                    detail.Line(P(-0.36, 1.2), P(-0.36, 1.32));
+                    detail.Line(P(0.36, 1.2), P(0.36, 1.32));
+                }
                 break;
             case AgentKind.Boss:
                 break;
@@ -259,7 +311,7 @@ public static class VehicleRenderer
                 // The glass never pokes outside the outline: the top stays under the roof, the bottom inside the body at that height.
                 wt = Math.Min(wt, shape[^1].X * w / 2 - 0.05 * s);
                 wb = Math.Min(wb, HalfWidthAt(shape, bodyTop + 0.06) * w / 2 - 0.05 * s);
-                detail.Line(new Point(g.X - wb, winBottom), new Point(g.X + wb, winBottom));
+                if (!art) detail.Line(new Point(g.X - wb, winBottom), new Point(g.X + wb, winBottom));   // restyled: the glass is open at the bottom
                 detail.Line(new Point(g.X + wb, winBottom), new Point(g.X + wt, winTop));
                 detail.Line(new Point(g.X + wt, winTop), new Point(g.X - wt, winTop));
                 detail.Line(new Point(g.X - wt, winTop), new Point(g.X - wb, winBottom));
@@ -270,7 +322,8 @@ public static class VehicleRenderer
                 }
                 break;
         }
-        detail.Draw(dc, pen);
+        if (art) detail.Draw(dc, detailPen);
+        else detail.Draw(dc, pen);
         if (IsPolice(kind)) LightBar(dc, P, shape[^1], time, s);
 
         switch (kind)

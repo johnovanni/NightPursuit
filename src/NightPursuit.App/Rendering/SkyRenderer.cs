@@ -50,8 +50,14 @@ public static class SkyRenderer
             dc.DrawEllipse(Neon.Black, null, new Point(c.X + 8, c.Y - 4), 17, 17);   // crescent
         }
 
-        var ridge = new LineBatch();
         double step = Math.Tau / Ridge.Length;
+        if (LineArt.Restyled)
+        {
+            DrawLayeredRidges(dc, p, heading, step);
+            return;
+        }
+
+        var ridge = new LineBatch();
         for (int i = 0; i < Ridge.Length; i++)
         {
             double a = WrapPi(i * step - heading);
@@ -60,6 +66,57 @@ public static class SkyRenderer
                        new Point(halfW + (a + step) * ppr, horizon - Ridge[(i + 1) % Ridge.Length]));
         }
         ridge.Draw(dc, Neon.Sky);
+    }
+
+    static readonly double[] FarRidge = MakeFarRidge();
+
+    static double[] MakeFarRidge()
+    {
+        var rng = new Random(23);
+        var r = new double[64];
+        for (int i = 0; i < r.Length; i++) r[i] = 30 + rng.NextDouble() * 46 + (i % 9 < 3 ? 26 : 0);
+        return r;
+    }
+
+    /// <summary>
+    /// SPIKE: two ridges for depth. The far range is taller and dim; the near one is brighter and filled black below its
+    /// line, so it hides the far range behind it, as real hills do.
+    /// </summary>
+    static void DrawLayeredRidges(DrawingContext dc, Projector p, double heading, double step)
+    {
+        double ppr = p.PxPerRadian, halfW = p.HalfWidth, horizon = p.Horizon;
+        double scale = p.Height / 720;
+
+        var far = new List<Point>();
+        double farStep = Math.Tau / FarRidge.Length;
+        for (int i = 0; i < FarRidge.Length; i++)
+        {
+            double a = WrapPi(i * farStep - heading * 0.92);   // a touch of parallax: the far range turns more slowly
+            if (Math.Abs(a) > 1.1) continue;
+            far.Add(new Point(halfW + a * ppr, horizon - FarRidge[i] * scale));
+        }
+        far.Sort((x, y) => x.X.CompareTo(y.X));
+        if (far.Count > 1) LineArt.Draw(dc, LineArt.Polyline(far), LineArt.Scenery(Neon.Indigo, 0.35));
+
+        var near = new List<Point>();
+        for (int i = 0; i < Ridge.Length; i++)
+        {
+            double a = WrapPi(i * step - heading);
+            if (Math.Abs(a) > 1.1) continue;
+            near.Add(new Point(halfW + a * ppr, horizon - Ridge[i] * scale));
+        }
+        near.Sort((x, y) => x.X.CompareTo(y.X));
+        if (near.Count < 2) return;
+        var fill = new StreamGeometry();
+        using (var c = fill.Open())
+        {
+            c.BeginFigure(new Point(near[0].X, horizon + 2), true, true);
+            foreach (var pt in near) c.LineTo(pt, false, false);
+            c.LineTo(new Point(near[^1].X, horizon + 2), false, false);
+        }
+        fill.Freeze();
+        dc.DrawGeometry(Neon.Black, null, fill);
+        LineArt.Draw(dc, LineArt.Polyline(near), LineArt.Scenery(Neon.Purple, 0.6));
     }
 
     static double WrapPi(double a)

@@ -109,15 +109,74 @@ public static class DiagnosticsRunner
             return 2;
         }
 
+        // SPIKE: --style classic,laser,newwave,combined renders each scene in each trial style; --sheet also writes a 2x2
+        // comparison per scene (it needs exactly four styles).
+        var styles = new List<ArtStyle>();
+        foreach (string name in (Arg(args, "--style") ?? "classic").Split(','))
+        {
+            if (!Enum.TryParse<ArtStyle>(name, true, out var st) || name.All(char.IsDigit))
+            {
+                Error($"Unknown style '{name}'. Known styles: classic, laser, newwave, combined");
+                return 2;
+            }
+            styles.Add(st);
+        }
+        bool sheet = Has(args, "--sheet") && styles.Count == 4;
+
         foreach (string scene in scenes)
         {
-            // With several scenes, out.png becomes out-<scene>.png; each scene starts from its own fresh run.
-            string file = scenes.Length > 1
-                ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + scene + Path.GetExtension(path))
-                : path;
-            RenderScene(scene, mission, seconds, width, height, file);
+            var made = new List<(ArtStyle Style, string File)>();
+            foreach (var style in styles)
+            {
+                // With several scenes or styles, out.png becomes out-<scene>[-<style>].png; each starts from its own fresh run.
+                string suffix = (scenes.Length > 1 ? "-" + scene : "") + (styles.Count > 1 ? "-" + style.ToString().ToLowerInvariant() : "");
+                string file = suffix.Length > 0
+                    ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + suffix + Path.GetExtension(path))
+                    : path;
+                LineArt.Style = style;
+                RenderScene(scene, mission, seconds, width, height, file);
+                made.Add((style, file));
+            }
+            LineArt.Style = ArtStyle.Classic;
+            if (sheet)
+                WriteSheet(made, width, height,
+                    Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + scene + "-sheet" + Path.GetExtension(path)));
         }
         return 0;
+    }
+
+    /// <summary>SPIKE: four renders side by side (2x2, full size), each labelled with its style.</summary>
+    static void WriteSheet(List<(ArtStyle Style, string File)> made, int width, int height, string path)
+    {
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, width * 2 + 8, height * 2 + 8));
+            for (int i = 0; i < made.Count; i++)
+            {
+                var img = new BitmapImage();
+                img.BeginInit();
+                img.CacheOption = BitmapCacheOption.OnLoad;
+                img.UriSource = new Uri(Path.GetFullPath(made[i].File));
+                img.EndInit();
+                double x = (i % 2) * (width + 8), y = (i / 2) * (height + 8);
+                dc.DrawImage(img, new Rect(x, y, width, height));
+                string label = made[i].Style switch
+                {
+                    ArtStyle.Classic => "NOW", ArtStyle.Laser => "LASER", ArtStyle.NewWave => "NEW WAVE", _ => "COMBINED",
+                };
+                var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+                                           new Typeface("Consolas"), 40, Brushes.White, 1.0);
+                dc.DrawRectangle(Brushes.Black, null, new Rect(x + width / 2 - ft.Width / 2 - 12, y + height - 70, ft.Width + 24, 56));
+                dc.DrawText(ft, new Point(x + width / 2 - ft.Width / 2, y + height - 64));
+            }
+        }
+        var bitmap = new RenderTargetBitmap(width * 2 + 8, height * 2 + 8, 96, 96, PixelFormats.Pbgra32);
+        bitmap.Render(visual);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(bitmap));
+        using var file = File.Create(path);
+        encoder.Save(file);
     }
 
     static void RenderScene(string scene, string mission, double seconds, int width, int height, string path)

@@ -17,10 +17,14 @@ public static class RoadRenderer
         int n = (int)(DrawDistance / seg);
         p.BeginClip(firstD, n + 1);
 
-        LineBatch[] edges = { new(), new(), new() };
-        LineBatch[] lanes = { new(), new(), new() };
-        var posts = new LineBatch();
-        var lamps = new LineBatch();
+        // SPIKE: the trial styles fade the road in finer steps (see ArtBands).
+        bool art = LineArt.Restyled;
+        int bands = art ? ArtBands.Length : 3;
+        var edges = new LineBatch[bands];
+        var lanes = new LineBatch[bands];
+        var postBands = new LineBatch[bands];
+        var lampBands = new LineBatch[bands];
+        for (int b = 0; b < bands; b++) { edges[b] = new(); lanes[b] = new(); postBands[b] = new(); lampBands[b] = new(); }
 
         double[] lat = { -Track.RoadHalfWidth, -Track.LaneLine, Track.LaneLine, Track.RoadHalfWidth };
         var prev = new Point[4];
@@ -40,7 +44,9 @@ public static class RoadRenderer
             {
                 // Coming out from behind a crest: start the line where it emerges.
                 double t = prevY > maxY ? (maxY - prevY) / (sy - prevY) : 0;
-                int band = d < 250 ? 0 : d < 700 ? 1 : 2;
+                int band = art ? ArtBand(d) : d < 250 ? 0 : d < 700 ? 1 : 2;
+                var posts = postBands[art ? band : 0];
+                var lamps = lampBands[art ? band : 0];
                 Point From(int k) => prev[k] + (cur[k] - prev[k]) * t;
 
                 edges[band].Line(From(0), cur[0]);
@@ -86,9 +92,33 @@ public static class RoadRenderer
         const double margin = 60;   // covers the shake offset
         dc.DrawRectangle(Neon.Black, null, new Rect(-margin, groundTop, p.Width + 2 * margin, Math.Max(0, p.Height + margin - groundTop)));
 
-        posts.Draw(dc, Neon.Post);
-        lamps.Draw(dc, Neon.Lamp);
-        lanes[2].Draw(dc, Neon.LaneFar); lanes[1].Draw(dc, Neon.LaneMid); lanes[0].Draw(dc, Neon.LaneNear);
-        edges[2].Draw(dc, Neon.RoadFar); edges[1].Draw(dc, Neon.RoadMid); edges[0].Draw(dc, Neon.RoadNear);
+        if (!art)
+        {
+            postBands[0].Draw(dc, Neon.Post);
+            lampBands[0].Draw(dc, Neon.Lamp);
+            lanes[2].Draw(dc, Neon.LaneFar); lanes[1].Draw(dc, Neon.LaneMid); lanes[0].Draw(dc, Neon.LaneNear);
+            edges[2].Draw(dc, Neon.RoadFar); edges[1].Draw(dc, Neon.RoadMid); edges[0].Draw(dc, Neon.RoadNear);
+            return;
+        }
+        // Far to near, so the brighter near lines sit on top.
+        for (int b = bands - 1; b >= 0; b--)
+        {
+            double fade = LineArt.Fade(ArtBandMiddle(b));
+            postBands[b].Draw(dc, LineArt.Detail(Neon.Gray, fade * 0.8));
+            lampBands[b].Draw(dc, LineArt.Detail(Neon.Amber, fade));
+            lanes[b].Draw(dc, LineArt.Detail(Neon.Blue, fade));
+            edges[b].Draw(dc, LineArt.Scenery(Neon.Cyan, fade));
+        }
     }
+
+    /// <summary>SPIKE: the far edge of each fade band, in metres ahead.</summary>
+    static readonly double[] ArtBands = { 40, 90, 160, 260, 400, 600, 850, 1200, double.MaxValue };
+
+    static int ArtBand(double d)
+    {
+        for (int b = 0; b < ArtBands.Length; b++) if (d < ArtBands[b]) return b;
+        return ArtBands.Length - 1;
+    }
+
+    static double ArtBandMiddle(int b) => b == 0 ? 20 : b == ArtBands.Length - 1 ? 1350 : (ArtBands[b - 1] + ArtBands[b]) / 2;
 }
