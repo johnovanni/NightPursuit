@@ -1322,12 +1322,15 @@ public class PoliceTests
         var run = new MissionRun(MissionLoader.LoadFile(PatrolGroundPath), new FeelSettings(), 1);
         var w = run.World;
         Assert.True(w.HeatHeldUntilMoved);
+        run.Update(ControlFrame.Empty, Step);
+        var seeded = Police(w).Select(c => c.Id).ToHashSet();   // the starting patrol cars, placed on the first step
         for (int i = 0; i < 60 * 60; i++)
         {
             run.Update(ControlFrame.Empty, 1 / 60.0);
             Assert.Equal(85, w.Heat.Value);
             Assert.Equal(HeatLevel.Pursuit, w.Heat.Level);
-            Assert.Empty(Police(w));
+            Assert.All(Police(w), c => Assert.Contains(c.Id, seeded));          // nothing new comes
+            Assert.All(Police(w), c => Assert.Same(PatrolDriver.Instance, c.Driver));   // and nothing chases
             Assert.DoesNotContain(w.Hazards, h => h is SpeedTrap or Roadblock);
         }
         Assert.True(w.HeatHeldUntilMoved);
@@ -1540,4 +1543,60 @@ public class PoliceTests
         Assert.Empty(w.RollingRoadblocks);
         Assert.All(cars, c => Assert.Equal(ChaseRole.Trail, ChaseDriver.RoleOf(c)));
     }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    public void Starting_police_are_on_the_road_before_you_move_and_none_pops_into_view(int seed)
+    {
+        // A hot start's patrol cars are placed on the first step, as the dispatcher would, and drive as traffic while the
+        // heat is held. Moving off only brings chasers from behind and new cars out of sight ahead, never one in view.
+        var run = new MissionRun(MissionLoader.LoadFile(PatrolGroundPath), new FeelSettings(), seed);
+        var w = run.World;
+        run.Update(ControlFrame.Empty, Step);
+        Assert.True(w.HeatHeldUntilMoved);
+        var first = Police(w);
+        Assert.Equal(3, first.Count);   // round(2 x 1.5)
+        Assert.All(first, c => Assert.Equal(AgentKind.PolicePatrol, c.Kind));
+        Assert.All(first, c => Assert.Same(PatrolDriver.Instance, c.Driver));
+        var seen = first.Select(c => c.Id).ToHashSet();
+        for (int i = 0; i < 3 * 120; i++)
+        {
+            run.Update(ControlFrame.Empty, Step);
+            Assert.All(Police(w), c => Assert.Contains(c.Id, seen));
+        }
+        for (int i = 0; i < 4 * 120; i++)
+        {
+            w.Player.Armor = 100;
+            run.Update(new ControlFrame { Gas = true, PadConnected = true, PadSteer = EnemyMissileTests.AutopilotSteer(w) }, Step);
+            foreach (var c in Police(w))
+            {
+                if (!seen.Add(c.Id)) continue;
+                double dz = c.Distance - w.Player.Distance;
+                Assert.False(dz is >= 0 and <= 1200, $"seed {seed}: {c.Kind} {c.Id} appeared {dz:0} m ahead, in view, at {w.Time:0.00} s");
+            }
+        }
+        Assert.False(w.HeatHeldUntilMoved);
+        Assert.Contains(Police(w), IsChasing);
+    }
+
+    [Fact]
+    public void A_manhunt_start_leaves_room_for_its_manhunt_cars()
+    {
+        // Seeded before you move, the patrol cars leave room under the cap of 6 for the SUV pair and the interceptors,
+        // which come first when you move off (F12), as they did when everything was seeded on the same step.
+        var run = Run(2, 95);
+        var w = run.World;
+        Tick(run, 0);
+        Assert.True(Police(w).Count <= MaxPoliceWithRoom(2));
+        Tick(run, 10);
+        Assert.Single(w.RollingRoadblocks);
+        Assert.Equal(2, w.Agents.Count(IsInterceptor));
+    }
+
+    /// <summary>The patrol cars seeded before a Manhunt start: 6 less the SUV pair and min(2, round(presence)) interceptors.</summary>
+    static int MaxPoliceWithRoom(double presence) => PoliceDispatcher.MaxPolice - 2 - Math.Min(2, (int)Math.Round(presence, MidpointRounding.AwayFromZero));
 }

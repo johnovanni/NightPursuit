@@ -635,8 +635,11 @@ heat that high, for example by hurting civilians.
   (starting at 85, Pursuit), if you commit no offence at all, Pursuit lasts 20 s from when you move off and then drops
   to Patrol.
 - At the start of a mission with police, nothing happens until you first drive faster than 5 mph: the heat doesn't
-  fall, the time in its level doesn't count, and no police, speed traps or roadblocks come. So you can read the start
-  help in peace. Offences still add heat. A respawn doesn't hold the heat again.
+  fall, the time in its level doesn't count, nothing chases you, no new police come, and no speed traps or roadblocks
+  are placed. So you can read the start help in peace. A mission that starts at Patrol or above does have its patrol
+  cars on the road from the first moment, spread from 400 m behind you to 1450 m ahead, driving as traffic, so none
+  pops into view when you move off. Chasers then come from 150–250 m behind you. Offences still add heat. A respawn
+  doesn't hold the heat again.
 - A mission that starts at Patrol or above says its level once at the start, for example "HEAT: PURSUIT" (D87).
 - A bust sets the heat straight to 50 instead (D84).
 
@@ -824,7 +827,8 @@ HEAT". A roadblock also shows "HIT A ROADBLOCK", as other damage does. When it w
 - You start with 5 oil, 3 smoke, 3 caltrops, 2 missiles and 1 strike.
 - Right at the start, one bullet on a police car (+5) takes you to Manhunt.
 - The game runs while the start help is showing, but the heat and the police wait until you first drive faster than
-  5 mph (D77): the heat stays at 85 and the chasers arrive the moment you move off. Without an offence, Pursuit then
+  5 mph (D77): the heat stays at 85, its 3 patrol cars drive as traffic, and the chasers come from behind the moment
+  you move off. Without an offence, Pursuit then
   lasts 20 s.
 
 The real missions 2–6 come in Plan 4.
@@ -1061,10 +1065,6 @@ New from Plan 3:
 - Right after cars bump at Manhunt level, police can briefly cover all three lanes. The tests allow up to 3 s of this a
   minute, and one run came close to that. These and D104 are the known times the three-lane rule (D85) gives way.
 - Interceptors ram about twice a minute in the tests (D106).
-- On a mission that starts at Patrol or above, the police come onto the road the moment you first move off (D77), all
-  at once, from 400 m behind you to 1450 m ahead. So a patrol car can appear in sight ahead of you at that moment,
-  where other cars never pop into view (D75). Please judge whether it shows; if it does, they could be put on the road
-  at the start and held still until you move.
 - In a very small window (320×200) the BUSTED box sits over the weapon panel and a warning over the mirror's label.
   Tiny windows were already crowded before Plan 3.
 - The long stress run never happens to show a formed rolling roadblock (the test pictures do), and the automatic
@@ -1089,7 +1089,8 @@ Coming in later plans:
    `dotnet run -c Release --project src/NightPursuit.App -- --mission patrol-ground`.
    It starts at heat 85 (Pursuit); one bullet on a police car (+5) takes you to Manhunt. Take your time with the
    start help: the heat and the police wait until you move off, and from then Pursuit lasts 20 s without an offence
-   (D77). Check that "HEAT: PURSUIT" shows at the start and that nothing changes until you drive off. Then:
+   (D77). Check that "HEAT: PURSUIT" shows at the start, that the heat stays at 85 and the patrol cars just drive along
+   as traffic until you drive off, and that no police car pops into view ahead when you do. Then:
    - get boxed in, and break out by braking, right down to a stop beside the Side car (it must not bust you, D84);
    - shake the police with smoke;
    - take the gap in a roadblock (the first one is 800 m ahead of where you move off), and try going round one on

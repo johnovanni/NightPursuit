@@ -84,6 +84,8 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     const int MaxSuvs = 2;
 
     bool _started;
+    /// <summary>The starting patrol cars were placed by <see cref="SeedWhileHeld"/>, so the first <see cref="Update"/> does not seed again.</summary>
+    bool _seededWhileHeld;
     bool _atPatrol;
     double _nextSpawn;
     double _nextChaser;
@@ -129,10 +131,10 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
             NextRoadblockAt = w.Player.Distance;
         }
 
-        int target = Math.Min(MaxPolice, (int)Math.Round(def.Presence * 2.0, MidpointRounding.AwayFromZero));
+        int target = PatrolTarget;
         // In priority order (F12): the Manhunt cars before the patrol cars and cruisers, so they get the room first.
         if (manhunt) SendManhunt(w, all: first, boss);
-        if (first) Seed(w, target);
+        if (first && !_seededWhileHeld) Seed(w, target);
         else TopUp(w, target);
         if (pursuit)
         {
@@ -147,9 +149,31 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         if (!boss) PlaceRoadblock(w);
     }
 
-    void Seed(World w, int target)
+    /// <summary>Patrol cars kept in the window at Patrol or above: round(2 x presence), at most 6.</summary>
+    int PatrolTarget => Math.Min(MaxPolice, (int)Math.Round(def.Presence * 2.0, MidpointRounding.AwayFromZero));
+
+    /// <summary>
+    /// While the heat is held at a mission's start (<see cref="World.HeatHeldUntilMoved"/>), the mission director calls
+    /// this instead of <see cref="Update"/>. On its first call (the mission's first step) a start at Patrol or above puts
+    /// its patrol cars across the window, as <see cref="Update"/>'s first step would, so none appears in view when you move
+    /// off; they drive as traffic. Nothing else happens until you move: no chasers or Manhunt cars, no new police, no
+    /// speed traps or roadblocks. A Manhunt start leaves room under the cap for the SUV pair and the interceptors, which
+    /// come first (F12) when you move off.
+    /// </summary>
+    public void SeedWhileHeld(World w)
     {
-        for (int i = 0; i < target && Count(w) < MaxPolice; i++)
+        if (_started || _seededWhileHeld) return;
+        _seededWhileHeld = true;
+        if (w.Heat.Level < HeatLevel.Patrol) return;
+        int keep = 0;
+        if (w.Heat.Level >= HeatLevel.Manhunt)
+            keep = (def.Presence >= 1 ? 2 : 0) + Math.Min(MaxInterceptors, (int)Math.Round(def.Presence, MidpointRounding.AwayFromZero));
+        Seed(w, PatrolTarget, MaxPolice - keep);
+    }
+
+    void Seed(World w, int target, int cap = MaxPolice)
+    {
+        for (int i = 0; i < target && Count(w) < cap; i++)
         {
             double offset = SpawnSpots.SeedOffset(w, i, target, SeedFrom, SeedTo, SeedClear);
             Place(w, w.Player.Distance + offset);

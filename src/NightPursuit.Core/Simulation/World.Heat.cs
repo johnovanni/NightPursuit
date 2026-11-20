@@ -24,8 +24,9 @@ public sealed partial class World
     /// <summary>
     /// True from the start of a mission with a police section until the first step the player is driving faster than
     /// 5 mph (<see cref="BustedWatch.SpeedLimit"/>). Until then the heat does not die down (nor does the time in its
-    /// level count) and the mission director does not run the police dispatcher, so nothing happens while the start help
-    /// is up. A respawn does not set it again. Offences still add heat.
+    /// level count), and the police dispatcher only places the starting patrol cars on the first step
+    /// (<see cref="PoliceDispatcher.SeedWhileHeld"/>): nothing chases, spawns or is placed while the start help is up.
+    /// A respawn does not set it again. Offences still add heat.
     /// </summary>
     public bool HeatHeldUntilMoved { get; set; }
 

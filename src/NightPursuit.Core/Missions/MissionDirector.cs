@@ -67,7 +67,9 @@ public sealed class MissionDirector(MissionDefinition def)
         }
 
         _traffic?.Update(w);   // last, so traffic and police see this step's boss stage
-        if (!w.HeatHeldUntilMoved) _police?.Update(w, Stage);   // no police until you have moved off (World.HeatHeldUntilMoved)
+        // Until you have moved off (World.HeatHeldUntilMoved) the police only place the starting patrol cars, on the first step.
+        if (w.HeatHeldUntilMoved) _police?.SeedWhileHeld(w);
+        else _police?.Update(w, Stage);
     }
 
     /// <summary>DIAGNOSTICS ONLY: puts the director in the boss stage with this boss, so the HUD draws the boss bar. The game never calls this.</summary>
