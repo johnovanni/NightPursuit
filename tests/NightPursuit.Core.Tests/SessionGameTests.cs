@@ -216,4 +216,25 @@ public class SessionGameTests
         Assert.Equal(6, Campaign.MissionIds.Length);
         Assert.Equal("mission-01", Campaign.MissionIds[0]);
     }
+
+    [Fact]
+    public void Practice_restart_works_from_the_end_stages_only()
+    {
+        var p = NewGame(practice: true);
+        p.StartMission();
+        Complete(p);
+        Assert.Equal(GameStage.MissionComplete, p.Stage);
+        var w = p.Run!.World;
+        p.RestartMission();
+        Assert.Equal(GameStage.Playing, p.Stage);
+        Assert.NotSame(w, p.Run.World);
+
+        var g = NewGame();
+        g.StartMission();
+        Complete(g);
+        var cw = g.Run!.World;
+        g.RestartMission();
+        Assert.Equal(GameStage.MissionComplete, g.Stage);
+        Assert.Same(cw, g.Run.World);
+    }
 }

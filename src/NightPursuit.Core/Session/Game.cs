@@ -75,13 +75,16 @@ public sealed class Game
         Run.Handle(a);
     }
 
-    /// <summary>Practice only: start the mission over (from a pause or an end state).</summary>
+    /// <summary>Practice only: start the mission over (from a pause, or from the mission-complete or game-over screen).</summary>
     public void RestartMission()
     {
-        if (!Practice || Stage != GameStage.Playing || Run is null || !Run.CanRestart) return;
+        if (!Practice || Run is null || !Run.CanRestart) return;
+        if (Stage is not (GameStage.Playing or GameStage.MissionComplete or GameStage.GameOver)) return;
         Run.Handle(new GameAction(ActionKind.Restart));
+        Stage = GameStage.Playing;
+        QuitEarly = false;
         // The rebuild restores the scheme the run started with; the player may have changed it since.
-                Run.World.Handle(new GameAction(ActionKind.SelectScheme, _settings.SchemeIndex));
+        Run.World.Handle(new GameAction(ActionKind.SelectScheme, _settings.SchemeIndex));
     }
 
     public void Continue()
