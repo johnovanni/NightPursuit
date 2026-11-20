@@ -51,6 +51,10 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     const double LaneHalfWidth = 2.5;
     /// <summary>A formed SUV that has been in the open lane this long (pushed there, or stuck) breaks the pair up, seconds.</summary>
     const double InGapLimit = 2;
+    /// <summary>A formed SUV within 60 m of you that has been off its lane (more than 1 m from its centre) this long breaks the pair up, seconds.</summary>
+    const double OffSlotLimit = 3, OffSlotBy = 1;
+    /// <summary>A newly formed pair has this long to move into its lanes before being off them counts, seconds.</summary>
+    const double SettleSeconds = 4;
     /// <summary>
     /// The second SUV of a pair starts this far behind the first, in the same lane: beyond the 25 m a car keeps clear of
     /// a car ahead at the same speed, so it does not swing out to pass its partner, metres.
@@ -63,7 +67,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     /// on the way), and no roadblock is parked while a rolling one is on the road: one roadblock at a time, metres.
     /// </summary>
     const double RoadblockClearBehind = 300;
-    /// <summary>After a pair breaks, no new one is sent for this long, seconds; and never more than this many SUVs on the road.</summary>
+    /// <summary>After a pair breaks, no new one is sent for this long, seconds; and never more than this many SUVs on the road (backed-off ones on patrol do not count).</summary>
     const double PairRetry = 20;
     const int MaxSuvs = 2;
 
@@ -276,7 +280,8 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     void SendPair(World w, bool all)
     {
         if (w.RollingRoadblocks.Count > 0 || (!all && w.Time < _nextPair) || ParkedRoadblockNear(w)) return;
-        if (w.Agents.Count(a => a.Kind == AgentKind.ArmoredSuv && a.State != VehicleState.Wrecked) + 2 > MaxSuvs) return;
+        int suvs = w.Agents.Count(a => a.Kind == AgentKind.ArmoredSuv && a.State != VehicleState.Wrecked && !ReferenceEquals(a.Driver, PatrolDriver.Instance));
+        if (suvs + 2 > MaxSuvs) return;
         _nextPair = w.Time + SpawnInterval;
         if (!MakeRoom(w, 2, RankOfSuv)) return;
         var p = w.Player;
@@ -374,7 +379,8 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     /// <summary>
     /// Forms each pair once both SUVs are at least 60 m ahead of you: the open lane is locked to the lane farthest from
     /// yours, or, when you are in the middle, the random outer lane drawn when the pair was sent (F3). A formed pair with an
-    /// SUV in its open lane for 2 s (pushed there, or stuck) is broken up: both SUVs chase as Trail.
+    /// SUV in its open lane for 2 s (pushed there, or stuck), or with an SUV near you off its lane for 3 s, is broken up:
+    /// both SUVs chase as Trail.
     /// </summary>
     static void FormRollingRoadblocks(World w)
     {
@@ -387,8 +393,17 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
             if (!rb.Formed) continue;
             double gap = Track.LaneCentres[rb.OpenLane];
             rb.InGapSeconds = rb.Cars.Any(c => PoliceLanes.Covers(c, gap)) ? rb.InGapSeconds + World.Step : 0;
-            if (rb.InGapSeconds < InGapLimit - 1e-9) continue;
-            w.RollingRoadblockList.RemoveAt(i);   // it can no longer hold the gap open: both SUVs chase as Trail
+            bool offSlot = false;
+            for (int slot = 0; slot < rb.Cars.Count; slot++)
+            {
+                var car = rb.Cars[slot];
+                offSlot |= Math.Abs(car.Distance - p.Distance) <= PoliceLanes.GapKeptClearWithin
+                           && Math.Abs(car.Lateral - Track.LaneCentres[rb.LaneOf(slot)]) > OffSlotBy;
+            }
+            rb.FormedSeconds += World.Step;
+            rb.OffSlotSeconds = offSlot && rb.FormedSeconds >= SettleSeconds ? rb.OffSlotSeconds + World.Step : 0;
+            if (rb.InGapSeconds < InGapLimit - 1e-9 && rb.OffSlotSeconds < OffSlotLimit - 1e-9) continue;
+            w.RollingRoadblockList.RemoveAt(i);   // it can no longer hold its lanes: both SUVs chase as Trail
             foreach (var car in rb.Cars) MakeTrail(car);
         }
     }

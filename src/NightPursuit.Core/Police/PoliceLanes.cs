@@ -177,15 +177,80 @@ public static class PoliceLanes
 
     /// <summary>
     /// The World's pass over a police car's final intent, every step: a refused line becomes <see cref="AllowedLateral"/>,
-    /// the speed goes through <see cref="SpeedCap"/> (counting the lanes on its way to that line), and no target speed is
-    /// below 0 (F4). Below Pursuit a patrol car's intent is left exactly as its driver made it.
+    /// the line is kept out of a formed rolling roadblock's open lane (<see cref="KeepGapClear"/>), the speed goes through
+    /// <see cref="SpeedCap"/> (counting the lanes on its way to that line), and no target speed is below 0 (F4). Below
+    /// Pursuit a patrol car's intent is left exactly as its driver made it.
     /// </summary>
     public static DriveIntent Restrain(WorldView view, AgentCar self, DriveIntent intent)
     {
         if (IsNeutral(view, self)) return intent;
         double lateral = MayEnter(view, self, intent.TargetLateral) ? intent.TargetLateral : AllowedLateral(view, self);
+        lateral = KeepGapClear(view, self, lateral, out bool stuck);
         double speed = Math.Max(0, SpeedCap(view, self, intent.TargetSpeed, lateral));
+        if (stuck) speed = GapFallBack(view.Player, self, speed);
         return intent with { TargetSpeed = speed, TargetLateral = lateral };
+    }
+
+    /// <summary>Police within this distance of you (along the road) keep a formed rolling roadblock's open lane clear, metres.</summary>
+    public const double GapKeptClearWithin = 60;
+    /// <summary>Below this speed (m/s) a car steering out of the gap may take a lane whose car ahead is at least <see cref="SlowRoom"/> m away.</summary>
+    const double SlowBelow = 5, SlowRoom = 10;
+
+    /// <summary>
+    /// The one gap rule, applied last to every police car that is not one of the pair (so it also covers the World's
+    /// keep-clear lane changes): while a formed pair's open lane is kept clear (<see cref="RollingRoadblock.GapToKeepClear"/>)
+    /// and the car is within 60 m of you, it never steers to a line that covers that lane. Asked to, or already in it,
+    /// it steers to the nearest lane that does not cover it and that the three-lane rule allows, with no wreck or roadblock
+    /// ahead and room among the cars there; with no such lane it keeps its own line, and if it is in the gap it is
+    /// <paramref name="stuck"/>: it falls back out of the 60 m (<see cref="GapFallBack"/>).
+    /// </summary>
+    static double KeepGapClear(WorldView view, AgentCar self, double lateral, out bool stuck)
+    {
+        stuck = false;
+        if (self.Driver is RollingRoadblockDriver) return lateral;
+        var p = view.Player;
+        if (Math.Abs(self.Distance - p.Distance) > GapKeptClearWithin) return lateral;
+        int gap = RollingRoadblock.GapToKeepClear(view.RollingRoadblocks, p.Distance);
+        if (gap < 0) return lateral;
+        double centre = Track.LaneCentres[gap], width = self.Stats.Width;
+        if (!Covers(lateral, width, centre) && !Covers(self.Lateral, width, centre)) return lateral;
+        double? best = null;
+        foreach (double lane in Track.LaneCentres)
+            if (!Covers(lane, width, centre) && MayEnter(view, self, lane) && IsClear(view, self, lane) && RoomToSteerOut(view, self, lane)
+                && (best is null || Math.Abs(lane - self.Lateral) < Math.Abs(best.Value - self.Lateral)))
+                best = lane;
+        if (best is double b) return b;
+        stuck = Covers(self.Lateral, width, centre);
+        return Covers(lateral, width, centre) ? self.Lateral : lateral;
+    }
+
+    /// <summary>
+    /// A car stuck in the gap within 60 m of you leaves by speed: behind you at most your speed - 4 (never below 0), ahead
+    /// of you at least your speed + 4, as a car held back by the three-lane rule does.
+    /// </summary>
+    static double GapFallBack(PlayerCar p, AgentCar self, double speed) =>
+        self.Distance < p.Distance ? Math.Min(speed, Math.Max(0, p.Speed - HoldSlower)) : Math.Max(speed, p.Speed + HoldSlower);
+
+    /// <summary>
+    /// Room to steer into <paramref name="lane"/>: the keep-clear span is free (<see cref="DriverHelpers.LaneClearOfCars"/>),
+    /// or, both crawling (below 5 m/s), every car in that lane near it is crawling too and at least 10 m ahead of it,
+    /// bumper to bumper (a crawling car cannot run into one 10 m ahead).
+    /// </summary>
+    static bool RoomToSteerOut(WorldView view, AgentCar self, double lane)
+    {
+        if (DriverHelpers.LaneClearOfCars(self, view, lane)) return true;
+        if (self.Speed >= SlowBelow) return false;
+        bool Fine(Vehicle other)
+        {
+            if (Math.Abs(other.Lateral - lane) >= (self.Stats.Width + other.Stats.Width) / 2 + 0.3) return true;
+            double d = other.Distance - self.Distance, half = (self.Stats.Length + other.Stats.Length) / 2;
+            if (d <= -(10 + half) || d >= 25 + half) return true;
+            return other.Speed < SlowBelow && d - half >= SlowRoom;
+        }
+        if (!Fine(view.Player)) return false;
+        foreach (var other in view.Agents)
+            if (!ReferenceEquals(other, self) && other.IsOnRoadDriving && !Fine(other)) return false;
+        return true;
     }
 
     static double Reach(double width) => HalfLane + width / 2;

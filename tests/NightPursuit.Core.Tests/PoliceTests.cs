@@ -753,6 +753,10 @@ public class PoliceTests
                     var events = w.Events.Skip(before).ToList();
                     bool hit = events.Any(e => e is PlayerDamaged { Reason: "SIDESWIPED" })
                                && w.Agents.Any(a => a.Kind == AgentKind.Interceptor && Math.Abs(a.ContactCooldown - 0.25) < 1e-9);
+                    bool interceptorTouched = w.Agents.Any(a => a.Kind == AgentKind.Interceptor && Math.Abs(a.ContactCooldown - 0.25) < 1e-9);
+                    // Fix round 2: an interceptor comes alongside to ram, never into the back of you.
+                    Assert.False(interceptorTouched && events.Any(e => e is PlayerDamaged { Reason: "HIT FROM BEHIND" }),
+                        $"lane {lane} seed {seed}: an interceptor hit you from behind at {w.Time:0.00} s");
                     if (!hit) continue;
                     Assert.DoesNotContain(events, e => e is HeatChanged { Amount: > 0 });   // police ramming you gives no heat
                     if (formedAt >= 0) rams++;
@@ -766,13 +770,24 @@ public class PoliceTests
     }
 
     /// <summary>TrafficRng seeds 1-6 for each of your three lanes, with the careful and the plain held player.</summary>
-    public static TheoryData<int, double, bool> SeedsLanesAndDrivers()
+    /// <summary>How the test player drives in its lane.</summary>
+    public enum TestDriving
     {
-        var data = new TheoryData<int, double, bool>();
+        /// <summary>Up to 45 m/s, never driving into a car ahead (<see cref="HoldCareful"/>).</summary>
+        Careful,
+        /// <summary>Held at 45 m/s whatever is ahead (<see cref="Hold"/>): it rams the pair.</summary>
+        Plain,
+        /// <summary>Careful, on Task 8's braking cycle: up to 60 m/s at 6 m/s², then hard down to 8 m/s at 15 m/s², and again.</summary>
+        Braking,
+    }
+
+    public static TheoryData<int, double, TestDriving> SeedsLanesAndDrivers()
+    {
+        var data = new TheoryData<int, double, TestDriving>();
         for (int seed = 1; seed <= 6; seed++)
             foreach (double lane in Track.LaneCentres)
-                foreach (bool careful in new[] { true, false })
-                    data.Add(seed, lane, careful);
+                foreach (var driving in Enum.GetValues<TestDriving>())
+                    data.Add(seed, lane, driving);
         return data;
     }
 
@@ -805,27 +820,65 @@ public class PoliceTests
 
     [Theory]
     [MemberData(nameof(SeedsLanesAndDrivers))]
-    public void Rolling_roadblock_always_leaves_a_lane_open(int seed, double lane, bool careful)
+    public void Rolling_roadblock_always_leaves_a_lane_open(int seed, double lane, TestDriving driving) =>
+        LaneOpenRun(seed, lane, driving);
+
+    [Fact]
+    public void A_side_car_makes_room_for_the_rolling_roadblock()
     {
-        // Presence 1 at heat 95, you held in your lane at up to 45 m/s (careful: never driving into a car ahead), up to
-        // 120 s. Once formed: the gap is the lane the rule says and never changes; the SUVs hold the two other lanes side by
-        // side; no police car covers the gap within 60 m of you (fix round 1, Critical: SUVs used to stay in their own gap),
-        // except just after a collision (under 1 s in all for the careful player, under 5 s for the plain one, who rams the
-        // pair); and Side acts as Trail while the pair is within 80 m.
+        // The combined check for the theory above: in at least one of its runs a Side car really was near the pair, so its
+        // stand-down to Trail was tested (LaneOpenRun asserts it every step one is).
+        bool seen = false;
+        for (int seed = 1; seed <= 6 && !seen; seed++)
+            foreach (double lane in Track.LaneCentres)
+                if (!seen) seen = LaneOpenRun(seed, lane, TestDriving.Careful);
+        Assert.True(seen, "no run had a Side car near the pair");
+    }
+
+    /// <summary>
+    /// Presence 1 at heat 95, you held in your lane (<paramref name="driving"/>), up to 120 s. Once formed: the gap is the
+    /// lane the rule says and never changes; the SUVs hold the two other lanes side by side; no police car covers the gap
+    /// within 60 m of you (fix round 1, Critical: SUVs used to stay in their own gap; fix round 2: keep-clear lane changes
+    /// and spun interceptors), except just after a collision (under 2 s in all, or 5 s for the plain player, who rams the
+    /// pair); an SUV near you is off its lane for at most 3 s; and Side acts as Trail while the pair is within 80 m.
+    /// Returns whether a Side car was near the pair.
+    /// </summary>
+    static bool LaneOpenRun(int seed, double lane, TestDriving driving)
+    {
         var w = PursuitWorld(95);
         w.TrafficRng = new SeededRng(seed);
         w.Player.Lateral = lane;
+        if (driving == TestDriving.Braking) w.Player.Speed = 55;
         var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
         var shoves = new Shoves(w);
         RollingRoadblock? rb = null;
         int open = -1, excused = 0;
-        double formedAt = 0;
-        bool pairNear = false;
+        double formedAt = 0, phase = 0, offSlotFor = 0;
+        bool pairNear = false, sideNear = false, braking = false;
         for (int i = 0; i < 120 * 120; i++)
         {
             if (i % 240 == 0) w.Heat.Set(95);
             int before = w.Events.Count;
-            if (careful) HoldCareful(w, 45, lane, dispatcher); else Hold(w, 45, lane, dispatcher);
+            switch (driving)
+            {
+                case TestDriving.Plain: Hold(w, 45, lane, dispatcher); break;
+                case TestDriving.Careful: HoldCareful(w, 45, lane, dispatcher); break;
+                default:
+                    double v = w.Player.Speed;
+                    phase += Step;
+                    if (braking)
+                    {
+                        v = Math.Max(8, v - 15 * Step);
+                        if (v <= 8) { braking = false; phase = 0; }
+                    }
+                    else
+                    {
+                        v = Math.Min(60, v + 6 * Step);
+                        if (v >= 60 || phase >= 8) braking = true;
+                    }
+                    HoldCareful(w, v, lane, dispatcher);
+                    break;
+            }
             w.Hazards.RemoveAll(h => h is Roadblock);   // a player held in its lane cannot take a parked roadblock's gap
             shoves.Step(before);
             var p = w.Player;
@@ -839,7 +892,7 @@ public class PoliceTests
                 Assert.Equal(ExpectedOpen(lane, rb), open);
                 Assert.All(rb.Cars, c => Assert.True(c.Distance - p.Distance >= 60, "formed before both were 60 m ahead"));
             }
-            if (!w.RollingRoadblocks.Contains(rb)) break;              // rammed apart (the plain player); the check ends here
+            if (!w.RollingRoadblocks.Contains(rb)) break;              // broken up (rammed apart, or off its lanes); the check ends here
             Assert.Equal(open, rb.OpenLane);                           // locked
             double gap = Track.LaneCentres[open];
             foreach (var c in Police(w).Where(c => c.State == VehicleState.Driving && Near(w, c, 60) && PoliceLanes.Covers(c, gap)))
@@ -849,22 +902,30 @@ public class PoliceTests
             }
             if (rb.Cars.Any(c => Near(w, c, 80)))
                 foreach (var c in Police(w).Where(c => ChaseDriver.RoleOf(c) == ChaseRole.Side && c.Blinded <= 0))
+                {
+                    sideNear |= Near(w, c, 80);
                     Assert.Equal(ChaseRole.Trail, ((ChaseDriver.State)c.DriverState!).ActingAs);
+                }
             if (w.Time - formedAt < 4) continue;                       // still moving into their lanes
-            if (rb.Cars.Any(shoves.Excused)) continue;
+            // Fix round 2: an SUV near you may be off its lane (keep-clear round a car stopped ahead, or rammed) only
+            // briefly: after 3 s the pair is broken up.
+            bool offSlot = rb.Cars.Select((c, k) => Near(w, c, 60) && Math.Abs(c.Lateral - Track.LaneCentres[rb.LaneOf(k)]) > 1).Any(x => x);
+            offSlotFor = offSlot ? offSlotFor + Step : 0;
+            Assert.True(offSlotFor <= 3 + 2 * Step, $"an SUV off its lane near you for {offSlotFor:0.00} s at {w.Time:0.00} s");
+            if (offSlot || rb.Cars.Any(shoves.Excused)) continue;
             var lanes = rb.Cars.Select(c => DriverHelpers.NearestLane(c.Lateral)).ToList();
-            // Side by side in adjacent lanes. (A plain player rams them, and an SUV may then change lane round a slower
-            // car ahead of it, into its partner's lane; never into the gap, which is checked above for every car.)
-            if (careful) Assert.Equal(5, Math.Abs(lanes[0] - lanes[1]), 9);
+            Assert.Equal(5, Math.Abs(lanes[0] - lanes[1]), 9);          // side by side in adjacent lanes
             Assert.DoesNotContain(gap, lanes);
             Assert.All(rb.Cars, c => Assert.False(PoliceLanes.Covers(c, gap)));
             pairNear |= rb.Cars.All(c => c.Distance - p.Distance is > 0 and <= 45);
         }
         Assert.NotNull(rb);
-        // A plain player rams the pair again and again, and the shoves can put an SUV in the gap (it is broken up after 2 s).
-        double allowed = careful ? 1 : 5;
+        // A plain player rams the pair again and again, and the shoves can put an SUV in the gap (it is broken up after 2 s);
+        // braking hard, a car spun into the gap takes about a second to steer out.
+        double allowed = driving == TestDriving.Plain ? 5 : 2;
         Assert.True(excused * Step < allowed, $"police were in the gap after collisions for {excused * Step:0.00} s");
         Assert.True(pairNear, "the formed pair never came within 45 m ahead of you, so the test proves nothing");
+        return sideNear;
     }
 
     /// <summary>

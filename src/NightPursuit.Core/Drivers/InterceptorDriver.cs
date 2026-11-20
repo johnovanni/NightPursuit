@@ -15,8 +15,10 @@ namespace NightPursuit.Core.Drivers;
 /// <item>While a rolling roadblock is still forming it never rams and holds off at least 80 m behind you in your lane, so
 /// the SUVs have room to pass you and take their lanes (the SUVs come first, call 14).</item>
 /// <item>Dropping back it never steers into that open lane either.</item>
-/// <item>Except while it rams you, in your line behind you it closes only to 80 m and then waits at your speed - 3, so it
-/// never runs into the back of you.</item>
+/// <item>In your line behind you it closes only to 80 m and then waits at your speed - 3; attacking, it may come up
+/// alongside, but while it is still in your line behind you it never closes faster than it can stop 1 m short of your
+/// rear, even if you brake as hard as you can, so it never runs into the back of you.</item>
+/// <item>An interceptor that finds itself in the gap (spun there, say) ends its attack.</item>
 /// </list>
 /// Its hits on you are the usual car-to-car contacts, and its ramming never costs you heat (a side contact is your fault
 /// only when your own steering moved you into it). No target speed is below 0 (F4).
@@ -32,6 +34,10 @@ public sealed class InterceptorDriver : IDriver
     const double HoldOffBrake = 5, HoldOffDropBack = 6;
     /// <summary>Room kept beyond the two half widths while it is in your line, metres; and how much slower than you it waits there, m/s.</summary>
     const double KeepOffMargin = 0.3, YieldSlower = 3;
+    /// <summary>Attacking from behind in your line, it plans to stop this far short of your rear, metres.</summary>
+    const double RearMargin = 1;
+    /// <summary>The braking it plans with behind you, and the hardest it allows for you, m/s².</summary>
+    const double RearBrake = 8, PlayerBrake = 16;
     /// <summary>A car on the attack line counts as in the way out to this far past you, metres.</summary>
     const double InTheWayPast = 5;
 
@@ -43,7 +49,7 @@ public sealed class InterceptorDriver : IDriver
         if (self.DriverState is PursuerDriver.State s)
         {
             // It never rams while the SUVs pass, nor from a line over the gap the roadblock leaves you.
-            if (s.Phase == PursuerPhase.Attack && (holdOff || CoversGap(self, AttackLine(p, self.Side), gap)))
+            if (s.Phase == PursuerPhase.Attack && (holdOff || CoversGap(self, AttackLine(p, self.Side), gap) || CoversGap(self, self.Lateral, gap)))
                 s.Phase = PursuerPhase.Retreat;
             if (s.Phase == PursuerPhase.Approach && !holdOff && !PickSide(self, view, gap)) holdOff = true;
         }
@@ -58,11 +64,21 @@ public sealed class InterceptorDriver : IDriver
             speed = Math.Min(speed, room > 0 ? p.Speed + Math.Sqrt(2 * HoldOffBrake * room) : p.Speed - HoldOffDropBack);
         }
         if (!PoliceLanes.MayEnter(view, self, lateral)) lateral = PoliceLanes.AllowedLateral(view, self);
-        // Behind you in your line (it could not get out of it): it closes only to 80 m, then waits. Not while it rams you.
+        // Behind you in your line: outside an attack it closes only to 80 m and then waits; attacking, it may come up
+        // alongside you, but while it is in your line it never closes faster than it can still stop 1 m short of you.
         double keepOff = (self.Stats.Width + p.Stats.Width) / 2 + KeepOffMargin;
         double behind = p.Distance - p.Stats.Length / 2 - (self.Distance + self.Stats.Length / 2);
         bool attacking = self.DriverState is PursuerDriver.State { Phase: PursuerPhase.Attack };
-        if (!attacking && Math.Abs(self.Lateral - p.Lateral) < keepOff && Math.Abs(lateral - p.Lateral) < keepOff && behind >= 0)
+        bool inLine = Math.Abs(self.Lateral - p.Lateral) < keepOff;
+        if (behind >= 0 && inLine && attacking)
+        {
+            // Close no faster than it could stop 1 m short of your rear, at its own pace and if you braked as hard as you
+            // can (you brake at about 16 m/s², it plans 8): a car you brake in front of never runs into you.
+            double room = Math.Max(0, behind - RearMargin);
+            speed = Math.Min(speed, Math.Min(p.Speed + Math.Sqrt(2 * HoldOffBrake * room),
+                Math.Sqrt(2 * RearBrake * room + RearBrake / PlayerBrake * p.Speed * p.Speed)));
+        }
+        else if (behind >= 0 && inLine && Math.Abs(lateral - p.Lateral) < keepOff)
             speed = Math.Min(speed, behind < HoldOffBehind
                 ? p.Speed - YieldSlower
                 : p.Speed + Math.Sqrt(2 * HoldOffBrake * (behind - HoldOffBehind)));
@@ -84,8 +100,8 @@ public sealed class InterceptorDriver : IDriver
         gap >= 0 && PoliceLanes.Covers(line, self.Stats.Width, Track.LaneCentres[gap]);
 
     /// <summary>
-    /// Chooses the side to come up on: one whose attack line the three-lane rule allows and that does not cover
-    /// <paramref name="gap"/>; of those, its own side unless a car is in the way on that line and not on the other.
+    /// Chooses the side to come up on: one whose attack line is clear of your line (not squeezed by the road edge), that
+    /// the three-lane rule allows and that does not cover <paramref name="gap"/>; of those, its own side unless a car is in the way on that line and not on the other.
     /// Returns false (keeping its side) when neither side may be used.
     /// </summary>
     static bool PickSide(AgentCar self, WorldView view, int gap)
@@ -93,8 +109,10 @@ public sealed class InterceptorDriver : IDriver
         var p = view.Player;
         bool Usable(int side)
         {
+            // Not a side where the road edge squeezes the attack line into your line (it would come up into the back of you).
             double line = AttackLine(p, side);
-            return PoliceLanes.MayEnter(view, self, line) && !CoversGap(self, line, gap);
+            return Math.Abs(line - p.Lateral) >= (self.Stats.Width + p.Stats.Width) / 2 + KeepOffMargin
+                   && PoliceLanes.MayEnter(view, self, line) && !CoversGap(self, line, gap);
         }
         bool own = Usable(self.Side), other = Usable(-self.Side);
         if (!own && !other) return false;

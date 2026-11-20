@@ -25,6 +25,10 @@ public sealed class RollingRoadblock(AgentCar first, AgentCar second, int planne
     public int PlannedOpen { get; } = plannedOpen;
     /// <summary>How long (seconds) an SUV of the formed pair has been in its open lane; the dispatcher keeps it.</summary>
     internal double InGapSeconds { get; set; }
+    /// <summary>How long (seconds) an SUV of the formed pair near you has been off its lane; the dispatcher keeps it.</summary>
+    internal double OffSlotSeconds { get; set; }
+    /// <summary>How long (seconds) the pair has been formed; the dispatcher keeps it.</summary>
+    internal double FormedSeconds { get; set; }
 
     /// <summary>Police keep the open lane of a formed pair clear while one of its SUVs is this close to you (along the road), metres.</summary>
     public const double GapReach = 80;
