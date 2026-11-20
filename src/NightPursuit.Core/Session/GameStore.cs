@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Text.Json;
 
 namespace NightPursuit.Core.Session;
@@ -62,7 +63,17 @@ public sealed class FileGameStore : IGameStore
 
     static string Reason(Exception e)
     {
-        var m = e.Message ?? "";
+        switch (e)
+        {
+            case UnauthorizedAccessException: return "ACCESS DENIED";
+            case JsonException: return "NOT VALID JSON";
+            case DirectoryNotFoundException: return "FOLDER NOT WRITABLE";
+            case IOException io when (io.HResult & 0xFFFF) is 32 or 33: return "FILE IN USE";   // sharing / lock violation
+        }
+        var m = (e.Message ?? "").Replace("\r", " ").Replace("\n", " ");
+        // Drop any path (a drive path or a rooted one), which only crowds out the cause.
+        m = Regex.Replace(m, @"'?[A-Za-z]:[/\x5C][^'""]*'?|'?[/\x5C][^\s'""]+'?", "");
+        m = Regex.Replace(m, @"\s+", " ").Trim();
         return m.Length > 80 ? m[..80] : m;
     }
 

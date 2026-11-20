@@ -274,6 +274,48 @@ public class ScreenFlowTests
     }
 
     [Fact]
+    public void Quit_confirm_says_whether_the_score_counts()
+    {
+        var c = new Rig();
+        c.ToPause();
+        c.Select("quit"); c.Key(MenuInput.Confirm);
+        Assert.Equal("YOUR SCORE STILL COUNTS FOR THE HIGH SCORES.", c.Flow.Menu!.Lines[0]);
+
+        var p = new Rig();
+        p.ToPlay(practice: true);
+        p.PauseNow();
+        p.Select("quit"); p.Key(MenuInput.Confirm);
+        Assert.Equal(Screen.QuitConfirm, p.Flow.Current);
+        Assert.Equal("PRACTICE SCORES ARE NOT RECORDED.", p.Flow.Menu!.Lines[0]);
+    }
+
+    [Fact]
+    public void Quitting_a_practice_from_its_briefing_leaves_no_restart()
+    {
+        var r = new Rig();
+        r.Flow.StartGame(practice: true);
+        r.Key(MenuInput.Back);
+        Assert.Equal(Screen.QuitConfirm, r.Flow.Current);
+        r.Key(MenuInput.Down); r.Key(MenuInput.Confirm);
+        Assert.Equal(Screen.GameOver, r.Flow.Current);
+        Assert.Null(r.G.Run);
+        r.Letter('R');
+        Assert.Equal(Screen.GameOver, r.Flow.Current);
+        Assert.False(r.G.RestartMission());
+    }
+
+    [Fact]
+    public void A_repeated_notice_is_not_added_twice()
+    {
+        var r = new Rig();
+        r.Flow.ShowNotice("COULD NOT SAVE SETTINGS: X");
+        r.Flow.ShowNotice("COULD NOT SAVE SETTINGS: X");
+        Assert.Equal("COULD NOT SAVE SETTINGS: X", r.Flow.Notice);
+        r.Flow.ShowNotice("OTHER");
+        Assert.Equal("COULD NOT SAVE SETTINGS: X / OTHER", r.Flow.Notice);
+    }
+
+    [Fact]
     public void R_restarts_only_in_practice()
     {
         var r = new Rig();

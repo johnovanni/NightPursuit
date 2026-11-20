@@ -172,7 +172,7 @@ public sealed class MissionRun
         World.Tracers.RemoveAll(t => t.Hostile);   // nor an enemy bullet, which could hit the new car
         // The boss is never cleared (Review Focus 1): it goes back 300 m ahead and eases in again.
         World.Agents.RemoveAll(a => a is not BossCar && InZone(a.Distance));
-        double bossReturn = back +MissionDirector.BossAheadDistance;
+        double bossReturn = back + MissionDirector.BossAheadDistance;
         bool bossReturned = false;
         foreach (var a in World.Agents)
             if (a is BossCar boss && boss.State != VehicleState.Wrecked)

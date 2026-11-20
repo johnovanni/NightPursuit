@@ -48,6 +48,12 @@ public partial class MainWindow : Window
 
         _loop = new GameLoop(this, flow, View, Host, _input);
         Closed += (_, _) => _loop.Stop();
+        // Settings changed on the Settings screen are saved when it is left; closing the window from it must save them too.
+        Closing += (_, _) =>
+        {
+            if (flow.Current != Screen.Settings) return;
+            try { flow.SaveSettingsNow(); } catch { /* closing: nothing useful to do with a failure */ }
+        };
     }
 
     /// <summary>Stops the game loop (used when a fatal error is being shown).</summary>

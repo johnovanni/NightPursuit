@@ -52,16 +52,20 @@ public sealed class ScreenFlow
     /// <summary>Shows a notice on the current screen (null clears it). Several notices join with " / ".</summary>
     public void ShowNotice(string? notice)
     {
-        Notice = notice is null ? null : Notice is null ? notice : Notice + " / " + notice;
+        Notice = notice is null ? null : Notice is null ? notice : Joined(Notice, notice);
         _noticeShown = true;
         Version++;
     }
+
+    // Appends a notice unless it is already there, so repeated failures do not pile up.
+    static string Joined(string existing, string added) =>
+        existing.Split(" / ").Contains(added) ? existing : existing + " / " + added;
 
     // A notice raised while handling a key that changes screen: it is first shown on the next screen.
     void Post(string? problem)
     {
         if (problem is null) return;
-        Notice = Notice is null ? problem : Notice + " / " + problem;
+        Notice = Notice is null ? problem : Joined(Notice, problem);
         _noticeShown = false;
     }
 
@@ -86,7 +90,7 @@ public sealed class ScreenFlow
             Screen.Title => TitleMenu(selected),
             Screen.Pause => PauseMenu(selected),
             Screen.Settings => SettingsMenu(selected),
-            Screen.QuitConfirm => new MenuModel("QUIT THIS GAME?", new[] { "YOUR SCORE STILL COUNTS FOR THE HIGH SCORES." },
+            Screen.QuitConfirm => new MenuModel("QUIT THIS GAME?", new[] { Game is { Practice: true } ? "PRACTICE SCORES ARE NOT RECORDED." : "YOUR SCORE STILL COUNTS FOR THE HIGH SCORES." },
                 new[] { new MenuEntry("no", "NO, KEEP PLAYING"), new MenuEntry("yes", "YES, QUIT") }, selected),
             _ => null,
         };
@@ -235,7 +239,7 @@ public sealed class ScreenFlow
 
     void Restart()
     {
-        Game!.RestartMission();
+        if (!Game!.RestartMission()) return;
         _returns.Clear();
         Go(Screen.Play);
     }
@@ -286,6 +290,9 @@ public sealed class ScreenFlow
         // MissionRun.Handle passes a scheme change on only while Playing, and from Pause the run is Paused.
         Game?.Run?.World.Handle(new GameAction(ActionKind.SelectScheme, index));
     }
+
+    /// <summary>Saves the settings now (the window is closing while the Settings screen is open). Failures are ignored.</summary>
+    public void SaveSettingsNow() => _store.SaveSettings(Settings.Clone());
 
     void LeaveSettings()
     {

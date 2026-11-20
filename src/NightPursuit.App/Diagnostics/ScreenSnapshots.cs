@@ -305,11 +305,16 @@ public static class ScreenSnapshots
         grid.Children.Add(view);
         grid.Children.Add(host);
 
-        grid.Measure(new Size(width, height));
-        grid.Arrange(new Rect(0, 0, width, height));
-        grid.UpdateLayout();
-        var bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(grid);
+        RenderTargetBitmap bitmap;
+        try
+        {
+            grid.Measure(new Size(width, height));
+            grid.Arrange(new Rect(0, 0, width, height));
+            grid.UpdateLayout();
+            bitmap = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(grid);
+        }
+        finally { grid.Children.Clear(); }   // the view is reused for the next window size, so free it from this grid
         if (path is null) return;   // the stress pass only draws
 
         var encoder = new PngBitmapEncoder();

@@ -13,6 +13,7 @@ public partial class ResultScreen : UserControl
 {
     // In practice Enter goes back to the title and R starts the mission over (ScreenFlow).
     const string PracticeKeys = "ENTER  BACK TO TITLE   R  RESTART";
+    const string PracticeKeysNoRestart = "ENTER  BACK TO TITLE";
 
     /// <summary>A bonus line: the label in a fixed 22-place column, then the amount right-aligned, so the amounts line up (Consolas is monospaced).</summary>
     static string BonusLine(string label, int points) => label.PadRight(22) + ("+" + points).PadLeft(6);
@@ -36,13 +37,13 @@ public partial class ResultScreen : UserControl
                     Add(BonusLine(b.NoCarLost ? "NO CAR LOST" : "A CAR WAS LOST", b.CleanPoints), "TextBody", "TextWhite");
                 }
                 Add($"SCORE {g.Score:00000}   SPARE CARS {g.SpareCars}", "TextHeading", "TextCyan", bold: true, top: 14);
-                KeyText.Text = g.Practice ? PracticeKeys : g.MissionIndex + 1 < g.Missions.Count ? "ENTER  NEXT MISSION" : "ENTER  CONTINUE";
+                KeyText.Text = g.Practice ? PracticeKeysFor(g) : g.MissionIndex + 1 < g.Missions.Count ? "ENTER  NEXT MISSION" : "ENTER  CONTINUE";
                 break;
             case Screen.GameOver:
                 TitleText.Text = g.QuitEarly ? "GAME ENDED" : "GAME OVER";
                 Add($"MISSION REACHED {g.MissionReached} OF {g.Missions.Count}", "TextHeading", "TextWhite");
                 Add($"FINAL SCORE {g.Score:00000}", "TextHeading", "TextCyan", bold: true, top: 10);
-                KeyText.Text = g.Practice ? PracticeKeys : "ENTER  CONTINUE";
+                KeyText.Text = g.Practice ? PracticeKeysFor(g) : "ENTER  CONTINUE";
                 break;
             default:   // Finished
                 TitleText.Text = "ALL SIX MISSIONS COMPLETE";
@@ -54,6 +55,9 @@ public partial class ResultScreen : UserControl
         NoticeText.Text = flow.Notice ?? "";
         NoticeText.Visibility = flow.Notice is null ? Visibility.Collapsed : Visibility.Visible;
     }
+
+    // R restarts only when the run exists (a practice quit from its briefing has none).
+    static string PracticeKeysFor(Game g) => g.Run is null ? PracticeKeysNoRestart : PracticeKeys;
 
     void Add(string text, string size, string brush, bool bold = false, double top = 4)
     {

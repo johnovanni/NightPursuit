@@ -124,7 +124,7 @@ public sealed class GameLoop
         }
     }
 
-    static bool IsResultScreen(Screen s) => s is Screen.MissionComplete or Screen.GameOver or Screen.Finished;
+    static bool IsResultScreen(Screen s) => s is Screen.MissionComplete or Screen.GameOver or Screen.Finished or Screen.EnterInitials;
 
     static ControlFrame WithoutFire(ControlFrame f) => new()
     {

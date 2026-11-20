@@ -171,6 +171,15 @@ public class SessionGameTests
     }
 
     [Fact]
+    public void Restart_while_playing_in_practice_tells_the_player_how()
+    {
+        var g = NewGame(practice: true);
+        g.StartMission();
+        g.Handle(new GameAction(ActionKind.Restart));
+        Assert.Contains(g.Run!.World.RecentMessages.OfType<Message>(), m => m.Text == "PRESS P TO PAUSE, THEN R TO RESTART");
+    }
+
+    [Fact]
     public void Quit_ends_the_game_with_the_score_so_far()
     {
         var g = NewGame();

@@ -183,6 +183,32 @@ public sealed class GameStoreTests : IDisposable
         Assert.StartsWith("COULD NOT SAVE HIGH SCORES: ", r2.Problem);
     }
 
+    [Theory]
+    [InlineData("access", "ACCESS DENIED")]
+    [InlineData("lock", "FILE IN USE")]
+    [InlineData("folder", "FOLDER NOT WRITABLE")]
+    [InlineData("json", "NOT VALID JSON")]
+    public void A_failed_save_gives_a_short_reason(string kind, string reason)
+    {
+        Exception ex = kind switch
+        {
+            "access" => new UnauthorizedAccessException(@"Access to the path 'C:\x\settings.json.tmp' is denied."),
+            "lock" => new IOException("The process cannot access the file because it is being used by another process.", unchecked((int)0x80070020)),
+            "folder" => new DirectoryNotFoundException(@"Could not find a part of the path 'C:\x\y'."),
+            _ => new System.Text.Json.JsonException("bad"),
+        };
+        var r = new FileGameStore(_dir, (_, _) => throw ex).SaveSettings(new GameSettings());
+        Assert.Equal("COULD NOT SAVE SETTINGS: " + reason, r.Problem);
+    }
+
+    [Fact]
+    public void A_failed_save_reason_drops_the_path_and_newlines()
+    {
+        var ex = new IOException("Cannot write to 'C:/Users/someone/AppData/NightPursuit/settings.json'." + Environment.NewLine + "The disk is full.");
+        var r = new FileGameStore(_dir, (_, _) => throw ex).SaveSettings(new GameSettings());
+        Assert.Equal("COULD NOT SAVE SETTINGS: Cannot write to . The disk is full.", r.Problem);
+    }
+
     [Fact]
     public void Saving_writes_through_a_temp_file()
     {
