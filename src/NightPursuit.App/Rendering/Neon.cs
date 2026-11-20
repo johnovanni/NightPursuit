@@ -54,6 +54,12 @@ internal static class Neon
     public static readonly Brush RadarCivilian = Solid(CivilianGray);
     public static readonly NeonPen RadarPolice = Pen(White, 1, 1.5), GapPen = Pen(Green, 1, 2);
 
+    // Roadblocks and speed traps.
+    public static readonly NeonPen BarrierPen = Pen(Red, 0.9, 1.6), SignPen = Pen(Amber, 1, 2), SignCaughtPen = Pen(Red, 1, 2.4);
+    public static readonly Brush StripeRed = Solid(Red, 0.85), StripeWhite = Solid(White, 0.85);
+    public static readonly Brush SignFill = Solid(Amber, 0.1), SignCaughtFill = Solid(Red, 0.35);
+    public static readonly NeonPen RadarBarrier = Pen(Red, 1, 3.2), RadarGap = Pen(Green, 1, 2);
+
     /// <summary>Seconds each colour of a police light bar shows before the halves swap.</summary>
     public const double LightSwapSeconds = 0.2;
 

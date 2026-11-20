@@ -55,6 +55,18 @@ public sealed partial class World
     /// </summary>
     public IReadOnlyList<RollingRoadblock> RollingRoadblocks => RollingRoadblockList;
     internal List<RollingRoadblock> RollingRoadblockList { get; } = new();
+
+    /// <summary>
+    /// DIAGNOSTICS ONLY (used by <c>--scene police</c> so the App can draw a formed rolling roadblock). The game never calls
+    /// this: real play forms one only through the police dispatcher. Pairs two armored SUVs, forms the pair as if you were at
+    /// <paramref name="playerLateral"/> (so it locks its open lane) and adds it to <see cref="RollingRoadblocks"/>.
+    /// </summary>
+    public void AddFormedRollingRoadblockForDiagnostics(AgentCar a, AgentCar b, double playerLateral)
+    {
+        var rb = new RollingRoadblock(a, b, Track.LaneCentres.Length - 1);
+        rb.Form(playerLateral);
+        RollingRoadblockList.Add(rb);
+    }
     /// <summary>Reused by <see cref="Collisions"/> for its agent-vs-agent pass, so a step allocates nothing; empty between steps.</summary>
     internal List<AgentCar> AgentScratch { get; } = new();
     public Loadout Loadout { get; set; } = new();

@@ -60,6 +60,7 @@ public sealed class GameView : FrameworkElement
         SkyRenderer.Draw(dc, _projector, world.Track, Hud.ReadoutBounds(_layout));
         RoadRenderer.Draw(dc, _projector);
         HazardRenderer.DrawSlicks(dc, _projector, world);
+        RoadsideRenderer.DrawMarkings(dc, _projector, world);   // flat GAP chevrons: before the vehicles; barriers and signs are sorted into DrawAll
         ArsenalRenderer.DrawCaltrops(dc, _projector, world);
         ArsenalRenderer.DrawCrates(dc, _projector, world, _layout);
         VehicleRenderer.DrawAll(dc, _projector, world);

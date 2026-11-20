@@ -21,36 +21,31 @@ public static class VehicleRenderer
     const double BossTagDistance = 300;
 
     /// <summary>
-    /// Draws every visible enemy car and every wreck, far to near, so nearer black bodies hide farther things
-    /// (a far car must not paint over a nearer wreck).
+    /// Draws every visible enemy car, wreck, roadblock barrier and speed trap, far to near, so nearer black bodies hide farther
+    /// things (a far car must not paint over a nearer wreck or barrier). The flat road markings are painted before this call.
     /// </summary>
     public static void DrawAll(DrawingContext dc, Projector p, World w)
     {
         var items = Items;
         items.Clear();
-        foreach (var car in w.Agents) items.Add(new DrawItem(p.Ahead(car), car, null, 0));
+        foreach (var car in w.Agents) items.Add(new DrawItem(p.Ahead(car), car, null, null));
         foreach (var h in w.Hazards)
-            if (h is Wreck wreck) items.Add(new DrawItem(p.Ahead(wreck), null, wreck, 0));
-        foreach (var rb in w.RollingRoadblocks)
         {
-            if (!rb.Formed) continue;
-            double nearest = double.NaN;   // the nearer SUV that is still a car; the chevron goes with them
-            foreach (var suv in rb.Cars)
-                if (suv.State != VehicleState.Wrecked) nearest = double.IsNaN(nearest) ? p.Ahead(suv) : Math.Min(nearest, p.Ahead(suv));
-            if (!double.IsNaN(nearest)) items.Add(new DrawItem(GapChevron.PlaceAt(nearest), null, null, rb.OpenLane + 1));
+            if (h is Wreck wreck) items.Add(new DrawItem(p.Ahead(wreck), null, wreck, null));
+            else if (RoadsideRenderer.InRange(p, h, out double ahead)) items.Add(new DrawItem(ahead, null, null, h));
         }
         items.Sort(FarToNear);
         foreach (var item in items)
         {
             if (item.Car is not null) DrawRear(dc, p, item.Car, w.Time);
             else if (item.Wreck is not null) HazardRenderer.DrawWreck(dc, p, item.Wreck);
-            else GapChevron.Draw(dc, p, item.Distance, Track.LaneCentres[item.GapLane - 1]);
+            else RoadsideRenderer.Draw(dc, p, item.Roadside!, w.Time);
         }
         items.Clear();   // do not keep cars alive between frames
     }
 
-    /// <summary>One thing to draw. A gap chevron has neither car nor wreck; <c>GapLane</c> is its lane index + 1 (0 for the others).</summary>
-    readonly record struct DrawItem(double Distance, AgentCar? Car, Wreck? Wreck, int GapLane);
+    /// <summary>One thing to draw: a car, a wreck, or (neither) a roadblock or speed trap in <c>Roadside</c>.</summary>
+    readonly record struct DrawItem(double Distance, AgentCar? Car, Wreck? Wreck, Hazard? Roadside);
 
     static readonly List<DrawItem> Items = new();   // reused every frame (drawing happens on the UI thread only)
     static readonly Comparison<DrawItem> FarToNear = static (a, b) => b.Distance.CompareTo(a.Distance);
@@ -105,9 +100,10 @@ public static class VehicleRenderer
     static readonly (double X, double Y)[] BossShape = { (1, 0.224), (1, 0.62), (0.88, 0.8), (0.55, 1.02) };   // long and low
     static readonly (double X, double Y)[] BossFin = { (0.92, 0.7), (0.84, 1.5), (0.68, 1.5), (0.62, 0.95) };
 
-    // Civilians: a sedan with a trunk deck and a narrow cabin, a hatchback with one long sloping back, a tall flat van.
-    static readonly (double X, double Y)[] CivilianSedan = { (1, 0.224), (1, 0.68), (0.88, 0.72), (0.68, 1.45) };
-    static readonly (double X, double Y)[] CivilianHatch = { (1, 0.224), (1, 0.8), (0.84, 1.45) };
+    // Civilians (all 1.45 m tall): a sedan with a clear trunk shelf under a narrow cabin (roof 0.55), a hatchback whose near-full-width
+    // back slopes straight up to a wide roof (0.9), a boxy flat-roofed van.
+    static readonly (double X, double Y)[] CivilianSedan = { (1, 0.224), (1, 0.68), (0.62, 0.72), (0.55, 1.45) };
+    static readonly (double X, double Y)[] CivilianHatch = { (1, 0.224), (1, 0.8), (0.9, 1.45) };
     static readonly (double X, double Y)[] CivilianVan = { (1, 0.224), (1, 1.38), (0.96, 1.45) };
     // Police: a sedan, a low long interceptor with a wide stance, a tall boxy armored SUV with shoulders. The last point is the roof.
     static readonly (double X, double Y)[] PoliceSedan = { (1, 0.224), (1, 0.72), (0.9, 0.8), (0.72, 1.45) };
@@ -255,11 +251,14 @@ public static class VehicleRenderer
                 double bodyTop = kind switch
                 {
                     AgentKind.Pursuer => 0.62, AgentKind.Interceptor => 0.58, AgentKind.PolicePatrol or AgentKind.PoliceCruiser => 0.72,
-                    AgentKind.Civilian => car.Id % 3 == 0 ? 0.68 : 0.8, _ => 0.78,
+                    AgentKind.Civilian => car.Id % 3 == 0 ? 0.8 : 0.55, _ => 0.78,   // the sedan's glass starts above its trunk shelf, the hatch's low down its back
                 };
                 double inset = 0.22;
                 double winBottom = g.Y - bodyTop * s - 0.06 * s, winTop = g.Y - roof + 0.1 * s;
                 double wb = w / 2 * (1 - inset * 0.4) - 0.12 * s, wt = w / 2 * (1 - inset) - 0.12 * s;
+                // The glass never pokes outside the outline: the top stays under the roof, the bottom inside the body at that height.
+                wt = Math.Min(wt, shape[^1].X * w / 2 - 0.05 * s);
+                wb = Math.Min(wb, HalfWidthAt(shape, bodyTop + 0.06) * w / 2 - 0.05 * s);
                 detail.Line(new Point(g.X - wb, winBottom), new Point(g.X + wb, winBottom));
                 detail.Line(new Point(g.X + wb, winBottom), new Point(g.X + wt, winTop));
                 detail.Line(new Point(g.X + wt, winTop), new Point(g.X - wt, winTop));
@@ -388,6 +387,18 @@ public static class VehicleRenderer
     {
         if (!BodyBuffers.TryGetValue(length, out var buffer)) BodyBuffers[length] = buffer = new Point[length];
         return buffer;
+    }
+
+    /// <summary>A body outline's half-width (fraction of the car's half-width) at a height in metres.</summary>
+    static double HalfWidthAt((double X, double Y)[] shape, double y)
+    {
+        for (int i = 1; i < shape.Length; i++)
+            if (y <= shape[i].Y)
+            {
+                var (a, b) = (shape[i - 1], shape[i]);
+                return a.X + (b.X - a.X) * Math.Clamp((y - a.Y) / (b.Y - a.Y), 0, 1);
+            }
+        return shape[^1].X;
     }
 
     /// <summary>The boss body's half-width (fraction of the car's half-width) at a height in metres, read off <see cref="BossShape"/>.</summary>

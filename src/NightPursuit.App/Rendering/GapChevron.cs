@@ -6,7 +6,7 @@ namespace NightPursuit.App.Rendering;
 
 /// <summary>
 /// The green "GAP" chevron flat on the road in a roadblock's open lane, pointing the way you drive. One shared drawing
-/// for the rolling roadblock (Task 12) and the parked ones (Task 13), so the two never drift apart.
+/// for the rolling roadblock (Task 12, one chevron) and the parked ones (Task 13, three), so the two never drift apart.
 /// </summary>
 internal static class GapChevron
 {
@@ -21,8 +21,20 @@ internal static class GapChevron
     /// <summary>Distance ahead of the camera of the chevron for cars <paramref name="carsAhead"/> m ahead (nearest car's centre).</summary>
     public static double PlaceAt(double carsAhead) => carsAhead - Behind;
 
-    /// <summary>Draws the chevron with its tip <paramref name="ahead"/> m along the road, centred in the lane at <paramref name="lateral"/>.</summary>
-    public static void Draw(DrawingContext dc, Projector p, double ahead, double lateral)
+    /// <summary>Gap between the tips of a row of chevrons, metres.</summary>
+    const double Spacing = 4.5;
+
+    /// <summary>
+    /// Draws <paramref name="count"/> chevrons in a row (the first with its tip <paramref name="ahead"/> m along the road, the
+    /// others <see cref="Spacing"/> behind it), centred in the lane at <paramref name="lateral"/>. The word GAP goes above the
+    /// first one when <paramref name="label"/> is set.
+    /// </summary>
+    public static void Draw(DrawingContext dc, Projector p, double ahead, double lateral, int count = 1, bool label = true)
+    {
+        for (int i = 0; i < count; i++) DrawOne(dc, p, ahead - i * Spacing, lateral, label && i == 0);
+    }
+
+    static void DrawOne(DrawingContext dc, Projector p, double ahead, double lateral, bool label)
     {
         if (ahead < 4 || ahead > MaxDistance) return;
         // A "^" lying on the road: the tip is furthest ahead; the two arms sweep back and out, Thickness apart.
@@ -34,7 +46,7 @@ internal static class GapChevron
         var pts = new Point[outline.Length];
         for (int i = 0; i < outline.Length; i++)
             if (!p.ToScreen(outline[i].Z, lateral + outline[i].X, 0, out pts[i], out _)) return;
-        if (!p.ToScreen(ahead - Length - Thickness, lateral, 0, out var label, out double depth)) return;
+        if (!p.ToScreen(ahead, lateral, 0, out var tip, out double depth)) return;
         if (p.ClipAt(ahead) <= 0 || pts[0].Y > p.ClipAt(ahead)) return;   // hidden behind a hill
 
         var g = new StreamGeometry();
@@ -47,9 +59,12 @@ internal static class GapChevron
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, p.ClipAt(ahead))));
         dc.DrawGeometry(Fill, Neon.GapPen.Glow, g);
         dc.DrawGeometry(null, Neon.GapPen.Core, g);
-        double size = Math.Clamp(0.9 * p.Ppm(depth), 9, 26);
-        var text = new FormattedText("GAP", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, size, Neon.TextGreen, 1.0);
-        dc.DrawText(text, new Point(label.X - text.Width / 2, label.Y + 2));
+        if (label)
+        {
+            double size = Math.Clamp(0.9 * p.Ppm(depth), 9, 26);
+            var text = new FormattedText("GAP", CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Font, size, Neon.TextGreen, 1.0);
+            dc.DrawText(text, new Point(tip.X - text.Width / 2, tip.Y - text.Height - 2));   // just above the tip
+        }
         dc.Pop();
     }
 }

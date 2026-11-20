@@ -47,7 +47,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock" };
 
     static string _logPath = "diagnostics.log";
 
@@ -130,7 +130,7 @@ public static class DiagnosticsRunner
             view.Effects.Absorb(run.World);
             view.Effects.Update(Dt);
         }
-        if (scene == "traffic") AdvanceToLightPhase(run, view, 0);   // the two scenes show opposite light-bar phases
+        if (scene is "traffic" or "roadblock") AdvanceToLightPhase(run, view, 0);   // the traffic and police scenes show opposite light-bar phases
         else if (scene == "police") AdvanceToLightPhase(run, view, 1);
         if (scene == "close-cars") PlaceCloseCars(run.World, view.Effects);
         else if (scene == "offroad") PlaceOffRoad(run);
@@ -146,6 +146,7 @@ public static class DiagnosticsRunner
         else if (scene == "boss-lock") { PlaceOnOpenRoad(run.World); PlaceBossLock(run, view.Effects, mission); }
         else if (scene == "traffic") { PlaceOnOpenRoad(run.World); PlaceTraffic(run.World, view.Effects); }
         else if (scene == "police") { PlaceOnOpenRoad(run.World); PlacePolice(run.World, view.Effects); }
+        else if (scene == "roadblock") { PlaceOnOpenRoad(run.World); PlaceRoadblock(run.World, view.Effects); }
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
 
         view.Measure(new Size(width, height));
@@ -730,8 +731,23 @@ public static class DiagnosticsRunner
     }
 
     /// <summary>
-    /// Heat 80: a cruiser in front and a patrol car alongside on the left (the box-in), an interceptor alongside on the right,
-    /// the armored SUV pair 48 m ahead (outer lanes), a cruiser and a patrol car behind for the mirror, and one civilian for contrast.
+    /// A roadblock 180 m ahead with its gap on the right, a speed trap 120 m ahead on the right edge (amber sign, 70), and one on
+    /// the left edge 60 m ahead that has already caught you (red sign, 60), so both sign colours and both radar marks show.
+    /// </summary>
+    static void PlaceRoadblock(World w, EffectList effects)
+    {
+        var p = w.Player;
+        ClearForScene(w, effects);
+        w.Hazards.Add(Roadblock.Place(p.Distance + 180, gapLane: 2));
+        w.Hazards.Add(new SpeedTrap { Distance = p.Distance + 120, Lateral = SpeedTrap.EdgeLateral, LimitMph = 70 });
+        w.Hazards.Add(new SpeedTrap { Distance = p.Distance + 60, Lateral = -SpeedTrap.EdgeLateral, LimitMph = 60, Triggered = true, Caught = true });
+    }
+
+    /// <summary>
+    /// Heat 80: a patrol car ahead on the left (16 m, clear of the weapon panel) and an interceptor on the right (13 m), a formed
+    /// rolling roadblock (two armored SUVs 45 m ahead in the middle and right lanes, the left lane open: chevron and radar mark;
+    /// the middle lane is kept free of nearer police so neither SUV is hidden), a cruiser and a patrol car behind for the mirror,
+    /// and one civilian behind (mirror) for contrast.
     /// </summary>
     static void PlacePolice(World w, EffectList effects)
     {
@@ -739,14 +755,16 @@ public static class DiagnosticsRunner
         ClearForScene(w, effects);
         w.SetHeat(80, "scene");
         void Add(AgentKind kind, double ahead, double lane) => w.Agents.Add(AgentCar.Create(w.NextId(), kind, p.Distance + ahead, lane, p.Speed));
-        Add(AgentKind.PoliceCruiser, 24, 0);
-        Add(AgentKind.PolicePatrol, 13, -5);
-        Add(AgentKind.Interceptor, 16, 5);
-        Add(AgentKind.ArmoredSuv, 48, -5);
-        Add(AgentKind.ArmoredSuv, 48, 5);
+        Add(AgentKind.PolicePatrol, 16, -5);
+        Add(AgentKind.Interceptor, 13, 5);
+        var middle = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, p.Distance + 45, 0, p.Speed);
+        var right = AgentCar.Create(w.NextId(), AgentKind.ArmoredSuv, p.Distance + 45, 5, p.Speed);
+        w.Agents.Add(middle);
+        w.Agents.Add(right);
+        w.AddFormedRollingRoadblockForDiagnostics(middle, right, 5);   // you in the right lane: the left lane is the one left open
         Add(AgentKind.PoliceCruiser, -20, 0);
         Add(AgentKind.PolicePatrol, -45, 5);
-        Add(AgentKind.Civilian, 70, 5);
+        Add(AgentKind.Civilian, -70, -5);
     }
 
     static void ClearForScene(World w, EffectList effects)

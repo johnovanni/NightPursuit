@@ -11,7 +11,7 @@ namespace NightPursuit.App.Rendering;
 /// <summary>
 /// Top-down radar, bottom right. Each kind has its own shape as well as its colour: runner diamond (magenta),
 /// blocker square (amber), pursuer triangle (red, pulsing), gunner ring with a dot (orange-red), dropper
-/// down-triangle (teal), civilian small grey dot, police a white-outlined square with a dark bar flashing blue/red (larger for the armored SUV), armored hexagon (steel blue), boss pulsing double ring with a gold inner ring (white); wrecks are X, oil slicks circles, you are the green arrow.
+/// down-triangle (teal), civilian small grey dot, police a white-outlined square with a dark bar flashing blue/red (larger for the armored SUV), armored hexagon (steel blue), boss pulsing double ring with a gold inner ring (white); a roadblock (parked or rolling) is a red bar across its held lanes with a green tick in the open lane, a speed trap an amber S; wrecks are X, oil slicks circles, you are the green arrow.
 /// </summary>
 internal static class Radar
 {
@@ -61,6 +61,9 @@ internal static class Radar
                 foreach (double f in new[] { -1.0, 0, 1.0 })
                     dc.DrawEllipse(Neon.TextSteel, null, new Point(at.X + f * u * 0.9, at.Y), u * 0.3, u * 0.3);
             }
+            else if (h is Roadblock block) RoadblockMark(dc, Map, k, h.Distance - cam.CamDistance, block.GapLane, 0);
+            else if (h is SpeedTrap trap)   // an amber S at the road edge it stands on (red once it caught you)
+                l.Text(dc, "S", at.X, at.Y - 7 * k, 14, trap.Caught ? Neon.TextRed : Neon.TextAmber, TextAlignment.Center, true);
             else if (h is SupplyCrate crate)   // a white square with its item letter
             {
                 double q = u * 1.4;
@@ -113,6 +116,16 @@ internal static class Radar
                     Poly(dc, Neon.TextRed, Neon.RadarPursuer, new Point(at.X, at.Y - s), new Point(at.X + s, at.Y + s), new Point(at.X - s, at.Y + s));
                     break;
             }
+        }
+
+        foreach (var rb in w.RollingRoadblocks)   // a formed pair marks its held lanes like a parked roadblock
+        {
+            if (!rb.Formed) continue;
+            double sum = 0;
+            int n = 0;
+            foreach (var suv in rb.Cars)
+                if (suv.State != VehicleState.Wrecked) { sum += cam.Ahead(suv); n++; }
+            if (n > 0) RoadblockMark(dc, Map, k, sum / n, rb.OpenLane, u * 1.4 + 3 * k);   // just beyond the SUVs' own squares, or they would hide it
         }
 
         foreach (var m in w.Missiles)   // yours: a white dot
@@ -173,6 +186,28 @@ internal static class Radar
         var fill = Neon.LightPhase(time) == 0 ? Neon.LightBlueFill : Neon.LightRedFill;
         dc.DrawRectangle(fill, Neon.RadarPolice.Core, new Rect(at.X - half, at.Y - half, half * 2, half * 2));
         dc.DrawRectangle(Neon.Black, null, new Rect(at.X - half * 0.6, at.Y - half * 0.18, half * 1.2, half * 0.36));
+    }
+
+    /// <summary>
+    /// A roadblock: a red bar across each lane it holds and a green tick in the open lane. Parked and rolling roadblocks look the same.
+    /// <paramref name="ahead"/> is its distance in front of you and <paramref name="gapLane"/> the open lane (an index into <see cref="Track.LaneCentres"/>); <paramref name="lift"/> moves the mark up the screen by that many pixels.
+    /// </summary>
+    static void RoadblockMark(DrawingContext dc, Func<double, double, Point> map, double k, double ahead, int gapLane, double lift)
+    {
+        Point At(double lateral) { var q = map(ahead, lateral); return new Point(q.X, q.Y - lift); }
+        var bars = new LineBatch();
+        for (int lane = 0; lane < Track.LaneCentres.Length; lane++)
+        {
+            if (lane == gapLane) continue;
+            double c = Track.LaneCentres[lane];
+            bars.Line(At(c - Roadblock.BarrierHalfWidth), At(c + Roadblock.BarrierHalfWidth));
+        }
+        bars.Draw(dc, Neon.RadarBarrier);
+        var at = At(Track.LaneCentres[gapLane]);   // the tick: a check mark
+        var tick = new LineBatch();
+        tick.Line(new Point(at.X - 4 * k, at.Y), new Point(at.X - 1 * k, at.Y + 4 * k));
+        tick.Line(new Point(at.X - 1 * k, at.Y + 4 * k), new Point(at.X + 5 * k, at.Y - 5 * k));
+        tick.Draw(dc, Neon.RadarGap);
     }
 
     static void Cross(DrawingContext dc, Point at, double u)

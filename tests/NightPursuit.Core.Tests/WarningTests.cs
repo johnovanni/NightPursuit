@@ -108,6 +108,20 @@ public class WarningTests
     }
 
     [Fact]
+    public void Diagnostics_hook_adds_a_formed_pair_that_holds_the_other_two_lanes()
+    {
+        var w = Straight();
+        var a = Police(w, 50, -5, AgentKind.ArmoredSuv);
+        var b = Police(w, 50, 0, AgentKind.ArmoredSuv);
+        w.AddFormedRollingRoadblockForDiagnostics(a, b, -5);   // you in the left lane: the open lane is the right one
+        var rb = Assert.Single(w.RollingRoadblocks);
+        Assert.True(rb.Formed);
+        Assert.Equal(2, rb.OpenLane);
+        Assert.Equal(0, rb.LaneOf(0));
+        Assert.Equal(1, rb.LaneOf(1));
+    }
+
+    [Fact]
     public void Rolling_roadblock_warns_with_its_gap()
     {
         var w = Straight();
