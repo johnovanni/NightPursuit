@@ -1113,3 +1113,113 @@ Coming in later plans:
 5. Watch for a single hitch (the one 24 ms frame, D116), and for any stutter with heavy traffic.
 6. If you ever play in a very small window, look at how crowded the HUD gets (open items).
 7. Tell me whether to shorten the 68-minute stress test for later plans (D116).
+
+## Line-art restyle (2026-11-20, branch `line-art`)
+
+Everything on screen is now drawn in the "Combined" line-art look from the trial: bright outlines with a soft glow,
+gaps in the outlines, a fade with distance, and no line along the base of a standing object. The rules are unchanged
+(StateHash, all 873 tests, no test edited), and the HUD text is the same strings, sizes, colours and positions. These
+are my calls, for you to check.
+
+**D117. Combined is the only look.** The style switch, the old drawing paths and the Laser and New Wave pens are
+deleted, not kept as a setting. One look is less to test and to keep in step.
+*Cost to change:* large (the old paths would have to be rebuilt; the trial branch still holds them, see D125).
+
+**D118. Gaps need room.** An outline is only broken (a gap past the right shoulder and a small one low on the left, as
+if lit from the upper right) when the points' bounding box is at least 30 px wide. Narrower shapes stay whole, so a far
+car never turns into dots. The rule looks at width only, as the plan said.
+*Cost to change:* one number.
+
+**D119. Wrecks show their silhouette:** the rear face's sides and top (no base), the two outer roof ridges and the far
+roof edge. The inner ridges are dropped; the cracks on the rear face stay as detail.
+*Cost to change:* a few lines.
+
+**D120. Smoke has no outlines.** Wreck smoke, smoke-screen clouds and mirror smoke are soft fills only; smoke has no
+edges to present. In the first build the wreck smoke was black-filled and was seen only through its rims, so with the
+rims gone it nearly vanished. I gave its puffs a soft grey fill (like the smoke-screen cloud), keeping their fade and
+timing, still with no rims. The same applies in the mirror (the plan's Task 5 text said "Detail" strokes there, and
+this call won). In the snapshots the wreck smoke reads as a grey plume.
+*Cost to change:* a fill alpha, or add the rims back.
+
+**D121. Panels get corner brackets; gauges keep their boxes.**
+- Corner brackets (each arm 14 px × the HUD scale): the weapon panel, radar, help box, BUSTED and notice boxes, and the
+  boss-bar panel.
+- Full boxes: the armour, heat, gun-heat, speed, steer and boss-health bars. A gauge needs its ends.
+- The mirror keeps a full frame, because it is an object.
+
+*Cost to change:* a few lines per panel (please judge it, see the checks below).
+
+**D122. The Gunner's port is a short line across the open bottom of its window:** dim while idle, a bright outline while
+aiming, and two parallel lines while firing, so firing differs from aiming by shape and not only by brightness.
+*Cost to change:* a few lines.
+
+**D123. The windshield cracks and the rolling tread stay as built in the trial.** You played the trial, so they were
+not redone.
+*Cost to change:* none.
+
+**D124. The stress test runs once, at the end, at its current length (about 68 minutes, D116),** in the background,
+because every renderer changed. Your D116 question about shortening it for later plans stays open. The figures
+(frames, failures, minutes) follow when the run finishes.
+*Cost to change:* none.
+
+**D125. The trial branch `spike-line-art` stays as history.** `line-art` starts from it, so the trial's commits stay in
+the log.
+*Cost to change:* none.
+
+**D126. The wreck "breakdown" effects are dropped.** You decided against them in the design; nothing of them is built.
+*Cost to change:* a new design.
+
+**D127. Dashes line up on all three layers.** A review found that the hostile oil slick's and caltrops' red dashed
+outline dashed its halo, glow and core in different lengths, so they did not line up. They now dash in the core's
+pixel pattern, from the same start, so the dashes read clearly (NFR-3: a hostile hazard is told by its dashed shape).
+*Cost to change:* none.
+
+**D128. The boss's shield pulse shows as a cyan band outside the white outline.** In the first build the shield stroke
+was the same width as the white outline and sat under the body fill, so it could not be seen. It is now a wider cyan
+stroke under the fill (about three times the outline's core width), so the band shows around the boss, as the old glow
+did. The edge and gaps are the same as the outline's.
+*Cost to change:* one width.
+
+**D129. Mirror cars use thin Detail pens, so far ones are fainter.** Cars in the mirror are drawn with the Detail pen
+(about 1 px, 70 per cent), which a reviewer found makes distant police light halves and the boss's trim harder to
+tell apart than before. Colour and position are unchanged; see the open items.
+*Cost to change:* use the Outline weight for the mirror's light halves and boss strip.
+
+**D130. Smaller rulings made during the build.**
+- Speed-trap strokes fade twice (the old opacity and the new fade), so distant ones are dimmer than before; I left it.
+- The strike's scan line and corner brackets, and the missile lock box, use the line-art pens too (the lock box's
+  corner shape is shared with the strike's).
+- Brackets and boxes are built every frame (about 15 small shapes). It is cheap (see the speed figure below).
+
+*Cost to change:* a few lines each.
+
+**Speed figure (line art).** Drawing one frame takes 1.720 ms on average (2.630 ms for the slowest one in twenty; the
+slowest of 600 took 9.848 ms), on the D116 scene (the 25-car crowd, roadblock, speed trap, boss, smoke, crates,
+missiles and a strike sweep). The limit is 8 ms and Plan 3's figure was 2.245 ms, so the restyle is no slower. One
+frame in 600 took about 10 ms, a one-off like D116's. As in D17, the graphics card's own work is left out.
+
+## Open items after the line-art restyle
+
+- Cars in the mirror are fainter than before (D129). The police lights are the clearest case: in the 1280x720
+  `police` and `busted` scenes the red and blue halves are a few pixels and no longer clearly two colours. If you find
+  them hard to tell apart in play, the fix is to give the mirror's light halves the Outline weight.
+- The boss-bar panel's brackets touch the bottom of the mirror frame (the panel's position was already close to it).
+- Things no test picture could show (see the checks below): the boss's cyan shield band at close range, the Gunner's
+  two lines while firing, a Dropper's armed chute, oil slicks, tracers and a wreck behind a hill. The speed-trap
+  strokes at distance and the small objects at 960x540 look fine in the pictures, but are small.
+- Minor tidy-ups left: some pens and shapes are made again every frame; a few comments are stale.
+- The stress run's result is added to D124 when it finishes.
+
+## Checks only you can do (line art)
+
+1. Play mission 1 and the patrol ground. Judge the look in motion: the glow, the gaps, the fade, the tread, the cracks.
+2. Check that every enemy type is told apart by shape at a distance.
+3. Check the HUD is as easy to read as before.
+4. Say whether the panel brackets look right (D121), or whether you want full boxes back.
+5. The boss's cyan shield band at close range (D128): is it easy to see, and does it pulse?
+6. The Gunner firing (two lines) against aiming (one bright line) (D122).
+7. The Dropper's chute, armed against not armed. Arming is now shown mostly by the fill.
+8. Oil slicks: your own (the lower half of the rim) and a hostile one (a full ring and red dashes) (D127).
+9. Tracers: are your bullets and the enemy's easy to follow?
+10. The police lights in the mirror (D129): can you tell blue from red? A reviewer found them fainter than before.
+11. A wreck hidden behind a hill: it should vanish behind the crest, not show through.

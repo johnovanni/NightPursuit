@@ -73,10 +73,10 @@ Also read `docs/decisions.md`:
   - If the permission system refuses a launch, do not retry. Report what is left unseen.
 - **Paths:** the App exe is `src/NightPursuit.App/bin/Release/net10.0-windows/NightPursuit.exe`, built with `dotnet build src/NightPursuit.App -c Release`. Snapshots go in `snapshots/` (git-ignored).
 - **Commits:**
-  - local commits on a new branch `plan-4-missions-and-screens`, created from `plan-3-traffic-and-police`;
+  - local commits on a new branch `plan-4-missions-and-screens`, created from `line-art` (the restyle branch, which holds Plan 3);
   - messages end with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`;
   - never push.
-- **Test command** (from the repo root): `dotnet test tests/NightPursuit.Core.Tests`.
+- **Test command** (from the repo root): `dotnet test tests/NightPursuit.Core.Tests`. The baseline on `line-art` is 873 tests, so the total is 873 plus this plan's own.
 - **Screen copy is upper case**, in the HUD's Consolas look. Exact strings are given in the tasks. Where a task gives a format such as `{score:00000}`, use it as written.
 
 ## Review Focus
@@ -119,7 +119,7 @@ Also read `docs/decisions.md`:
 
 ## Calls made in this plan
 
-The spec leaves these open. Each is logged as a decision for the owner in Task 12, numbered from D117.
+The spec leaves these open. Each is logged as a decision for the owner in Task 12, numbered from D131 (the line-art restyle used D117 to D130).
 
 1. **Where things live.**
    - The session rules (`Game`, `ScreenFlow`, menus, initials, settings, high scores, saving) are in Core, so they are unit-tested.
@@ -708,9 +708,9 @@ The test project references Core only, so this task has no unit tests of its own
 **Interfaces:**
 - Consumes: `BossLook` (Task 1), `Game.Mission`, `MissionIndex`, `Score`, `SpareCars` and `Practice`, and `HeatRules.LevelOf`/`LevelName`.
 - Produces:
-  - **Boss shapes:** `internal static class BossShapes` (in `VehicleRenderer.cs` or its own file) with `Body(BossLook)` and `Fins(BossLook)`, returning the point tables. `Fin` = today's `BossShape` and `BossFin`. `Twin` = the body widened to 1.1 with two fin pairs at x 0.92 and 0.55. `Dome` = no fins, with a raised cabin outline from y 0.8 to 1.35 between x ±0.5.
+  - **Boss shapes** (drawn with the `LineArt` pens: an outline, gaps, no line along the base, as the line-art restyle did for the boss in play): `internal static class BossShapes` (in `VehicleRenderer.cs` or its own file) with `Body(BossLook)` and `Fins(BossLook)`, returning the point tables. `Fin` = today's `BossShape` and `BossFin`. `Twin` = the body widened to 1.1 with two fin pairs at x 0.92 and 0.55. `Dome` = no fins, with a raised cabin outline from y 0.8 to 1.35 between x ±0.5.
   - In play, the boss uses its definition's look. `BossCar` already holds its `Definition` (BossCar.cs:20), so add `public BossLook Look => Definition.Look;`. The director needs no change.
-  - **`BossPortrait : FrameworkElement`** with `BossLook Look` and `string Name`. It draws the rear view about 300×180 in the boss colour with the glow pens, through the same shape tables.
+  - **`BossPortrait : FrameworkElement`** with `BossLook Look` and `string Name`. It draws the rear view about 300×180 in the boss colour with the `LineArt` pens (outline, gaps, no base line; the same pens as the boss in play), through the same shape tables.
   - **`BriefingScreen`** copy, top to bottom:
     - `MISSION {n} OF {count}` (practice: `PRACTICE`);
     - `{TITLE}` (heading);
@@ -835,7 +835,7 @@ The test project references Core only, so this task has no unit tests of its own
 **Files:**
 - Modify: `docs/decisions.md`
 
-- [ ] **Step 1: Add D117 onward,** one per "Calls made" item, plus any rulings made during the build. Each one is in the log's existing style: what was decided, why, and *Cost to change*.
+- [ ] **Step 1: Add D131 onward,** one per "Calls made" item, plus any rulings made during the build. Each one is in the log's existing style: what was decided, why, and *Cost to change*.
 - [ ] **Step 2: Update "Open items":**
   - close "F1 help doesn't pause the game" and "You respawn where you crashed";
   - replace "Coming in later plans" with "After version 1 (design §10): police helicopters and enemy spies. Sound (design §9)";
