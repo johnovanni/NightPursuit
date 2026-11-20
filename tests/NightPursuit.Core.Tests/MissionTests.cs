@@ -2,6 +2,7 @@ using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
+using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
@@ -262,6 +263,135 @@ public class MissionTests
         WaitForRespawn(run);
         Assert.Equal(RunState.Playing, run.State);
         Assert.Equal(new[] { 600.0 }, run.World.Agents.Select(a => a.Distance).ToArray());
+    }
+
+    // ---- carry-in values and respawning a short way back
+
+    /// <summary>Drives the car at 40 m/s (steering along the road) until it passes <paramref name="to"/>.</summary>
+    static void DriveTo(MissionRun run, double to)
+    {
+        var w = run.World;
+        for (int i = 0; i < 4000 && w.Player.Distance < to; i++)
+        {
+            w.Player.Speed = 40;
+            run.Update(new ControlFrame { Gas = true, PadConnected = true, PadSteer = EnemyMissileTests.AutopilotSteer(w) }, 1 / 60.0);
+        }
+        Assert.True(w.Player.Distance >= to, "the car never got there");
+    }
+
+    [Fact]
+    public void RunStart_carries_score_spares_and_scheme()
+    {
+        var run = new MissionRun(Def(), new FeelSettings(), 3, new RunStart(4200, 1, 1));
+        Assert.Equal(new RunStart(4200, 1, 1), run.Start);
+        Assert.Equal((4200, 1, 1), (run.World.Score, run.World.Player.SpareCars, run.World.SchemeIndex));
+        run.Handle(new GameAction(ActionKind.Pause));
+        run.Handle(new GameAction(ActionKind.Restart));
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal((4200, 1, 1), (run.World.Score, run.World.Player.SpareCars, run.World.SchemeIndex));
+    }
+
+    [Fact]
+    public void Respawn_puts_you_150_m_back_on_a_clear_road()
+    {
+        var run = Run();
+        var w = run.World;
+        var p = w.Player;
+        w.Hazards.Add(new Wreck { Distance = 2900, PrevDistance = 2900, Lateral = 0, Width = 2.4, Length = 5.6 });
+        w.Hazards.Add(new OilSlick { Distance = 3150, Lateral = 0 });
+        var crate = new SupplyCrate(SupplyItem.Missile, 1) { Distance = 3000, PrevDistance = 3000, Lateral = 4 };
+        w.Hazards.Add(crate);
+        w.Agents.Add(new AgentCar(AgentKind.Blocker, VehicleStats.Blocker)
+            { Id = w.NextId(), Distance = 2880, Lateral = 5, Driver = new StillDriver(), Armor = 3 });
+        p.Distance = 3000;
+        Wreck(run);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(2850, p.Distance, 1e-3);
+        static bool InZone(double d) => d >= 2650 && d <= 3200;
+        Assert.DoesNotContain(w.Hazards, h => h is not SupplyCrate && InZone(h.Distance));
+        Assert.DoesNotContain(w.Agents, a => InZone(a.Distance));
+        Assert.Contains(crate, w.Hazards);
+    }
+
+    [Fact]
+    public void Respawn_near_the_start_stops_at_0()
+    {
+        var run = Run();
+        run.World.Player.Distance = 90;
+        Wreck(run);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(0, run.World.Player.Distance);
+        Assert.Equal(0, run.World.Player.PrevDistance);
+    }
+
+    [Fact]
+    public void A_tripped_speed_trap_does_not_count_again_after_respawn()
+    {
+        var run = Run();
+        var w = run.World;
+        var tripped = new SpeedTrap { Distance = 3240, Lateral = SpeedTrap.EdgeLateral, LimitMph = 60, Triggered = true };
+        var fresh = new SpeedTrap { Distance = 3400, Lateral = SpeedTrap.EdgeLateral, LimitMph = 60 };
+        w.Hazards.Add(tripped);
+        w.Hazards.Add(fresh);
+        w.Player.Distance = 3000;
+        Wreck(run);
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.Equal(2850, w.Player.Distance, 1e-3);
+        Assert.Contains(tripped, w.Hazards);   // outside the cleared zone [2650, 3200]
+
+        DriveTo(run, 3300);                    // 40 m/s = 89 mph, over the limit, past the tripped trap
+        Assert.Equal(0, w.Heat.Value);
+        Assert.False(tripped.Caught);
+
+        DriveTo(run, 3500);                    // the control: an untriggered trap counts
+        Assert.True(fresh.Caught);
+        Assert.True(w.Heat.Value >= HeatRules.SpeedTrap - 1e-6);
+    }
+
+    [Fact]
+    public void Respawning_does_not_send_waves_again()
+    {
+        var run = Run(Def(4000, new WaveDefinition(500, AgentKind.Runner, 1, 400), new WaveDefinition(1000, AgentKind.Runner, 1, 400)));
+        var w = run.World;
+        DriveTo(run, 1050);
+        Assert.NotEmpty(w.Agents);
+        w.Player.Distance = 1100;
+        w.Player.Speed = 0;
+        Wreck(run);
+        var seen = w.Agents.Select(a => a.Id).ToHashSet();
+        WaitForRespawn(run);
+        Assert.Equal(RunState.Playing, run.State);
+        for (int i = 0; i < 120; i++) run.Update(ControlFrame.Empty, 1 / 60.0);
+        Assert.All(w.Agents, a => Assert.Contains(a.Id, seen));
+
+        // Past the 1000 m wave again: it does not fire a second time either.
+        w.Player.Distance = 1010;
+        for (int i = 0; i < 30; i++) run.Update(ControlFrame.Empty, 1 / 60.0);
+        Assert.All(w.Agents, a => Assert.Contains(a.Id, seen));
+    }
+
+    [Fact]
+    public void Respawn_is_measured_from_the_crash_not_where_the_wreck_stops()
+    {
+        var run = Run();
+        var p = run.World.Player;
+        p.Distance = 3000;
+        p.Speed = 40;
+        Wreck(run);
+        Assert.Equal(RunState.Respawning, run.State);
+        double crash = p.Distance;
+        double slid = crash;
+        while (run.State == RunState.Respawning)
+        {
+            slid = Math.Max(slid, p.Distance);
+            run.Update(ControlFrame.Empty, 0.1);
+        }
+        Assert.True(slid > crash + 20, "the wreck should have slid on");
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.InRange(p.Distance, 3000 - MissionRun.RespawnBack - 1, 3000 - MissionRun.RespawnBack + 2);
     }
 
     [Fact]

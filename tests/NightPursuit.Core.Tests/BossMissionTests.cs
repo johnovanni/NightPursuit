@@ -365,15 +365,23 @@ public class BossMissionTests
     [Fact]
     public void Respawn_clears_hazards_where_the_boss_returns()
     {
-        var (run, boss) = RunAtBoss();
+        // The boss stage starts near the start of the road, so the respawn clamps at 0 and the main cleared zone is
+        // [-200, 260]. The boss returns 300 m ahead of the new spot, outside that zone: only the boss-return clause
+        // (20 m round where it lands) can clear the wreck there.
+        var run = Run(Def(50, Two));
         var p = run.World.Player;
-        p.Speed = 0;                     // the wreck stays where it is, so +300 now is +300 at the respawn
+        p.Distance = 50;
+        p.Speed = 40;
+        run.Director.Update(run.World);
+        var boss = run.Director.Boss!;
+        p.Distance = 60;
+        p.Speed = 0;                     // the wreck stays where it is: the crash point is 60, so the respawn is at 0
         boss.Distance = p.Distance + 500;
         boss.Speed = 0;
         boss.SnapPrev();
         var wreck = new NightPursuit.Core.Hazards.Wreck
         {
-            Distance = p.Distance + 300, PrevDistance = p.Distance + 300, Lateral = 0, Width = 2.4, Length = 5.6,
+            Distance = 300, PrevDistance = 300, Lateral = 0, Width = 2.4, Length = 5.6,
         };
         run.World.Hazards.Add(wreck);
 
@@ -381,13 +389,44 @@ public class BossMissionTests
         run.Update(ControlFrame.Empty, 1 / 60.0);
         WaitForRespawn(run);
         Assert.Equal(RunState.Playing, run.State);
-        Assert.Equal(p.Distance + 300, boss.Distance, 1e-9);
+        Assert.Equal(0, p.Distance);
+        Assert.Equal(300, boss.Distance, 1e-9);
         Assert.DoesNotContain(wreck, run.World.Hazards);
 
         double armor = boss.Armor;
         for (int i = 0; i < 4; i++) run.Update(ControlFrame.Empty, 0.25);
         Assert.Equal(armor, boss.Armor);
         Assert.Equal(100, boss.Armor);
+    }
+
+    [Fact]
+    public void Crossing_back_over_the_boss_line_keeps_the_boss_stage()
+    {
+        var run = Run(Def(1000, Two));
+        var p = run.World.Player;
+        p.Distance = 1000;
+        p.Speed = 40;
+        run.Director.Update(run.World);
+        Assert.Equal(MissionStage.Boss, run.Director.Stage);
+        p.Distance = 1050;
+        p.Speed = 0;
+        p.Armor = 0;
+        run.Update(ControlFrame.Empty, 1 / 60.0);
+        Assert.Equal(RunState.Respawning, run.State);
+        while (run.State == RunState.Respawning)
+        {
+            Assert.Equal(MissionStage.Boss, run.Director.Stage);
+            run.Update(ControlFrame.Empty, 1 / 60.0);
+        }
+        Assert.Equal(900, p.Distance, 1e-3);
+        for (int i = 0; i < 10; i++)
+        {
+            run.Update(ControlFrame.Empty, 1 / 60.0);
+            Assert.Equal(MissionStage.Boss, run.Director.Stage);
+        }
+        var bosses = run.World.Agents.OfType<BossCar>().ToList();
+        Assert.Single(bosses);
+        Assert.Equal(p.Distance + 300, bosses[0].Distance, 1);
     }
 
     [Fact]

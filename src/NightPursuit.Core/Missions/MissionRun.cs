@@ -10,9 +10,14 @@ namespace NightPursuit.Core.Missions;
 
 public enum RunState { Playing, Paused, Respawning, Completed, GameOver }
 
+/// <summary>What a run carries in from the one before it (a fresh game uses the defaults).</summary>
+public sealed record RunStart(int Score = 0, int SpareCars = 3, int SchemeIndex = 0);
+
 /// <summary>One attempt at a mission: the world, the director, and what happens after a wreck.</summary>
 public sealed class MissionRun
 {
+    /// <summary>How far back from the crash point the new car starts, metres.</summary>
+    public const double RespawnBack = 150;
     const double RespawnSeconds = 3;
     const double RespawnClearRadius = 200;
     const double BossReturnClearRadius = 20;
@@ -20,6 +25,7 @@ public sealed class MissionRun
     readonly MissionDefinition _def;
     readonly FeelSettings _feel;
     readonly int _seed;
+    double _crashAt;
 
     public World World { get; private set; } = null!;
     public MissionDirector Director { get; private set; } = null!;
@@ -27,8 +33,11 @@ public sealed class MissionRun
     /// <summary>Seconds left in the current state (counts down while respawning).</summary>
     public double StateTimer { get; private set; }
 
-    public MissionRun(MissionDefinition def, FeelSettings feel, int seed)
+    public RunStart Start { get; }
+
+    public MissionRun(MissionDefinition def, FeelSettings feel, int seed, RunStart? start = null)
     {
+        Start = start ?? new RunStart();
         _def = def;
         _feel = feel;
         _seed = seed;
@@ -39,6 +48,9 @@ public sealed class MissionRun
     {
         World = new World(new Track(_def.Road), _feel, new SeededRng(_seed)) { Loadout = new Loadout(_def.Loadout), TrafficRng = new SeededRng(_seed * 31 + 7) };
         if (_def.Police is { } police) World.StartPolice(police.StartingHeat);   // held until you move off; not again at a respawn
+        World.Score = Start.Score;
+        World.Player.SpareCars = Start.SpareCars;
+        if (Start.SchemeIndex != 0) World.Handle(new GameAction(ActionKind.SelectScheme, Start.SchemeIndex));
         Director = new MissionDirector(_def);
         State = RunState.Playing;
         StateTimer = 0;
@@ -117,6 +129,8 @@ public sealed class MissionRun
             State = RunState.GameOver;
             return;
         }
+        // The wreck slides on for up to about 90 m during the respawn wait, so the crash point is taken now.
+        _crashAt = World.Player.Distance;
         State = RunState.Respawning;
         StateTimer = RespawnSeconds;
     }
@@ -124,6 +138,11 @@ public sealed class MissionRun
     void Respawn()
     {
         var p = World.Player;
+        double crash = _crashAt;
+        double back = Math.Max(0, crash - RespawnBack);
+        // Everything from just behind the new spot to just past the crash point is cleared, so you restart on a clear road.
+        bool InZone(double d) => d >= back - RespawnClearRadius && d <= crash + RespawnClearRadius;
+        p.Distance = back;
         p.SpareCars--;
         p.Armor = 100;
         p.WorstDamage = 0;   // a new car, a clean windshield
@@ -152,8 +171,8 @@ public sealed class MissionRun
         World.Missiles.Clear();
         World.Tracers.RemoveAll(t => t.Hostile);   // nor an enemy bullet, which could hit the new car
         // The boss is never cleared (Review Focus 1): it goes back 300 m ahead and eases in again.
-        World.Agents.RemoveAll(a => a is not BossCar && Math.Abs(a.Distance - p.Distance) < RespawnClearRadius);
-        double bossReturn = p.Distance + MissionDirector.BossAheadDistance;
+        World.Agents.RemoveAll(a => a is not BossCar && InZone(a.Distance));
+        double bossReturn = back +MissionDirector.BossAheadDistance;
         bool bossReturned = false;
         foreach (var a in World.Agents)
             if (a is BossCar boss && boss.State != VehicleState.Wrecked)
@@ -165,7 +184,7 @@ public sealed class MissionRun
         // Also clear where the boss lands, so a leftover wreck, slick or caltrops can't hit it straight away. Supply
         // crates are always kept, so a respawn never costs you supplies.
         World.Hazards.RemoveAll(h => h is not SupplyCrate
-                                     && (Math.Abs(h.Distance - p.Distance) < RespawnClearRadius
+                                     && (InZone(h.Distance)
                                          || (bossReturned && Math.Abs(h.Distance - bossReturn) < BossReturnClearRadius)));
         // The boss forgets the hazards that are gone (it only remembers each one so that it acts on it once).
         foreach (var a in World.Agents)
