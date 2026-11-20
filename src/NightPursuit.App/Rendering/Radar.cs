@@ -64,12 +64,12 @@ internal static class Radar
             }
             else if (h is Roadblock block) RoadblockMark(dc, Map, k, h.Distance - cam.CamDistance, block.GapLane, 0);
             else if (h is SpeedTrap trap)   // an amber S at the road edge it stands on (red, and "S!", once it caught you)
-                l.Text(dc, trap.Caught ? "S!" : "S", at.X, at.Y - 7 * k, 14, trap.Caught ? Neon.TextRed : Neon.TextAmber, TextAlignment.Center, true);
+                l.Text(dc, trap.Caught ? "S!" : "S", at.X, at.Y - 7 * k, 14, trap.Caught ? Neon.TextRed : Neon.TextAmber, TextAlignment.Center, true, scaled: false);   // glyphs on the map keep their size
             else if (h is SupplyCrate crate)   // a white square with its item letter
             {
                 double q = u * 1.4;
                 dc.DrawRectangle(Neon.TextWhite, null, new Rect(at.X - q, at.Y - q, q * 2, q * 2));
-                l.Text(dc, ItemLetter(crate.Item), at.X, at.Y - 6.5 * k, 11, Neon.Black, TextAlignment.Center, true);
+                l.Text(dc, ItemLetter(crate.Item), at.X, at.Y - 6.5 * k, 11, Neon.Black, TextAlignment.Center, true, scaled: false);
             }
         }
 

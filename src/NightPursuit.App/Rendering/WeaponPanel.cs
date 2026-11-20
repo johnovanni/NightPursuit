@@ -22,12 +22,12 @@ internal static class WeaponPanel
         return p;
     }
 
-    /// <summary>Screen rectangle behind the panel: left edge, from 150 down, 250 wide (at 1280x720 scale).</summary>
-    public static Rect Bounds(HudLayout l) => new(8 * l.K, 150 * l.K, 250 * l.K, 276 * l.K);
+    /// <summary>Screen rectangle behind the panel: left edge, from 150 down, 250 wide (at 1280x720 scale). Its rows, pips and width grow with the text size, and it starts lower so it clears the controls lines above it.</summary>
+    public static Rect Bounds(HudLayout l) => new(8 * l.K, 150 * l.K + l.Grow(50), l.T(250), l.T(276));
 
     public static void Draw(DrawingContext dc, HudLayout l, World w)
     {
-        double k = l.K;
+        double k = l.T(1);   // every row and offset in the panel holds text or lines up with it, so all of it grows
         var b = Bounds(l);
         dc.DrawRectangle(Neon.PanelFill, null, b);
         LineArt.Brackets(dc, b, 14 * k, LineArt.Gauge);
@@ -88,7 +88,7 @@ internal static class WeaponPanel
     static void DrawRearRow(DrawingContext dc, HudLayout l, string name, ChargedWeapon weapon, bool selected, Brush fill, Pen pen,
                             double x, double right, double y, bool showRecharge)
     {
-        double k = l.K;
+        double k = l.T(1);
         if (selected)
         {
             dc.DrawRectangle(null, SelectPen, new Rect(x - 4 * k, y - 3 * k, right - x + 8 * k, 24 * k));
@@ -108,5 +108,5 @@ internal static class WeaponPanel
     }
 
     static void DrawPip(DrawingContext dc, HudLayout l, Point c, bool filled, Brush fill, Pen pen, double radius = 6) =>
-        dc.DrawEllipse(filled ? fill : null, pen, c, radius * l.K, radius * l.K);
+        dc.DrawEllipse(filled ? fill : null, pen, c, radius * l.T(1), radius * l.T(1));
 }

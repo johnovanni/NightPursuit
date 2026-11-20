@@ -47,9 +47,8 @@ internal static class Overlays
     /// <summary>Draws exactly what <see cref="Warnings.Collect"/> says (the rules live in Core, where tests prove each one): words, and an edge arrow where it has one.</summary>
     public static void DrawWarnings(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
-        double k = l.K;
         bool bright = (w.Time * 3) % 1 < 0.5;
-        double y = WarningsTop(bossBar) * k;
+        double y = WarningsTop(l, bossBar);
         foreach (var warning in Warnings.Collect(w))
         {
             bool police = warning.Kind is WarningKind.PoliceAlongside or WarningKind.PoliceBehind;
@@ -57,20 +56,20 @@ internal static class Overlays
             if (warning.ShowArrow) DrawEdgeArrow(dc, l, warning.Side);
             l.Centered(dc, warning.Text, y, 18, WarningBrush(warning.Kind));
             dc.Pop();
-            y += WarningRow * k;
+            y += l.T(WarningRow);
         }
     }
 
-    /// <summary>Top of the first warning line in HUD units: 108, or just under the boss bar while it shows.</summary>
-    static double WarningsTop(bool bossBar) => bossBar ? WarningTop + BossBar.Height : WarningTop;
+    /// <summary>Top of the first warning line in pixels: 108 units, or just under the boss bar while it shows (the bar grows with the text).</summary>
+    static double WarningsTop(HudLayout l, bool bossBar) => WarningTop * l.K + (bossBar ? BossBar.BlockHeight(l) : 0);
 
     /// <summary>Where the messages start (pixels): below the last of the <see cref="Warnings.MaxShown"/> possible warning lines, so the two never overlap.</summary>
     static double MessagesTop(HudLayout l, bool bossBar) =>
-        Math.Max(l.Height * 0.26, (WarningsTop(bossBar) + Warnings.MaxShown * WarningRow + 4) * l.K);
+        Math.Max(l.Height * 0.26, WarningsTop(l, bossBar) + Warnings.MaxShown * l.T(WarningRow) + 4 * l.K);
 
     /// <summary>How many message rows fit between <see cref="MessagesTop"/> and the aim mark (which starts near 0.44 of the height), 1 to 4; the oldest are left out.</summary>
     static int MessageRows(HudLayout l, bool bossBar) =>
-        Math.Clamp((int)Math.Floor((l.Height * 0.43 - MessagesTop(l, bossBar)) / (MessageRow * l.K)), 1, 4);
+        Math.Clamp((int)Math.Floor((l.Height * 0.43 - MessagesTop(l, bossBar)) / l.T(MessageRow)), 1, 4);
 
     static Brush WarningBrush(WarningKind kind) => kind switch
     {
@@ -89,18 +88,24 @@ internal static class Overlays
     public static void DrawAnnouncement(DrawingContext dc, HudLayout l, World w, bool bossBar)
     {
         if (w.Announcement is not { } a) return;
-        double k = l.K;
+        double k = l.K, kt = l.T(1);
         double fade = Math.Clamp(Math.Min((w.Time - a.Start) / BannerFadeIn, (a.Until - w.Time) / BannerFadeOut), 0, 1);
-        bool detail = a.Detail.Length > 0;
-        double messagesBottom = MessagesTop(l, bossBar) + MessageRows(l, bossBar) * MessageRow * k + 4 * k;
-        double top = Math.Max(l.Height * 0.50, messagesBottom), boxWidth = Math.Max(0, Math.Min(l.Width - 20, 640 * k)), boxHeight = (detail ? 82 : 56) * k;
+        var box = AnnouncementBox(l, a, bossBar);
+        double top = box.Y;
         dc.PushOpacity(fade);
-        var box = new Rect(l.HalfWidth - boxWidth / 2, top, boxWidth, boxHeight);
         dc.DrawRectangle(Neon.PanelFill, null, box);
         LineArt.Brackets(dc, box, 14 * k, LineArt.Gauge);
-        l.Centered(dc, a.Title, top + 6 * k, 34, Neon.TextAmber);
-        if (detail) l.Centered(dc, a.Detail, top + 52 * k, 18, Neon.TextCyan);
+        l.Centered(dc, a.Title, top + 6 * kt, 34, Neon.TextAmber);
+        if (a.Detail.Length > 0) l.Centered(dc, a.Detail, top + 52 * kt, 18, Neon.TextCyan);
         dc.Pop();
+    }
+
+    /// <summary>Where the announcement's backing box is: its height and width grow with the text.</summary>
+    static Rect AnnouncementBox(HudLayout l, Announcement a, bool bossBar)
+    {
+        double messagesBottom = MessagesTop(l, bossBar) + MessageRows(l, bossBar) * l.T(MessageRow) + 4 * l.K;
+        double top = Math.Max(l.Height * 0.50, messagesBottom), boxWidth = Math.Max(0, Math.Min(l.Width - 20, l.T(640)));
+        return new Rect(l.HalfWidth - boxWidth / 2, top, boxWidth, l.T(a.Detail.Length > 0 ? 82 : 56));
     }
 
     /// <summary>
@@ -110,12 +115,14 @@ internal static class Overlays
     public static void DrawBusted(DrawingContext dc, HudLayout l, World w)
     {
         if (!w.Busted.Counting) return;
-        double k = l.K, top = l.Height * 0.70, boxWidth = Math.Max(0, Math.Min(l.Width - 20, 470 * k));
-        var box = new Rect(l.HalfWidth - boxWidth / 2, top - 8 * k, boxWidth, 88 * k);
+        double k = l.K, kt = l.T(1), boxWidth = Math.Max(0, Math.Min(l.Width - 20, 470 * k + l.Grow(60))), boxHeight = 88 * kt;   // wider at large text, but not so wide it covers the weapon panel
+        // 0.70 of the height, but never lower than the hood allows once the box has grown with the text.
+        double boxTop = Math.Min(l.Height * 0.70 - 8 * k, l.HoodTop - boxHeight - 2 * k), top = boxTop + 8 * kt;
+        var box = new Rect(l.HalfWidth - boxWidth / 2, boxTop, boxWidth, boxHeight);
         dc.DrawRectangle(Neon.PanelFill, null, box);
         LineArt.Brackets(dc, box, 14 * k, LineArt.Gauge);
         l.Centered(dc, $"BUSTED IN {w.Busted.SecondsLeft}", top, 44, Neon.TextRed);
-        l.Centered(dc, "SPEED UP TO BREAK FREE", top + 56 * k, 18, Neon.TextAmber);
+        l.Centered(dc, "SPEED UP TO BREAK FREE", top + 56 * kt, 18, Neon.TextAmber);
     }
 
     /// <summary>A chevron on the screen edge pointing out toward the side a warning comes from (both sides when it is dead behind): pursuers, missiles, blockers, the boss and hostiles.</summary>
@@ -160,7 +167,12 @@ internal static class Overlays
             dc.DrawRectangle(null, new Pen(Neon.HitEdge, t), new Rect(t / 2, t / 2, Math.Max(1, l.Width - t), Math.Max(1, l.Height - t)));
         }
         if (run.State == RunState.Playing && p.State == VehicleState.Driving && p.OffRoad)
-            l.Centered(dc, p.Lateral < 0 ? "<< OFF ROAD" : "OFF ROAD >>", l.Height * 0.62, 26, Neon.TextAmber);
+        {
+            // 0.62 of the height, moved up as the busted box (below it) grows with the text, and kept under an announcement box if one is showing.
+            double y = l.Height * 0.62 - l.Grow(26);
+            if (run.World.Announcement is { } a) y = Math.Max(y, AnnouncementBox(l, a, BossBar.Showing(run) is not null).Bottom + 4 * l.K);
+            l.Centered(dc, p.Lateral < 0 ? "<< OFF ROAD" : "OFF ROAD >>", y, 26, Neon.TextAmber);
+        }
     }
 
     /// <summary>
@@ -171,11 +183,11 @@ internal static class Overlays
     {
         if (run.State != RunState.Respawning) return;
         var w = run.World;
-        double boxWidth = Math.Min(l.Width - 20, l.S(760));
-        dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, l.Height * 0.30 - l.S(12), boxWidth, l.S(110)));
+        double boxWidth = Math.Min(l.Width - 20, l.T(760));
+        dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, l.Height * 0.30 - l.T(12), boxWidth, l.T(110)));
         l.Centered(dc, "WRECKED — RESPAWNING", l.Height * 0.30, 40, Neon.TextRed);
         l.Centered(dc, $"NEW CAR IN {Math.Max(0, run.StateTimer):0.0} s     SPARE CARS LEFT: {Math.Max(0, w.Player.SpareCars - 1)}",
-                   l.Height * 0.30 + l.S(54), 20, Neon.TextWhite);
+                   l.Height * 0.30 + l.T(54), 20, Neon.TextWhite);
     }
 
     /// <summary>
@@ -184,10 +196,10 @@ internal static class Overlays
     /// </summary>
     public static void DrawNotice(DrawingContext dc, HudLayout l, string notice)
     {
-        double k = l.K, size = 18, room = Math.Max(1, l.Width - 40);
+        double k = l.T(1), size = 18, room = Math.Max(1, l.Width - 40);
         double width = l.TextWidth(notice, size, bold: true);
-        if (width > room) { size = Math.Max(8 / k, size * room / width); width = l.TextWidth(notice, size, bold: true); }
-        double y = l.HoodTop - 30 * k, boxWidth = Math.Min(l.Width - 20, width + 40 * k);
+        if (width > room) { size = Math.Max(18 / l.TextScale, size * room / width); width = l.TextWidth(notice, size, bold: true); }
+        double y = l.HoodTop - l.T(30), boxWidth = Math.Min(l.Width - 20, width + 40 * k);
         dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - boxWidth / 2, y - 4 * k, Math.Max(0, boxWidth), 30 * k));
         l.Centered(dc, notice, y, size, Neon.TextAmber);
     }
@@ -199,8 +211,10 @@ internal static class Overlays
     /// </summary>
     public static void DrawHelp(DrawingContext dc, HudLayout l)
     {
-        double k = l.K, lineH = 22 * k, pad = 22 * k, margin = 10 * k;
-        double top = l.Height * 0.28, height = HelpLines.Count * lineH + 30 * k;
+        double k = l.K, kt = l.T(1), lineH = 22 * k * (1 + 0.6 * (l.TextScale - 1)), pad = 22 * kt, margin = 10 * k;   // lines grow less than the text, so the taller box still fits
+        // 0.28 of the height; at a large text size the taller box moves up so its bottom stays on screen.
+        double height = HelpLines.Count * lineH + 30 * kt;
+        double top = Math.Max(Math.Min(l.Height * 0.28, l.Height - height - margin), Mirror.Bounds(l).Bottom + 4 * k);
         double left = WeaponPanel.Bounds(l).Right + margin, right = l.Width - margin;
         var radar = Radar.Bounds(l);
         if (top + height > radar.Top) right = Math.Min(right, radar.Left - margin);
@@ -213,15 +227,15 @@ internal static class Overlays
         }
         else
         {
-            double width = Math.Min(l.Width - 20, 800 * k);
+            double width = Math.Min(l.Width - 20, Math.Max(800 * k, needed));   // wide enough for the longest line at any text size
             r = new Rect(l.HalfWidth - width / 2, top, width, height);
         }
         dc.DrawRectangle(Neon.PanelFill, null, r);
         LineArt.Brackets(dc, r, 14 * k, LineArt.Gauge);
-        double y = r.Y + 16 * k;
+        double y = r.Y + 16 * kt;
         for (int i = 0; i < HelpLines.Count; i++)
         {
-            l.Text(dc, HelpLines[i], r.X + 22 * k, y, i == 0 ? 17 : 14.5, i == 0 ? Neon.TextAmber : Neon.TextWhite, bold: i == 0);
+            l.Text(dc, HelpLines[i], r.X + pad, y, i == 0 ? 17 : 14.5, i == 0 ? Neon.TextAmber : Neon.TextWhite, bold: i == 0);
             y += lineH;
         }
     }

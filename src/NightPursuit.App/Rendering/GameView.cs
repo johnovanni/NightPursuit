@@ -30,7 +30,7 @@ public sealed class GameView : FrameworkElement
     /// <summary>Whether the world shakes with the car (the screen-shake setting; the game loop sets it each frame).</summary>
     public bool ShakeEnabled { get; set; } = true;
 
-    /// <summary>The text-size setting's scale (1, 1.25 or 1.5). Not used for drawing yet: the HUD takes it in a later task.</summary>
+    /// <summary>The text-size setting's scale (1, 1.25 or 1.5): the HUD's text and the boxes that hold it grow with it (the game loop sets it each frame).</summary>
     public double TextScale { get; set; } = 1;
 
     /// <summary>A one-line notice from the screen flow (such as a failed save) shown in play, or null.</summary>
@@ -66,6 +66,7 @@ public sealed class GameView : FrameworkElement
 
         _projector.Begin(w, h, world);
         _layout.Begin(w, h, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        _layout.TextScale = TextScale;
 
         double shake = ShakeEnabled ? world.Player.Shake * 14 : 0;
         dc.PushTransform(new TranslateTransform(Math.Sin(world.Time * 61) * shake, Math.Cos(world.Time * 53) * shake));
@@ -112,7 +113,7 @@ public sealed class GameView : FrameworkElement
         double now = _frameClock.Elapsed.TotalSeconds, frame = now - _lastFrame;
         _lastFrame = now;
         if (frame > 0 && frame < 1) _fps = _fps * 0.95 + 0.05 / frame;
-        _layout.Text(dc, $"{_fps:0} FPS", 16 * _layout.K, h - 24 * _layout.K, 13, Neon.TextGray);
+        _layout.Text(dc, $"{_fps:0} FPS", 16 * _layout.K, h - 24 * _layout.K, 13, Neon.TextGray, scaled: false);
 #endif
     }
 }

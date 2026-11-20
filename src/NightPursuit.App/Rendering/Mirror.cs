@@ -131,6 +131,6 @@ internal static class Mirror
             LineArt.Draw(dc, new EllipseGeometry(at, r, r), LineArt.Detail(LineArt.ColorOf(Neon.EnemyMissile), 1));
         }
         dc.Pop();
-        l.Text(dc, "REAR VIEW", m.X + 6 * k, m.Bottom - 17 * k, 13, Neon.TextGray);
+        l.Text(dc, "REAR VIEW", m.X + 6 * k, m.Bottom - l.T(17), 13, Neon.TextGray);
     }
 }

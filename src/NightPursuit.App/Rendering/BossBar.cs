@@ -16,6 +16,16 @@ internal static class BossBar
     public const double Height = 34;
     const double Top = 100, Width = 520, FlashSeconds = 0.15;
 
+    /// <summary>The block's height in pixels: the bar block grows with the text size (the warning lines start below it).</summary>
+    public static double BlockHeight(HudLayout l) => l.T(Height);
+
+    /// <summary>The dark panel behind the bar: a little wider at larger text, as far as the room beside the readouts allows.</summary>
+    public static Rect PanelBounds(HudLayout l)
+    {
+        double k = l.K, width = (Width * k + l.Grow(60)), x = l.HalfWidth - width / 2, y = Top * k;
+        return new Rect(x - 4 * k, y - 2 * k, width + 8 * k, BlockHeight(l) + 4 * k);
+    }
+
     static readonly Pen TickPen = MakePen(Neon.TextWhite, 1.5);
     static World? _seenWorld;
     static double _lastDamage = double.NegativeInfinity;
@@ -36,14 +46,12 @@ internal static class BossBar
         if (Showing(run) is not { } boss) return;
         var w = run.World;
         NoteDamage(w);
-        double k = l.K;
-        var box = new Rect(l.HalfWidth - Width / 2 * k, Top * k, Width * k, Height * k);
-        var panel = new Rect(box.X - 4 * k, box.Y - 2 * k, box.Width + 8 * k, box.Height + 4 * k);
+        double k = l.T(1);
+        var panel = PanelBounds(l);
+        var box = new Rect(panel.X + 4 * l.K, panel.Y + 2 * l.K, panel.Width - 8 * l.K, panel.Height - 4 * l.K);
         dc.DrawRectangle(Neon.PanelFill, null, panel);
 
         int n = boss.PhaseIndex + 1, m = boss.Definition.Phases.Count;
-        l.Text(dc, $"{boss.Definition.Name.ToUpperInvariant()}  PHASE {n}/{m}: {boss.Phase.Behaviour.ToString().ToUpperInvariant()}",
-               box.X, box.Y, 12, Neon.TextWhite, bold: true);
 
         // Status words, right-aligned and stacked from the right edge (Consolas is about 0.55 em wide).
         double right = box.Right;
@@ -55,6 +63,10 @@ internal static class BossBar
         if (boss.Shield > 0) Status("SHIELDED", Neon.TextCyan);
         if (boss.ArmorOpen) Status("ARMOR OPEN ×2", Neon.TextGold);
         if (!boss.Engaged) Status("CLOSING IN", Neon.TextAmber);
+
+        // The name and phase take what the status words leave (drawn smaller, never below Normal, if they would meet).
+        string title = $"{boss.Definition.Name.ToUpperInvariant()}  PHASE {n}/{m}: {boss.Phase.Behaviour.ToString().ToUpperInvariant()}";
+        l.Text(dc, title, box.X, box.Y, l.FitSize(title, 12, right - box.X, true), Neon.TextWhite, bold: true);
 
         double percentWidth = 54 * k;
         var bar = new Rect(box.X, box.Y + 18 * k, box.Width - percentWidth, 12 * k);

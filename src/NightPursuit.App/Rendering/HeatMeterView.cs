@@ -20,7 +20,7 @@ internal static class HeatMeterView
     static readonly Pen Tick = MakePen(Neon.White, 1);
 
     /// <summary>Where the meter draws: inside <see cref="Hud.ReadoutBounds"/>, clear of the car-state rows (which end near 152) and of the right edge arrow.</summary>
-    public static Rect Bounds(HudLayout l) => new(l.Width - 214 * l.K, 158 * l.K, 198 * l.K, 38 * l.K);
+    public static Rect Bounds(HudLayout l) => new(l.Width - l.T(214), l.T(158), l.T(198), l.T(38));   // the readout block above it grows with the text, so this moves down with it
 
     public static Color Colour(HeatLevel level) => level switch
     {
@@ -34,7 +34,7 @@ internal static class HeatMeterView
     public static void Draw(DrawingContext dc, HudLayout l, World w)
     {
         var heat = w.Heat;
-        double k = l.K;
+        double k = l.T(1);
         var b = Bounds(l);
         int level = Array.IndexOf(Levels, heat.Level);
 

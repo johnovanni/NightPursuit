@@ -14,7 +14,7 @@ using NightPursuit.Core.Session;
 namespace NightPursuit.App.Diagnostics;
 
 /// <summary>
-/// <c>--snapshot out.png --screen name[,name] [--mission m] [--size WxH] [--text-size normal|large|largest]</c>: drives a fresh
+/// <c>--snapshot out.png --screen name[,name] [--mission m] [--size WxH[,WxH]] [--text-size normal|large|largest[,...]]</c>: drives a fresh
 /// screen flow through its public API to each named screen and renders the game view with the screen host over it, as the
 /// window shows them. The flow saves to a <see cref="MemoryGameStore"/> (never the real data folder) and starts with a sample
 /// table of 7 high scores. Without <c>--mission</c> the game is the campaign; with it, a practice game of that mission.
@@ -27,7 +27,6 @@ public static class ScreenSnapshots
 
     static readonly string[] ScreenNames = { "title", "settings", "pause", "quit", "briefing", "briefing-all", "controls", "complete", "gameover", "ended", "finished", "initials", "highscores" };
     const string BriefingAll = "briefing-all";
-    static readonly string[] TextSizeNames = { "normal", "large", "largest" };
 
     // Made up for the pictures: initials, score, mission reached, finished all six.
     static readonly HighScoreEntry[] SampleScores =
@@ -57,40 +56,27 @@ public static class ScreenSnapshots
             return 2;
         }
 
-        int width = 1280, height = 720;
-        string? sizeText = DiagnosticsRunner.Arg(args, "--size");
-        if (sizeText is not null)
-        {
-            string[] parts = sizeText.Split('x');
-            if (!(parts.Length == 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out width)
-                  && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out height)
-                  && width is >= 1 and <= 8192 && height is >= 1 and <= 8192))
-            {
-                DiagnosticsRunner.Error($"--size needs WIDTHxHEIGHT from 1x1 to 8192x8192, e.g. --size 320x200, not '{sizeText}'");
-                return 2;
-            }
-        }
-
-        string textSizeText = DiagnosticsRunner.Arg(args, "--text-size") ?? "normal";
-        int textSize = Array.IndexOf(TextSizeNames, textSizeText);
-        if (textSize < 0)
-        {
-            DiagnosticsRunner.Error($"--text-size needs one of {string.Join(", ", TextSizeNames)}, not '{textSizeText}'");
-            return 2;
-        }
+        if (!DiagnosticsRunner.TryParseSizes(args, 1280, 720, out var sizes) || !DiagnosticsRunner.TryParseTextSizes(args, out var textSizes)) return 2;
 
         var campaign = Campaign.MissionIds.Select(LoadMission).ToArray();
         MissionDefinition? practice = mission is null ? null : LoadMission(mission);
 
         foreach (string screen in screens)
         {
-            string file = screens.Length > 1
-                ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + screen + Path.GetExtension(path))
-                : path;
-            var view = new GameView { ShowHelp = false };
-            var flow = NewFlow(campaign, practice, (TextSize)textSize);
-            DriveTo(flow, screen, view, practice is not null, screen.StartsWith("briefing-", StringComparison.Ordinal) ? int.Parse(screen[9..], CultureInfo.InvariantCulture) - 1 : -1);
-            Render(flow, view, width, height, file);
+            string file = screens.Length > 1 ? DiagnosticsRunner.WithSuffix(path, screen) : path;
+            foreach (var textSize in textSizes)
+            {
+                // Each text size is its own fresh drive (the flow's settings are the text size); the window sizes then reuse it.
+                var view = new GameView { ShowHelp = false };
+                var flow = NewFlow(campaign, practice, textSize);
+                DriveTo(flow, screen, view, practice is not null, screen.StartsWith("briefing-", StringComparison.Ordinal) ? int.Parse(screen[9..], CultureInfo.InvariantCulture) - 1 : -1);
+                foreach (var (width, height) in sizes)
+                {
+                    string named = DiagnosticsRunner.WithSuffix(DiagnosticsRunner.WithSuffix(file, textSizes.Count > 1 ? DiagnosticsRunner.TextSizeNames[(int)textSize] : null),
+                                                                sizes.Count > 1 ? $"{width}x{height}" : null);
+                    Render(flow, view, width, height, named);
+                }
+            }
         }
         return 0;
     }
@@ -269,6 +255,7 @@ public static class ScreenSnapshots
         view.ShakeEnabled = flow.Settings.ScreenShake;
         view.Notice = flow.Current == Screen.Play ? flow.Notice : null;
         view.Covered = flow.Current != Screen.Play;
+        view.TextScale = flow.Settings.TextScale;
         var host = new ScreenHost();
         host.Show(flow);
         var grid = new Grid { Width = width, Height = height, Background = Brushes.Black };

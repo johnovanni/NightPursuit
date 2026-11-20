@@ -16,7 +16,7 @@ internal static class Hud
     public static void Draw(DrawingContext dc, HudLayout l, MissionRun run)
     {
         DrawDriving(dc, l, run.World);
-        DrawControls(dc, l, run.World);
+        DrawControls(dc, l, run);
         DrawCarState(dc, l, run);
         HeatMeterView.Draw(dc, l, run.World);
     }
@@ -29,7 +29,7 @@ internal static class Hud
 
         double mph = Units.MsToMph(p.Speed);
         l.Text(dc, $"{mph:0}", hw + 8 * k, top + 6 * k, 40, Neon.TextAmber, TextAlignment.Right, true);
-        l.Text(dc, "MPH", hw + 16 * k, top + 26 * k, 15, Neon.TextGray);
+        l.Text(dc, "MPH", hw + 16 * k, top + l.T(26), 15, Neon.TextGray);
 
         // Speed bar with the target marker.
         var bar = new Rect(hw - 170 * k, l.Height - 24 * k, 340 * k, 9 * k);
@@ -50,11 +50,14 @@ internal static class Hud
         }
 
         // Pedals
-        DrawVerticalBar(dc, l, new Rect(hw - 236 * k, top + 12 * k, 14 * k, 66 * k), p.Throttle, Neon.ThrottleFill, "GAS");
-        DrawVerticalBar(dc, l, new Rect(hw - 206 * k, top + 12 * k, 14 * k, 66 * k), p.Brake, Neon.BrakeFill, "BRK");
+        // The labels grow with the text, so the bars get shorter by the same amount (they hang from the screen's bottom edge) and the pair moves apart.
+        double pedalH = 66 * k - l.Grow(16);
+        DrawVerticalBar(dc, l, new Rect(hw - 236 * k - l.Grow(14), top + 12 * k, 14 * k, pedalH), p.Throttle, Neon.ThrottleFill, "GAS");
+        DrawVerticalBar(dc, l, new Rect(hw - 206 * k, top + 12 * k, 14 * k, pedalH), p.Brake, Neon.BrakeFill, "BRK");
 
         // Steering and nose angle
-        var steer = new Rect(hw + 150 * k, top + 58 * k, 150 * k, 9 * k);
+        double noseY = top + 38 * k + l.Grow(18);   // under the status line, which grows with the text
+        var steer = new Rect(hw + 150 * k + l.Grow(60), noseY + 20 * k + l.Grow(16), 150 * k, 9 * k);
         dc.DrawRectangle(Neon.HudBack, null, steer);
         LineArt.Box(dc, steer, LineArt.Gauge);
         double centre = steer.X + steer.Width / 2, sx = centre + p.Steer * steer.Width / 2;
@@ -62,11 +65,11 @@ internal static class Hud
         dc.DrawRectangle(Neon.TextGray, null, new Rect(centre - 1, steer.Y - 3 * k, 2, steer.Height + 6 * k));
         double noseDeg = p.Heading * 180 / Math.PI;
         string nose = Math.Abs(noseDeg) < 0.5 ? "NOSE STRAIGHT" : $"NOSE {Math.Abs(noseDeg):0}° {(noseDeg > 0 ? "RIGHT" : "LEFT")}";
-        l.Text(dc, (w.Steering.UsingStick ? "STICK  " : "") + nose, steer.X, steer.Y - 20 * k, 13, Neon.TextGray);
+        l.Text(dc, (w.Steering.UsingStick ? "STICK  " : "") + nose, steer.X, noseY, 13, Neon.TextGray);
 
         string status = scheme.Status ?? "";
         if (p.OffRoad) status += "  OFF ROAD";
-        l.Text(dc, status.Trim(), hw + 150 * k, top + 12 * k, 15, Neon.TextCyan, bold: true);
+        l.Text(dc, status.Trim(), hw + 150 * k + l.Grow(60), top + 12 * k, 15, Neon.TextCyan, bold: true);
     }
 
     static void DrawVerticalBar(DrawingContext dc, HudLayout l, Rect r, double value, Brush fill, string label)
@@ -79,24 +82,32 @@ internal static class Hud
     }
 
     /// <summary>Top left: which throttle control is active and its help lines.</summary>
-    static void DrawControls(DrawingContext dc, HudLayout l, World w)
+    static void DrawControls(DrawingContext dc, HudLayout l, MissionRun run)
     {
-        double k = l.K, y = 12 * k;
-        l.Text(dc, $"CONTROL  {w.Scheme.Name}", 16 * k, y, 18, Neon.TextCyan, bold: true);
-        y += 26 * k;
-        foreach (var line in w.Scheme.HelpLines) { l.Text(dc, line, 16 * k, y, 13.5, Neon.TextGray); y += 18 * k; }
-        l.Text(dc, "F1 controls  P pause", 16 * k, y + 4 * k, 13, Neon.TextGray);
+        var w = run.World;
+        // Lines are drawn smaller (never below the Normal size) rather than run into the mirror or the boss bar.
+        double k = l.K, x = 16 * k, y = 12 * k;
+        double limit = Mirror.Bounds(l).Left - 10 * k;
+        if (BossBar.Showing(run) is not null) limit = Math.Min(limit, BossBar.PanelBounds(l).Left - 6 * k);
+        double room = limit - x;
+        string title = $"CONTROL  {w.Scheme.Name}";
+        l.Text(dc, title, x, y, l.FitSize(title, 18, room, true), Neon.TextCyan, bold: true);
+        y += l.T(26);
+        double lineSize = 13.5;   // one size for all the lines, the largest at which the longest still fits
+        foreach (var line in w.Scheme.HelpLines) lineSize = Math.Min(lineSize, l.FitSize(line, 13.5, room));
+        foreach (var line in w.Scheme.HelpLines) { l.Text(dc, line, x, y, lineSize, Neon.TextGray); y += l.T(18); }
+        l.Text(dc, "F1 controls  P pause", x, y + l.T(4), 13, Neon.TextGray);
     }
 
     /// <summary>Screen rectangle covered by the top-right readouts (score, armor, spare cars, boss or distance, no-grip and puncture timers, the heat meter), so scenery can keep clear of it.</summary>
     public static Rect ReadoutBounds(HudLayout l) =>
-        new(l.Width - 290 * l.K, 0, 290 * l.K, 200 * l.K);
+        new(l.Width - l.T(290), 0, l.T(290), l.T(200));
 
     static void DrawCarState(DrawingContext dc, HudLayout l, MissionRun run)
     {
         var w = run.World;
         var p = w.Player;
-        double k = l.K, rx = l.Width - 16 * k, barW = 160 * k, barX = rx - barW;
+        double k = l.K * l.TextScale, rx = l.Width - 16 * k, barW = 160 * l.K + l.Grow(80), barX = rx - barW;
         double labelX = barX - 8 * k;
 
         l.Text(dc, $"SCORE {w.Score:00000}", rx, 12 * k, 18, Neon.TextAmber, TextAlignment.Right, true);

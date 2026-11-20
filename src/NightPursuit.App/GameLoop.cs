@@ -104,6 +104,7 @@ public sealed class GameLoop
         _view.Run = run;
         _view.ShowHelp = _flow.ShowIntroHelp && _flow.Current == Screen.Play;
         _view.ShakeEnabled = _flow.Settings.ScreenShake;
+        _view.TextScale = _flow.Settings.TextScale;
         _view.Covered = _flow.Current != Screen.Play;
         _view.Notice = _flow.Current == Screen.Play ? _flow.Notice : null;
         if (run is not null)

@@ -150,7 +150,7 @@ internal static class ArsenalRenderer
 
             double top = Math.Min(ntl.Y, ftl.Y);
             if (dz <= CrateLabelDistance && top - 22 * l.K < clip)
-                l.Text(dc, c.Label, (nbl.X + nbr.X) / 2, top - 22 * l.K, 15, Neon.TextCyan, TextAlignment.Center, true);
+                l.Text(dc, c.Label, (nbl.X + nbr.X) / 2, top - 22 * l.K, 15, Neon.TextCyan, TextAlignment.Center, true, scaled: false);   // a label in the world, not part of the HUD
         }
     }
 

@@ -9,6 +9,7 @@ using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
+using NightPursuit.Core.Session;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
@@ -17,7 +18,7 @@ namespace NightPursuit.App.Diagnostics;
 
 /// <summary>
 /// Command-line diagnostics run instead of the game window:
-/// <c>--snapshot out.png [--seconds S] [--scene name] [--size WxH]</c>, <c>--snapshot out.png --screen name</c> (see <see cref="ScreenSnapshots"/>), <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c> and <c>--perf report.txt</c>.
+/// <c>--snapshot out.png [--seconds S] [--scene name[,name]] [--size WxH[,WxH]] [--text-size normal|large|largest[,...]]</c>, <c>--snapshot out.png --screen name</c> (see <see cref="ScreenSnapshots"/>), <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c> and <c>--perf report.txt</c>.
 /// </summary>
 public static class DiagnosticsRunner
 {
@@ -87,19 +88,7 @@ public static class DiagnosticsRunner
             Error($"--mission needs a mission name of letters, digits and '-' only, e.g. mission-01, not '{mission}'");
             return 2;
         }
-        int width = Width, height = Height;
-        string? sizeText = Arg(args, "--size");
-        if (sizeText is not null)
-        {
-            string[] parts = sizeText.Split('x');
-            if (!(parts.Length == 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out width)
-                  && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out height)
-                  && width is >= 1 and <= 8192 && height is >= 1 and <= 8192))
-            {
-                Error($"--size needs WIDTHxHEIGHT from 1x1 to 8192x8192, e.g. --size 320x200, not '{sizeText}'");
-                return 2;
-            }
-        }
+        if (!TryParseSizes(args, Width, Height, out var sizes) || !TryParseTextSizes(args, out var textSizes)) return 2;
         double seconds = 12;
         string? secondsText = Arg(args, "--seconds");
         if (secondsText is not null
@@ -125,28 +114,78 @@ public static class DiagnosticsRunner
         foreach (string scene in scenes)
         {
             // With several scenes, out.png becomes out-<scene>.png; each starts from its own fresh run.
-            string file = scenes.Length > 1
-                ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + scene + Path.GetExtension(path))
-                : path;
-            foreach (double damage in damages)
-            {
-                SnapshotDamage = damage;
-                string f = damage < 0 ? file
-                    : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + "-d" + damage.ToString(CultureInfo.InvariantCulture) + Path.GetExtension(file));
-                RenderScene(scene, mission, seconds, width, height, f);
-            }
-            SnapshotDamage = -1;
+            string file = scenes.Length > 1 ? WithSuffix(path, scene) : path;
+            foreach (var textSize in textSizes)
+                foreach (var (width, height) in sizes)
+                {
+                    // With several text sizes or window sizes, the name gets -normal or -1280x720 too.
+                    string named = WithSuffix(WithSuffix(file, textSizes.Count > 1 ? TextSizeNames[(int)textSize] : null), sizes.Count > 1 ? $"{width}x{height}" : null);
+                    foreach (double damage in damages)
+                    {
+                        SnapshotDamage = damage;
+                        string f = damage < 0 ? named : WithSuffix(named, "d" + damage.ToString(CultureInfo.InvariantCulture));
+                        RenderScene(scene, mission, seconds, width, height, f, new GameSettings { TextSize = textSize }.TextScale);
+                    }
+                    SnapshotDamage = -1;
+                }
         }
         return 0;
     }
 
+    internal static readonly string[] TextSizeNames = { "normal", "large", "largest" };
+
+    /// <summary>
+    /// Reads <c>--size WxH[,WxH...]</c> (the default size when absent), for <c>--scene</c> and <c>--screen</c> alike.
+    /// Reports a bad value through <see cref="Error"/> and returns false.
+    /// </summary>
+    internal static bool TryParseSizes(string[] args, int defaultWidth, int defaultHeight, out List<(int Width, int Height)> sizes)
+    {
+        sizes = new List<(int, int)>();
+        string? text = Arg(args, "--size");
+        if (text is null) { sizes.Add((defaultWidth, defaultHeight)); return true; }
+        foreach (string one in text.Split(','))
+        {
+            string[] parts = one.Split('x');
+            if (!(parts.Length == 2 && int.TryParse(parts[0], NumberStyles.None, CultureInfo.InvariantCulture, out int width)
+                  && int.TryParse(parts[1], NumberStyles.None, CultureInfo.InvariantCulture, out int height)
+                  && width is >= 1 and <= 8192 && height is >= 1 and <= 8192))
+            {
+                Error($"--size needs WIDTHxHEIGHT from 1x1 to 8192x8192 (a comma list is fine), e.g. --size 320x200 or --size 1280x720,960x540, not '{one}'");
+                return false;
+            }
+            sizes.Add((width, height));
+        }
+        return true;
+    }
+
+    /// <summary>Reads <c>--text-size normal|large|largest[,...]</c> (normal when absent). Reports a bad value through <see cref="Error"/> and returns false.</summary>
+    internal static bool TryParseTextSizes(string[] args, out List<TextSize> sizes)
+    {
+        sizes = new List<TextSize>();
+        foreach (string one in (Arg(args, "--text-size") ?? "normal").Split(','))
+        {
+            int index = Array.IndexOf(TextSizeNames, one);
+            if (index < 0)
+            {
+                Error($"--text-size needs one of {string.Join(", ", TextSizeNames)} (a comma list is fine), not '{one}'");
+                return false;
+            }
+            sizes.Add((TextSize)index);
+        }
+        return true;
+    }
+
+    /// <summary>out.png with <paramref name="suffix"/> added before the extension (out-suffix.png); unchanged when the suffix is null.</summary>
+    internal static string WithSuffix(string file, string? suffix) =>
+        suffix is null ? file : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + "-" + suffix + Path.GetExtension(file));
+
     /// <summary>The windshield damage forced on the next snapshot, or -1 to leave the run's own.</summary>
     static double SnapshotDamage = -1;
 
-    static void RenderScene(string scene, string mission, double seconds, int width, int height, string path)
+    static void RenderScene(string scene, string mission, double seconds, int width, int height, string path, double textScale = 1)
     {
         var run = NewRun(mission);
-        var view = new GameView { Run = run, Width = width, Height = height, ShowHelp = false };
+        var view = new GameView { Run = run, Width = width, Height = height, ShowHelp = false, TextScale = textScale };
         for (double t = 0; t < seconds; t += Dt)
         {
             run.Update(Autopilot.Next(run.World), Dt);
