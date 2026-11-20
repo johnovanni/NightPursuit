@@ -226,33 +226,31 @@ public static class VehicleRenderer
             dc.DrawGeometry(null, shield.Core, body);
             if (fins is not null) { dc.DrawGeometry(null, shield.Glow, fins); dc.DrawGeometry(null, shield.Core, fins); }
         }
+        // Black fills hide what is behind; only the presenting edges are stroked. There is no line along the bottom of
+        // the body (the road meets it there) and none along the base of a fin (the body hides it).
+        if (fins is not null)
         {
-            // Black fills hide what is behind; only the presenting edges are stroked. There is no line along the bottom of
-            // the body (the road meets it there) and none along the base of a fin (the body hides it).
-            if (fins is not null)
+            dc.DrawGeometry(Neon.Black, null, fins);
+            foreach (int side in Projector.Sides)
             {
-                dc.DrawGeometry(Neon.Black, null, fins);
-                foreach (int side in Projector.Sides)
-                {
-                    var fin = new Point[BossFin.Length];
-                    for (int i = 0; i < BossFin.Length; i++) fin[i] = P(side * BossFin[i].X, BossFin[i].Y);
-                    LineArt.Draw(dc, LineArt.Polyline(fin, (0.42, 0.5)), outlinePen);
-                }
+                var fin = new Point[BossFin.Length];
+                for (int i = 0; i < BossFin.Length; i++) fin[i] = P(side * BossFin[i].X, BossFin[i].Y);
+                LineArt.Draw(dc, LineArt.Polyline(fin, (0.42, 0.5)), outlinePen);
             }
-            dc.DrawGeometry(Neon.Black, null, body);
-            var edge = new List<Point>(shape.Length * 2);
-            for (int i = 0; i < shape.Length; i++) edge.Add(P(-shape[i].X, shape[i].Y));       // up the left side
-            for (int i = shape.Length - 1; i >= 0; i--) edge.Add(P(shape[i].X, shape[i].Y));   // across the roof and down the right
-            // Light from the upper right: a gap just past the right shoulder of the roof, and a small one low on the left.
-            double total = 0, toShoulder = 0;
-            for (int i = 1; i < edge.Count; i++)
-            {
-                total += (edge[i] - edge[i - 1]).Length;
-                if (i == shape.Length) toShoulder = total;
-            }
-            double sh = total > 0 ? toShoulder / total : 0.6;
-            LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outlinePen);
         }
+        dc.DrawGeometry(Neon.Black, null, body);
+        var edge = new List<Point>(shape.Length * 2);
+        for (int i = 0; i < shape.Length; i++) edge.Add(P(-shape[i].X, shape[i].Y));       // up the left side
+        for (int i = shape.Length - 1; i >= 0; i--) edge.Add(P(shape[i].X, shape[i].Y));   // across the roof and down the right
+        // Light from the upper right: a gap just past the right shoulder of the roof, and a small one low on the left.
+        double total = 0, toShoulder = 0;
+        for (int i = 1; i < edge.Count; i++)
+        {
+            total += (edge[i] - edge[i - 1]).Length;
+            if (i == shape.Length) toShoulder = total;
+        }
+        double sh = total > 0 ? toShoulder / total : 0.6;
+        LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outlinePen);
         tyres.Draw(dc, detailPen);
         tread.Draw(dc, LineArt.Detail(colour, fade * 0.55));
 
@@ -273,7 +271,7 @@ public static class VehicleRenderer
             case AgentKind.Blocker:
                 detail.Line(new Point(g.X, g.Y - 0.5 * s), new Point(g.X, g.Y - roof + 0.1 * s));   // cargo door line
                 break;
-            case AgentKind.Gunner:   // the rear window (restyled: open at the bottom)
+            case AgentKind.Gunner:   // the rear window (open at the bottom)
                 detail.Line(P(0.8, 0.9), P(0.52, 1.22));
                 detail.Line(P(0.52, 1.22), P(-0.52, 1.22));
                 detail.Line(P(-0.52, 1.22), P(-0.8, 0.9));

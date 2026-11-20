@@ -64,7 +64,7 @@ internal static class LineArt
         return p;
     }
 
-    /// <summary>The colour of a classic pen, at full strength.</summary>
+    /// <summary>The colour of a pen, at full strength.</summary>
     public static Color ColorOf(NeonPen pen)
     {
         var c = ((SolidColorBrush)pen.Core.Brush).Color;
@@ -78,19 +78,27 @@ internal static class LineArt
         return Color.FromRgb(c.R, c.G, c.B);
     }
 
-    /// <summary>The same pen with a dashed halo, glow and core. Hostile outlines use it: their dashes are part of their shape.</summary>
+    /// <summary>
+    /// The same pen dashed. Hostile outlines use it: their dashes are part of their shape. WPF measures dashes in multiples of
+    /// each pen's own thickness, so the halo and glow get the core's pixel pattern (<see cref="DashStyles.Dash"/> at the core's
+    /// thickness) divided by their own thickness; the three layers then dash and gap together. Dash caps are flat (the pen's
+    /// default), so a wider layer's dashes do not grow longer and the gaps stay open in all three.
+    /// </summary>
     public static ArtPen Dashed(ArtPen pen)
     {
         if (DashedCache.TryGetValue(pen, out var dashed)) return dashed;
-        dashed = new ArtPen(Dash(pen.Halo), Dash(pen.Glow), Dash(pen.Core));
+        double coreDash = 2 * pen.Core.Thickness;   // DashStyles.Dash is a 2-on, 2-off pattern in thicknesses
+        dashed = new ArtPen(Dash(pen.Halo, coreDash), Dash(pen.Glow, coreDash), Dash(pen.Core, coreDash));
         DashedCache[pen] = dashed;
         return dashed;
     }
 
-    static Pen Dash(Pen p)
+    static Pen Dash(Pen p, double pixels)
     {
         var d = p.Clone();
-        d.DashStyle = DashStyles.Dash;
+        double units = pixels / p.Thickness;
+        d.DashStyle = new DashStyle(new[] { units, units }, 0);
+        d.DashCap = PenLineCap.Flat;
         d.Freeze();
         return d;
     }
@@ -104,7 +112,7 @@ internal static class LineArt
 
     /// <summary>
     /// An open polyline through <paramref name="pts"/>, leaving out the stretches given as fractions of its length
-    /// (unless the line is narrower than <see cref="MinGapWidth"/>). The gaps are where light would catch the edge, and the eye fills them in.
+    /// (unless the line's width, from its leftmost to rightmost point, is under <see cref="MinGapWidth"/>). The gaps are where light would catch the edge, and the eye fills them in.
     /// </summary>
     public static StreamGeometry Polyline(IReadOnlyList<Point> pts, params (double From, double To)[] gaps)
     {
