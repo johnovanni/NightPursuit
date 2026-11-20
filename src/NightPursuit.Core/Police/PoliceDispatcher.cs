@@ -257,7 +257,10 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         return best;
     }
 
-    /// <summary>Below Pursuit every chaser goes back to patrol driving at 25 m/s, with one "POLICE BACKING OFF" message.</summary>
+    /// <summary>
+    /// Below Pursuit every chaser goes back to patrol driving at 25 m/s, with one "POLICE BACKING OFF" message when at least
+    /// one of them is not wrecked.
+    /// </summary>
     static void BackOff(World w)
     {
         bool any = false;
@@ -267,7 +270,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
             a.Driver = PatrolDriver.Instance;
             a.DriverState = null;
             a.CruiseSpeed = BackOffSpeed;
-            any = true;
+            any |= a.State != VehicleState.Wrecked;
         }
         if (any) w.Publish(new Message(w.Time, "POLICE BACKING OFF", Tone.Good));
     }

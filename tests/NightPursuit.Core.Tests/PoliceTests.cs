@@ -358,18 +358,77 @@ public class PoliceTests
     [Fact]
     public void Rear_ending_a_front_car_is_not_your_fault_but_a_trail_car_is()
     {
-        foreach (var (role, heat) in new[] { (ChaseRole.Front, 0.0), (ChaseRole.Trail, HeatRules.PoliceHit) })
+        RearEnd(ChaseRole.Front, 0);
+        RearEnd(ChaseRole.Trail, HeatRules.PoliceHit);
+    }
+
+    [Fact]
+    public void Rear_ending_a_front_car_that_is_not_boxing_you_is_your_fault()
+    {
+        // Fix round 1, Minor: only a Front car that is boxing you in right now. Dropped back to Trail near a roadblock, or blinded, it is not.
+        RearEnd(ChaseRole.Front, HeatRules.PoliceHit,
+            w => w.Hazards.Add(Roadblock.Place(w.Player.Distance + 100, gapLane: 1)));
+        RearEnd(ChaseRole.Front, HeatRules.PoliceHit, after: car => car.Blinded = 1);
+    }
+
+    /// <summary>
+    /// You (35 m/s) rear-end a police car in <paramref name="role"/> that is above its cruise speed, after its driver has
+    /// decided once; asserts the heat it costs.
+    /// </summary>
+    static void RearEnd(ChaseRole role, double heat, Action<World>? setup = null, Action<AgentCar>? after = null)
+    {
+        var w = PursuitWorld(75);
+        setup?.Invoke(w);
+        w.Player.Speed = 35;
+        var car = Chaser(w, role, 0, 0, 30);
+        car.CruiseSpeed = 25;                           // above its cruise speed: the slow-police rule does not apply
+        car.Distance = w.Player.Distance + (car.Stats.Length + w.Player.Stats.Length) / 2 - 0.5;
+        car.Driver.Decide(car, new WorldView(w), Step);   // its driver acts on this step (as Front, or as Trail near a roadblock)
+        after?.Invoke(car);
+        double before = w.Heat.Value;
+        Collisions.Resolve(w);
+        Assert.True(w.Events.OfType<PlayerDamaged>().Any(), "the cars touched");
+        Assert.Equal(before + heat, w.Heat.Value, 9);
+    }
+
+    [Fact]
+    public void Patrol_cars_keep_their_lanes_and_never_hit_you()
+    {
+        // Fix round 1, Critical (the reviewer's probe): Patrol level, you in the centre lane at 25 m/s, a patrol car 25 m
+        // ahead of you, and two overtaking you in the outer lanes. They cover all three lanes near you, but patrol cars are
+        // neutral traffic: none is moved out of its lane, so none runs into you.
+        var w = PursuitWorld(55);
+        var cars = new[] { (25.0, 0.0, 30.0), (-60.0, -5.0, 30.0), (-75.0, 5.0, 31.0) }
+            .Select(c => { var a = AgentCar.Create(w.NextId(), AgentKind.PolicePatrol, c.Item1, c.Item2, c.Item3); w.Agents.Add(a); return a; })
+            .ToList();
+        bool allThree = false;
+        for (int i = 0; i < 30 * 120; i++)
         {
-            var w = PursuitWorld(75);
-            w.Player.Speed = 35;
-            var car = Chaser(w, role, 0, 0, 30);
-            car.CruiseSpeed = 25;                           // above its cruise speed: the slow-police rule does not apply
-            car.Distance = w.Player.Distance + (car.Stats.Length + w.Player.Stats.Length) / 2 - 0.5;
-            double before = w.Heat.Value;
-            Collisions.Resolve(w);
-            Assert.True(w.Events.OfType<PlayerDamaged>().Any(), "the cars touched");
-            Assert.Equal(before + heat, w.Heat.Value, 9);
+            if (i % 240 == 0) w.Heat.Set(55);
+            Hold(w, 25, 0);
+            // All three near you at once, within the distance where the three-lane rule acts on lane changes.
+            allThree |= cars.All(c => Math.Abs(c.Distance - w.Player.Distance) <= PoliceLanes.HoldBeyond(w.Player.Speed));
+            Assert.All(cars, c => Assert.InRange(c.Lateral, Track.LaneCentres[0] - 1, Track.LaneCentres[2] + 1));
+            Assert.InRange(cars[1].Lateral, -5.5, -4.5);
+            Assert.InRange(cars[2].Lateral, 4.5, 5.5);
+            Assert.All(cars, c => Assert.Same(PatrolDriver.Instance, c.Driver));
         }
+        Assert.True(allThree, "the three patrol cars were never near you at once, so the test proves nothing");
+        Assert.DoesNotContain(w.Events, e => e is PlayerDamaged);
+        Assert.True(cars[1].Distance > w.Player.Distance && cars[2].Distance > w.Player.Distance, "both overtook you");
+    }
+
+    [Fact]
+    public void Backing_off_is_announced_only_for_a_live_chaser()
+    {
+        var w = PursuitWorld(60);                     // Patrol: every chaser backs off
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 60));
+        var wreck = Chaser(w, ChaseRole.Trail, -30, 0, 0);
+        wreck.State = VehicleState.Wrecked;
+        wreck.StateTimer = 1.5;
+        dispatcher.Update(w, MissionStage.Approach);
+        Assert.Same(PatrolDriver.Instance, wreck.Driver);
+        Assert.DoesNotContain(w.Events, e => e is Message { Text: "POLICE BACKING OFF" });
     }
 
     [Theory]
@@ -409,6 +468,49 @@ public class PoliceTests
         Assert.True(Police(w).Count(c => IsChasing(c) && Math.Abs(c.Distance - w.Player.Distance) <= 45) >= 3, "the police left");
         Assert.Equal(2, worst);
         Assert.All(Police(w), c => Assert.Equal(VehicleState.Driving, c.State));
+    }
+
+    [Theory]
+    [InlineData(-5)]
+    [InlineData(0)]
+    [InlineData(5)]
+    public void Police_never_fill_all_three_lanes_while_you_brake_hard(double playerLane)
+    {
+        // Fix round 1 guard. Pursuit (presence 2, heat 85, chasers seeded from the start). You cycle: accelerate at 6 m/s²
+        // to 60 m/s (or for at most 8 s), brake hard at 15 m/s² to 8 m/s, and go again, never driving into a car ahead.
+        // The first hard brake is from 60 m/s with the chasers closing from behind; later ones are from whatever the Front
+        // car lets you reach. Every step: never three lanes covered, and no contact at all.
+        var w = PursuitWorld(85);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(2, 85));
+        var view = new WorldView(w);
+        w.Player.Lateral = playerLane;
+        w.Player.Speed = 55;
+        double v = 55, phase = 0;
+        bool braking = false;
+        var brakesFrom = new List<double>();
+        for (int i = 0; i < 60 * 120; i++)
+        {
+            if (i % 240 == 0) w.Heat.Set(85);
+            v = w.Player.Speed;
+            phase += Step;
+            if (braking)
+            {
+                v = Math.Max(8, v - 15 * Step);
+                if (v <= 8) { braking = false; phase = 0; }
+            }
+            else
+            {
+                v = Math.Min(60, v + 6 * Step);
+                if (v >= 60 || phase >= 8) { braking = true; brakesFrom.Add(w.Player.Speed); }
+            }
+            HoldCareful(w, v, playerLane, dispatcher);
+            w.Hazards.RemoveAll(h => h is Roadblock);   // a player held in its lane cannot take a gap
+            Assert.True(PoliceLanes.CoveredLanes(view, null) <= 2, $"three lanes covered at {w.Time:0.00} s");
+        }
+        Assert.DoesNotContain(w.Events, e => e is PlayerDamaged);
+        Assert.True(brakesFrom.Count >= 4, $"only {brakesFrom.Count} hard brakes");
+        Assert.True(brakesFrom[0] >= 59.9, $"the first hard brake was from {brakesFrom[0]:0.0} m/s");
+        Assert.True(Police(w).Count(c => IsChasing(c) && Math.Abs(c.Distance - w.Player.Distance) <= 45) >= 2, "the police left");
     }
 
     /// <summary>Full stick toward <paramref name="lane"/>, easing off as the car gets there (a straight road).</summary>

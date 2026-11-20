@@ -479,6 +479,18 @@ public static class DriverHelpers
         return Math.Abs(AvoidWrecks(self, view, lane) - lane) < Same;
     }
 
+    /// <summary>
+    /// No other car on the road (and not you) in the lane's band from 10 m behind <paramref name="self"/> to 25 m ahead of
+    /// it, bumper to bumper: the room a keep-clear lane change needs.
+    /// </summary>
+    internal static bool LaneClearOfCars(AgentCar self, WorldView view, double lane)
+    {
+        if (InLaneSpan(self, view.Player, lane, 0)) return false;
+        foreach (var other in view.Agents)
+            if (!ReferenceEquals(other, self) && other.IsOnRoadDriving && InLaneSpan(self, other, lane, 0)) return false;
+        return true;
+    }
+
     /// <summary><paramref name="other"/> is in the lane's band from 10 m behind <paramref name="self"/> to 25 m past the car ahead (bumper to bumper).</summary>
     static bool InLaneSpan(AgentCar self, Vehicle other, double lane, double gapAhead)
     {

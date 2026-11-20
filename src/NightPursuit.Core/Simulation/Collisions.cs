@@ -164,14 +164,14 @@ public static class Collisions
 
     /// <summary>
     /// Whose fault a contact between the player and <paramref name="a"/> is. The player is at fault for rear-ending a car,
-    /// except a police car that is going slower than its cruise speed or is the Front car of a box-in (F9: it was put
-    /// there, or held back, to slow you), and for a
+    /// except a police car that is going slower than its cruise speed or is boxing you in as the Front car right now
+    /// (F9: it was put there, or held back, to slow you; see <see cref="ChaseDriver.IsBoxingFront"/>), and for a
     /// side contact where its own steering moved it into the car (<paramref name="ownInto"/>, above the 0.5 m/s dead band)
     /// more than the car moved into it (<paramref name="agentInto"/>).
     /// </summary>
     static bool PlayerAtFault(AgentCar a, bool rearEnd, double ownInto, double agentInto)
     {
-        if (rearEnd) return !(a.Faction == Faction.Police && (a.Speed < a.CruiseSpeed || ChaseDriver.RoleOf(a) == ChaseRole.Front));
+        if (rearEnd) return !(a.Faction == Faction.Police && (a.Speed < a.CruiseSpeed || ChaseDriver.IsBoxingFront(a)));
         return ownInto > OwnSteeringDeadBand && ownInto > agentInto;
     }
 

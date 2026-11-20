@@ -34,6 +34,10 @@ public sealed class ChaseDriver : IDriver
         /// <summary>-1 or +1: the side of you the box is on (Side's lane, and the side Front passes you on). The dispatcher keeps it the same for all chasers.</summary>
         public int Side { get; set; } = 1;
         public AvoidMemory Avoid { get; } = new();
+        /// <summary>The role it last drove as: <see cref="Role"/>, or Trail when it dropped back near a roadblock or stood down.</summary>
+        public ChaseRole ActingAs { get; private set; }
+
+        internal void Acted(ChaseRole role) => ActingAs = role;
     }
 
     const double TrailGap = 20, TrailGain = 1.2, TrailDropBack = -6, CloseUp = 20;
@@ -67,6 +71,13 @@ public sealed class ChaseDriver : IDriver
     /// <summary>The role of a car driven by a ChaseDriver, or null.</summary>
     public static ChaseRole? RoleOf(AgentCar car) => car.Driver is ChaseDriver && car.DriverState is State s ? s.Role : null;
 
+    /// <summary>
+    /// True while <paramref name="car"/> is boxing you in as the Front car: it has the Front role, it drove as Front on its
+    /// last step (not dropped back near a roadblock), and it is not blinded.
+    /// </summary>
+    public static bool IsBoxingFront(AgentCar car) =>
+        car.Driver is ChaseDriver && car.DriverState is State { Role: ChaseRole.Front, ActingAs: ChaseRole.Front } && car.Blinded <= 0;
+
     public DriveIntent Decide(AgentCar self, WorldView view, double dt)
     {
         if (self.DriverState is not State s)
@@ -81,6 +92,7 @@ public sealed class ChaseDriver : IDriver
         bool roadblock = RoadblockNear(self, view);
         if (role != ChaseRole.Trail && roadblock) role = ChaseRole.Trail;
         if (role == ChaseRole.Side && !PoliceLanes.MayEnter(view, self, boxLane)) role = ChaseRole.Trail;   // stands down (F2)
+        s.Acted(role);
 
         var (speed, lateral) = role switch
         {
