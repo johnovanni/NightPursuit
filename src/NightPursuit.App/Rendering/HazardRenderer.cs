@@ -27,20 +27,8 @@ public static class HazardRenderer
     const int Puffs = 8;
     const double PuffLife = 4.0, RiseSpeed = 1.5, WindSpeed = 0.7, StartRadius = 0.6, EndRadius = 2.2, MaxAlpha = 0.5;
     const double SmokeDistance = 900;   // visible from far away: it helps the WRECK AHEAD warning
-    const int AlphaLevels = 10;         // opacity is quantised so the pens and brushes can be built once
-    static readonly Pen[] SmokePens = MakeSmokePens();
+    const int AlphaLevels = 10;         // opacity is quantised so the brushes can be built once
     static readonly Brush[] SmokeFills = MakeSmokeFills();
-
-    static Pen[] MakeSmokePens()
-    {
-        var pens = new Pen[AlphaLevels];
-        for (int i = 0; i < pens.Length; i++)
-        {
-            pens[i] = new Pen(Neon.Solid(Neon.Gray, MaxAlpha * (i + 1) / AlphaLevels), 1.3);
-            pens[i].Freeze();
-        }
-        return pens;
-    }
 
     static Brush[] MakeSmokeFills()
     {
@@ -64,9 +52,29 @@ public static class HazardRenderer
             double rx = OilSlick.Radius * p.Ppm(depth);
             double ry = Math.Max(1, Math.Abs(near.Y - far.Y) / 2);
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-            dc.DrawEllipse(Neon.OilFill, Neon.Oil.Glow, c, rx, ry);
-            // A hostile slick is outlined red and dashed: the shape differs as well as the colour.
-            dc.DrawEllipse(null, o.Hostile ? Neon.HostileOutline.Core : Neon.Oil.Core, c, rx, ry);
+            double fade = LineArt.Fade(dz);
+            dc.DrawEllipse(Neon.OilFill, null, c, rx, ry);
+            var rim = LineArt.Scenery(Neon.Purple, fade);
+            if (o.Hostile)
+            {
+                // A hostile slick is outlined red and dashed: the shape differs as well as the colour.
+                var ring = new EllipseGeometry(c, rx, ry);
+                ring.Freeze();
+                LineArt.Draw(dc, ring, rim);
+                LineArt.Draw(dc, ring, LineArt.Dashed(LineArt.Outline(LineArt.ColorOf(Neon.HostileOutline), fade)));
+            }
+            else
+            {
+                // A friendly slick keeps only its near (lower) half: the far half would be a line along the road.
+                var half = new StreamGeometry();
+                using (var g = half.Open())
+                {
+                    g.BeginFigure(new Point(c.X - rx, c.Y), false, false);
+                    g.ArcTo(new Point(c.X + rx, c.Y), new Size(rx, ry), 0, false, SweepDirection.Counterclockwise, true, true);
+                }
+                half.Freeze();
+                LineArt.Draw(dc, half, rim);
+            }
             dc.Pop();
         }
     }
@@ -105,27 +113,37 @@ public static class HazardRenderer
         }
         near.Freeze();
 
+        double fade = LineArt.Fade(nearD);
+        var outline = LineArt.Outline(Neon.Orange, fade);
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-        dc.DrawGeometry(Neon.Black, Neon.WreckBody.Glow, shell);
-        dc.DrawGeometry(null, Neon.WreckBody.Core, shell);
+        dc.DrawGeometry(Neon.Black, null, shell);
 
-        // Roof ridges joining the faces, and the far face's top edge, so the length reads.
+        // Roof ridges at the two ends and the far face's roof edge, so the length reads. The rest are not stroked.
         var ridges = new LineBatch();
-        for (int i = 1; i <= TopCount; i++) ridges.Line(NearFace[i], FarFace[i]);
-        ridges.Draw(dc, Neon.WreckBody);
+        ridges.Line(NearFace[1], FarFace[1]);
+        ridges.Line(NearFace[TopCount], FarFace[TopCount]);
+        ridges.Draw(dc, outline);
+        LineArt.Draw(dc, LineArt.Polyline(new ArraySegment<Point>(FarFace, 1, TopCount)), outline);
 
-        // The rear face on top, filled, with cracks across it.
-        dc.DrawGeometry(Neon.Black, Neon.WreckBody.Glow, near);
-        dc.DrawGeometry(null, Neon.WreckBody.Core, near);
+        // The rear face on top: black fill, an open outline (no base; the road meets it there), and cracks across it.
+        dc.DrawGeometry(Neon.Black, null, near);
+        double total = 0, toShoulder = 0;
+        for (int i = 1; i < NearFace.Length; i++)
+        {
+            total += (NearFace[i] - NearFace[i - 1]).Length;
+            if (i == TopCount) toShoulder = total;
+        }
+        double sh = total > 0 ? toShoulder / total : 0.6;
+        LineArt.Draw(dc, LineArt.Polyline(NearFace, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outline);
         var cracks = new LineBatch();
         cracks.Line(Mix(NearFace[2], NearFace[0], 0.1), Mix(NearFace[3], NearFace[0], 0.8));
         cracks.Line(Mix(NearFace[4], NearFace[TopCount + 1], 0.1), Mix(NearFace[5], NearFace[TopCount + 1], 0.8));
-        cracks.Draw(dc, Neon.WreckBody);
+        cracks.Draw(dc, LineArt.Detail(Neon.Orange, fade));
 
         // Flames come up from the middle of the roof.
         double s = p.Ppm(depth);
         double roofY = p.ToScreen(dz, h.Lateral, WreckHeight * 0.85, out var roof, out _) ? roof.Y : g.Y - WreckHeight * s;
-        Flames(dc, h, g.X, roofY, s, h.Width / 2 * s);
+        Flames(dc, h, g.X, roofY, s, h.Width / 2 * s, fade);
         dc.Pop();
     }
 
@@ -149,7 +167,7 @@ public static class HazardRenderer
     }
 
     /// <summary>Flames: heights flicker from sines of the burn time; the lane offset is the per-wreck phase.</summary>
-    static void Flames(DrawingContext dc, Wreck wreck, double cx, double y0, double s, double hw)
+    static void Flames(DrawingContext dc, Wreck wreck, double cx, double y0, double s, double hw, double fade)
     {
         double phase = wreck.Lateral * 7.3;
         var outer = new LineBatch();
@@ -170,8 +188,8 @@ public static class HazardRenderer
             inner.Line(new Point(bx - baseW * 0.4, y0), mid);
             inner.Line(mid, new Point(bx + baseW * 0.4, y0));
         }
-        outer.Draw(dc, Neon.FlameOuter);
-        inner.Draw(dc, Neon.FlameInner);
+        outer.Draw(dc, LineArt.Outline(Neon.Orange, fade));
+        inner.Draw(dc, LineArt.Detail(Neon.Amber, fade));
     }
 
     /// <summary>
@@ -202,7 +220,7 @@ public static class HazardRenderer
                 if (!(r >= 0.5 && r < 5000)) continue;
                 double fade = (1 - t) * Math.Min(1, t / 0.08) * near;   // quick fade-in, then out over the life
                 int level = Math.Clamp((int)Math.Ceiling(fade * AlphaLevels) - 1, 0, AlphaLevels - 1);
-                dc.DrawEllipse(SmokeFills[level], SmokePens[level], c, r, r * 0.85);
+                dc.DrawEllipse(SmokeFills[level], null, c, r, r * 0.85);
             }
             dc.Pop();
         }

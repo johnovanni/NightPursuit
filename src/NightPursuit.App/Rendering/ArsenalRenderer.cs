@@ -40,15 +40,6 @@ internal static class ArsenalRenderer
 
     static double Frac(double x) => x - Math.Floor(x);
 
-    static readonly Pen SmokeRim = MakeRim();
-
-    static Pen MakeRim()
-    {
-        var pen = new Pen(Neon.Solid(Neon.Gray, 0.4), 1.2);
-        pen.Freeze();
-        return pen;
-    }
-
     /// <summary>Each cloud is 10 soft grey ellipses, grown over its first 0.8 s and faded over its last 1 s. Call it after the cars, so a car inside fades behind it.</summary>
     public static void DrawSmoke(DrawingContext dc, Projector p, World w)
     {
@@ -71,7 +62,7 @@ internal static class ArsenalRenderer
                 double rx = Math.Min(radius * scale * p.Ppm(depth), 0.35 * p.Height);
                 if (!(rx >= 0.5)) continue;
                 dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-                dc.DrawEllipse(Neon.SmokeFill, SmokeRim, c, rx, rx * 0.7);
+                dc.DrawEllipse(Neon.SmokeFill, null, c, rx, rx * 0.7);
                 dc.Pop();
             }
             dc.Pop();
@@ -105,19 +96,16 @@ internal static class ArsenalRenderer
                 stars.Line(new Point(g.X - r * 0.7, g.Y - r * 0.7), new Point(g.X + r * 0.7, g.Y + r * 0.7));
             }
             dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
-            stars.Draw(dc, Neon.Caltrop);
+            double fade = LineArt.Fade(dz);
+            stars.Draw(dc, LineArt.Detail(LineArt.ColorOf(Neon.Caltrop), fade));
             if (c.Hostile
                 && p.ToScreen(dz - Caltrops.HalfLength, c.Lateral - Caltrops.HalfWidth, 0, out var a, out _)
                 && p.ToScreen(dz - Caltrops.HalfLength, c.Lateral + Caltrops.HalfWidth, 0, out var b, out _)
                 && p.ToScreen(dz + Caltrops.HalfLength, c.Lateral + Caltrops.HalfWidth, 0, out var e, out _)
                 && p.ToScreen(dz + Caltrops.HalfLength, c.Lateral - Caltrops.HalfWidth, 0, out var f, out _))
             {
-                var outline = new LineBatch();
-                outline.Line(a, b);
-                outline.Line(b, e);
-                outline.Line(e, f);
-                outline.Line(f, a);
-                outline.Draw(dc, Neon.HostileOutline);
+                var box = LineArt.Polyline(new[] { a, b, e, f, a });
+                LineArt.Draw(dc, box, LineArt.Dashed(LineArt.Outline(LineArt.ColorOf(Neon.HostileOutline), fade)));
             }
             dc.Pop();
         }
@@ -154,11 +142,10 @@ internal static class ArsenalRenderer
             }
             face.Freeze();
             dc.DrawGeometry(Neon.CrateFill, null, face);
-            var edges = new LineBatch();
-            edges.Line(nbl, nbr); edges.Line(nbr, ntr); edges.Line(ntr, ntl); edges.Line(ntl, nbl);
-            edges.Line(fbl, fbr); edges.Line(fbr, ftr); edges.Line(ftr, ftl); edges.Line(ftl, fbl);
-            edges.Line(nbl, fbl); edges.Line(nbr, fbr); edges.Line(ntr, ftr); edges.Line(ntl, ftl);
-            edges.Draw(dc, Neon.Crate);
+            // Only the presenting edges: the near face without its base, and the top's far edge.
+            var crate = LineArt.Outline(LineArt.ColorOf(Neon.Crate), LineArt.Fade(dz));
+            LineArt.Draw(dc, LineArt.Polyline(new[] { nbl, ntl, ntr, nbr }), crate);
+            LineArt.Draw(dc, LineArt.Polyline(new[] { ftl, ftr }), crate);
             dc.Pop();
 
             double top = Math.Min(ntl.Y, ftl.Y);
