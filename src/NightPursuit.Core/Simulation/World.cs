@@ -290,6 +290,7 @@ public sealed partial class World
                 if (car.State == VehicleState.Wrecked || !Agents.Contains(car)) continue;
                 car.Driver = ChaseDriver.Instance;
                 car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+                car.CruiseSpeed = PoliceDispatcher.ChaseCruiseSpeed;
             }
         }
     }
@@ -537,7 +538,7 @@ public sealed partial class World
     /// and PunctureLeft; each agent in list order with the same four numbers, its Blinded timer, its player-blame time and hit-heat cooldown, its oil and caltrops
     /// droppers' charges and timers, its missile rack's cooldown and, for a boss, its phase, shield, caltrops slow and
     /// whether it is engaged; every missile's and enemy missile's Distance and Lateral; each hazard's type, Distance and
-    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat (value, level, the time since the last offence and in the level), the busted timer, whether it is armed and whether a bust is pending, and each rolling roadblock (formed, open and planned lane, the two lanes held, its cars, three timers).
+    /// Lateral (a speed trap's Triggered and Caught, a roadblock's HitPlayer), and their number; and the player's weapons: each one's charges, cooldown and recharge, then the strike sweep; last, the heat (value, level, the time since the last offence and in the level), the busted timer, whether it is armed, whether a bust is pending and whether the heat is held until the player moves, and each rolling roadblock (formed, open and planned lane, the two lanes held, its cars, three timers).
     /// </summary>
     public ulong StateHash()
     {
@@ -576,6 +577,7 @@ public sealed partial class World
         Add(ref h, Heat.Value); Add(ref h, Heat.SinceOffence);
         Add(ref h, Busted.Held); Add(ref h, BustedArmed ? 1 : 0);
         Add(ref h, (double)Heat.Level); Add(ref h, Heat.LevelTime); Add(ref h, BustedPending ? 1 : 0);
+        Add(ref h, HeatHeldUntilMoved ? 1 : 0);
         foreach (var rb in RollingRoadblockList)
         {
             Add(ref h, rb.Formed ? 1 : 0); Add(ref h, rb.OpenLane); Add(ref h, rb.PlannedOpen);

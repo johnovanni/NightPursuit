@@ -546,6 +546,7 @@ public class MissionTests
     [InlineData("\"police\": { \"startingHeat\": -1 }", "police.startingHeat must be from 0 to 100 (got -1)")]
     [InlineData("\"police\": { \"startingHeat\": 101 }", "police.startingHeat must be from 0 to 100 (got 101)")]
     [InlineData("\"police\": { \"heat\": 5 }", "police.heat is not a known field (presence, startingHeat)")]
+    [InlineData("\"police\": { \"presence\": 0, \"startingHeat\": 10 }", "police.startingHeat must be 0 when police.presence is 0")]
     public void Bad_traffic_and_police_name_the_field(string section, string expected)
     {
         var ex = Assert.Throws<MissionFormatException>(() => MissionLoader.Load(WithSection(section), "m.json"));
@@ -565,6 +566,9 @@ public class MissionTests
 
         var full = MissionLoader.Load(WithSection("\"police\": { \"presence\": 2, \"startingHeat\": 55 }"), "m.json");
         Assert.Equal(new PoliceDefinition(2, 55), full.Police);
+
+        var none0 = MissionLoader.Load(WithSection("\"police\": { \"presence\": 0, \"startingHeat\": 0 }"), "m.json");
+        Assert.Equal(new PoliceDefinition(0, 0), none0.Police);   // presence 0 with no heat is fine
     }
 
     [Fact]

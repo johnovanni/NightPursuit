@@ -22,10 +22,13 @@ public sealed class Roadblock : Hazard, ILaneBlocker
     public static Roadblock Place(double distance, int gapLane) =>
         new() { Distance = distance, GapLane = gapLane, Lateral = Track.LaneCentres[gapLane] };
 
-    public bool Blocks(double lateral, double halfWidth)
+    public bool Blocks(double lateral, double halfWidth) => Blocks(GapLane, lateral, halfWidth);
+
+    /// <summary><see cref="Blocks(double, double)"/> for a roadblock with its gap in <paramref name="gapLane"/>, before one is placed.</summary>
+    public static bool Blocks(int gapLane, double lateral, double halfWidth)
     {
         for (int i = 0; i < Track.LaneCentres.Length; i++)
-            if (i != GapLane && Math.Abs(lateral - Track.LaneCentres[i]) < BarrierHalfWidth + halfWidth + AvoidMargin) return true;
+            if (i != gapLane && Math.Abs(lateral - Track.LaneCentres[i]) < BarrierHalfWidth + halfWidth + AvoidMargin) return true;
         return false;
     }
 

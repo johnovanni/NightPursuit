@@ -180,7 +180,7 @@ public class PoliceTests
     public void Starting_at_patrol_seeds_patrol_cars()
     {
         var run = Run(1, 55);
-        Tick(run, 0);
+        Tick(run, 6);   // the police start on the first step you move off (I1)
         var cars = Police(run.World);
         Assert.Equal(2, cars.Count);
         Assert.All(cars, c => Assert.Equal(AgentKind.PolicePatrol, c.Kind));
@@ -227,7 +227,7 @@ public class PoliceTests
     public void Over_the_cap_only_unseen_patrol_cars_are_removed()
     {
         var run = Run(1, 55);
-        Tick(run, 0);
+        Tick(run, 6);   // the police start on the first step you move off (I1)
         var w = run.World;
         w.Agents.RemoveAll(a => KindRules.IsPolice(a.Kind));
         // Seven patrol cars in the window: five in view, two far ahead out of sight.
@@ -324,7 +324,7 @@ public class PoliceTests
     public void Starting_at_pursuit_seeds_the_chasers_at_once()
     {
         var run = Run(1.5, 85);
-        Tick(run, 0);
+        Tick(run, 6);   // the police start on the first step you move off (I1)
         var w = run.World;
         var chasers = Police(w).Where(IsChasing).ToList();
         Assert.Equal(3, chasers.Count);                      // min(3, round(2 x 1.5)) on the very first step
@@ -1308,5 +1308,236 @@ public class PoliceTests
         Assert.Equal(6, LivePoliceInWindow(w));
         Assert.Single(w.Agents, IsInterceptor);
         Assert.DoesNotContain(w.Agents, a => a.Kind == AgentKind.PoliceCruiser);
+    }
+
+    // ---- Final review fixes ----
+
+    static string PatrolGroundPath => Path.Combine(AppContext.BaseDirectory, "content", "missions", "patrol-ground.json");
+
+    [Fact]
+    public void Heat_and_police_wait_until_you_move()
+    {
+        // I1: the game runs while the start help is up. Sitting still for 60 s on the patrol ground keeps the heat at 85
+        // (Pursuit) and brings no police at all; moving off brings the chasers at once, and the heat dies down as before.
+        var run = new MissionRun(MissionLoader.LoadFile(PatrolGroundPath), new FeelSettings(), 1);
+        var w = run.World;
+        Assert.True(w.HeatHeldUntilMoved);
+        for (int i = 0; i < 60 * 60; i++)
+        {
+            run.Update(ControlFrame.Empty, 1 / 60.0);
+            Assert.Equal(85, w.Heat.Value);
+            Assert.Equal(HeatLevel.Pursuit, w.Heat.Level);
+            Assert.Empty(Police(w));
+            Assert.DoesNotContain(w.Hazards, h => h is SpeedTrap or Roadblock);
+        }
+        Assert.True(w.HeatHeldUntilMoved);
+        Assert.Equal(0, w.Heat.LevelTime);
+
+        double movedAt = -1;
+        bool offence = false;
+        for (int i = 0; i < 8 * 120; i++)
+        {
+            w.Player.Armor = 100;
+            run.Update(new ControlFrame { Gas = true, PadConnected = true, PadSteer = EnemyMissileTests.AutopilotSteer(w) }, Step);
+            offence |= w.Events.Any(e => e is HeatChanged { Amount: > 0 });
+            if (movedAt >= 0 || w.HeatHeldUntilMoved) continue;
+            movedAt = w.Time;
+            Assert.True(w.Player.Speed > BustedWatch.SpeedLimit);
+            Assert.Equal(3, Police(w).Count(IsChasing));   // seeded on the step you move off (F10)
+        }
+        Assert.True(movedAt >= 0, "the player never moved off");
+        Assert.False(offence, "an offence would hide the decay");
+        Assert.InRange(w.Heat.Value, 70, 84.9);   // 5 s quiet, then 2 a second
+        Assert.InRange(w.Heat.LevelTime, 7, 8);
+    }
+
+    [Fact]
+    public void Held_heat_is_not_held_again_after_a_respawn()
+    {
+        var run = Run(1, 85);
+        var w = run.World;
+        Tick(run, 10);
+        Assert.False(w.HeatHeldUntilMoved);
+        w.WreckPlayer("TEST");
+        Tick(run, 0);
+        for (int i = 0; i < 5 * 120 && run.State != RunState.Playing; i++) Tick(run, 0);
+        Assert.Equal(RunState.Playing, run.State);
+        Assert.False(w.HeatHeldUntilMoved);
+    }
+
+    [Theory]
+    [InlineData(85, "HEAT: PURSUIT")]
+    [InlineData(55, "HEAT: PATROL")]
+    [InlineData(95, "HEAT: MANHUNT")]
+    [InlineData(30, null)]
+    [InlineData(0, null)]
+    public void A_mission_starting_at_patrol_or_above_says_its_level(double heat, string? text)
+    {
+        // M4: the level messages only come when the level moves, so a hot start says its level once.
+        var w = Run(1, heat).World;
+        var heatMessages = w.RecentMessages.OfType<Message>().Where(m => m.Text.StartsWith("HEAT")).ToList();
+        if (text is null) Assert.Empty(heatMessages);
+        else Assert.Equal(new Message(0, text, Tone.Bad), Assert.Single(heatMessages));
+    }
+
+    [Fact]
+    public void A_roadblock_waits_for_cars_in_its_blocked_lanes()
+    {
+        // I3: never placed on top of traffic. Cars in every lane 50 m short of the spot leave no gap that fits, so the
+        // roadblock stays due; once only the centre lane has a car, it is placed with the centre as its gap, 800 m ahead.
+        var w = PursuitWorld(55);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(0.2, 55));   // 0.4 patrol cars round to 0: none seeded
+        var cars = new List<AgentCar>();
+        foreach (double lane in Track.LaneCentres)
+        {
+            var car = AgentCar.Create(w.NextId(), AgentKind.Civilian, w.Player.Distance + 750, lane, 30);
+            car.Driver = new StillDriver();
+            w.Agents.Add(car);
+            cars.Add(car);
+        }
+        for (int i = 0; i < 2 * 120; i++)
+        {
+            Hold(w, 30, 0, dispatcher);
+            Assert.DoesNotContain(w.Hazards, h => h is Roadblock);
+            Assert.True(dispatcher.NextRoadblockAt <= w.Player.Distance, "the roadblock stays due");
+        }
+        w.Agents.Remove(cars[0]);
+        w.Agents.Remove(cars[2]);
+        Hold(w, 30, 0, dispatcher);
+        var block = Assert.Single(w.Hazards.OfType<Roadblock>());
+        Assert.Equal(1, block.GapLane);
+        Assert.InRange(block.Distance - w.Player.Distance, 799, 801);
+        Assert.True(dispatcher.NextRoadblockAt > w.Player.Distance + 2900);
+    }
+
+    [Fact]
+    public void A_car_far_enough_before_the_spot_or_past_it_does_not_hold_a_roadblock_back()
+    {
+        var w = PursuitWorld(55);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(0.2, 55));
+        foreach (double dz in new[] { 800 - 160.0, 810 })   // 160 m short (beyond 150 m at 30 m/s), and 10 m past it
+            foreach (double lane in Track.LaneCentres)
+            {
+                var car = AgentCar.Create(w.NextId(), AgentKind.Civilian, w.Player.Distance + dz, lane, 30);
+                car.Driver = new StillDriver();
+                w.Agents.Add(car);
+            }
+        Hold(w, 30, 0, dispatcher);
+        Assert.Single(w.Hazards.OfType<Roadblock>());
+    }
+
+    [Fact]
+    public void The_first_roadblock_never_wrecks_a_civilian()
+    {
+        // I3, the review's probe C: on the patrol ground the first roadblock landed on a civilian in 12 of 20 seeds. Here the
+        // player moves off (so the police start) and then rolls along at 3 m/s, watched for 20 s.
+        int placed = 0;
+        var late = new List<string>();
+        foreach (int seed in Enumerable.Range(1, 20))
+        {
+            var run = new MissionRun(MissionLoader.LoadFile(PatrolGroundPath), new FeelSettings(), seed);
+            var w = run.World;
+            Roadblock? first = null;
+            double dueAt = -1;
+            var last = new Dictionary<int, double>();
+            for (int i = 0; i < 20 * 120; i++)
+            {
+                w.Player.Speed = 3; w.Player.Armor = 100;
+                run.Update(ControlFrame.Empty, Step);
+                if (dueAt < 0 && !w.HeatHeldUntilMoved) dueAt = w.Time;
+                if (first is null && w.Hazards.OfType<Roadblock>().FirstOrDefault() is { } rb)
+                {
+                    first = rb;
+                    placed++;
+                    Assert.InRange(rb.Distance - w.Player.Distance, 795, 805);
+                    if (w.Time - dueAt > 10) late.Add($"seed {seed} after {w.Time - dueAt:0.0} s");
+                }
+                foreach (var e in w.Events)
+                    if (e is VehicleDestroyed { Faction: Faction.Civilian, Cause: KillCause.WreckCollision } vd && first is not null
+                        && last.TryGetValue(vd.VehicleId, out double at))
+                        Assert.True(Math.Abs(at - first.Distance) > 10, $"seed {seed}: civilian {vd.VehicleId} wrecked on the roadblock at {w.Time:0.0} s");
+                last.Clear();
+                foreach (var a in w.Agents) last[a.Id] = a.Distance;
+            }
+        }
+        Assert.Equal(20, placed);
+        Assert.Empty(late);
+    }
+
+    [Fact]
+    public void A_trail_car_well_ahead_of_a_slow_player_keeps_moving()
+    {
+        // M1: a Trail car more than 30 m ahead of you would drop back at your speed - 6, so with you stopped it stopped
+        // dead in its lane. It keeps at least 8 m/s and moves on instead; one within 30 m still drops back past you.
+        var w = PursuitWorld();
+        var trail = Chaser(w, ChaseRole.Trail, 60, 0, 12);
+        for (int i = 0; i < 4 * 120; i++)
+        {
+            Hold(w, 0, 0);
+            Assert.True(trail.Speed >= 8 - 1e-6, $"trail at {trail.Speed:0.00} m/s, {trail.Distance - w.Player.Distance:0.0} m ahead");
+        }
+        var near = PursuitWorld();
+        var close = Chaser(near, ChaseRole.Trail, 20, 5, 12);
+        double slowest = double.MaxValue;
+        for (int i = 0; i < 4 * 120; i++)
+        {
+            Hold(near, 0, 0);
+            slowest = Math.Min(slowest, close.Speed);
+        }
+        Assert.True(slowest < 8, $"a trail car within 30 m only slowed to {slowest:0.00} m/s");
+    }
+
+    [Theory]
+    [InlineData(10)]
+    [InlineData(45)]
+    public void Chasers_cruise_at_30_whatever_your_speed(double speed)
+    {
+        // M2: the slow-police fault rule compares a police car's speed with its cruise speed, so chasers get a fixed 30 m/s
+        // instead of the speed they spawned at (your speed + 15). Patrol cars that start chasing get it too.
+        var w = PursuitWorld(95);
+        var patrol = AgentCar.Create(w.NextId(), AgentKind.PolicePatrol, w.Player.Distance + 300, Track.LaneCentres[0], 28);
+        w.Agents.Add(patrol);
+        var dispatcher = new PoliceDispatcher(new PoliceDefinition(1, 95));
+        Hold(w, speed, 0, dispatcher);
+        Assert.IsType<ChaseDriver>(patrol.Driver);
+        Assert.Equal(30, patrol.CruiseSpeed);
+        // Only your patrol car is left of the seeded ones, so cruisers come from behind to make up the chasers.
+        w.Agents.RemoveAll(a => a.Kind == AgentKind.PolicePatrol && a != patrol);
+        for (int i = 0; i < 120; i++) Hold(w, speed, 0, dispatcher);
+        var chasers = Police(w).Where(a => a.Driver is ChaseDriver or InterceptorDriver or RollingRoadblockDriver).ToList();
+        Assert.Contains(chasers, a => a.Kind == AgentKind.PoliceCruiser);
+        Assert.Contains(chasers, a => a.Kind == AgentKind.Interceptor);
+        Assert.Contains(chasers, a => a.Kind == AgentKind.ArmoredSuv);
+        Assert.All(chasers, a => Assert.Equal(30, a.CruiseSpeed));
+    }
+
+    [Fact]
+    public void A_broken_up_pair_cruises_at_30()
+    {
+        var w = PursuitWorld(95);
+        AgentCar[] cars = [];
+        var rb = OnlyTheRollingRoadblock(w, 45, 1, (r, _) => { cars = r.Cars.ToArray(); return true; });
+        foreach (var c in cars) c.CruiseSpeed = 12;   // as if it had come from somewhere else
+        w.Destroy(cars[0], KillCause.Rammed);
+        Hold(w, 45, w.Player.Lateral);
+        Assert.DoesNotContain(rb, w.RollingRoadblocks);
+        Assert.Equal(ChaseRole.Trail, ChaseDriver.RoleOf(cars[1]));
+        Assert.Equal(30, cars[1].CruiseSpeed);
+    }
+
+    [Fact]
+    public void A_wreck_in_a_formed_pairs_open_lane_breaks_the_rolling_roadblock()
+    {
+        // M5: like a wreck in an SUV's own lane, one in the lane the pair leaves open (within 120 m ahead of it) would leave
+        // you no way past, so the pair breaks up and both SUVs chase as Trail.
+        var w = PursuitWorld(95);
+        AgentCar[] cars = [];
+        var rb = OnlyTheRollingRoadblock(w, 45, 3, (r, _) => { cars = r.Cars.ToArray(); return true; });
+        Assert.Contains(rb, w.RollingRoadblocks);
+        var lead = rb.Cars.MaxBy(c => c.Distance)!;
+        w.Hazards.Add(new Wreck { Distance = lead.Distance + 60, Lateral = Track.LaneCentres[rb.OpenLane], Width = 1.9, Length = 4.4 });
+        Hold(w, 45, w.Player.Lateral);
+        Assert.Empty(w.RollingRoadblocks);
+        Assert.All(cars, c => Assert.Equal(ChaseRole.Trail, ChaseDriver.RoleOf(c)));
     }
 }

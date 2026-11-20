@@ -12,7 +12,8 @@ public enum ChaseRole { Trail, Front, Side }
 /// A police car chasing you at Pursuit level (call 13). Its <see cref="State.Role"/> says what it does:
 /// <list type="bullet">
 /// <item><b>Trail</b>: in your lane about 20 m behind (more at speed, so it can stop when you brake hard); when you are
-/// below 5 m/s it stops 6 m behind you, bumper to bumper. From beside or ahead of you it first gets out of your way and drops back.</item>
+/// below 5 m/s it stops 6 m behind you, bumper to bumper. From beside or ahead of you it first gets out of your way and drops back;
+/// more than 30 m ahead it never goes slower than 8 m/s, so it moves on rather than stop dead ahead of a slow you.</item>
 /// <item><b>Front</b>: passes you on the box side (<see cref="DriverHelpers.PassingLane"/>), takes your lane about 12 m
 /// ahead, and while within 25 m ahead slows to your speed - 4, never below 8 m/s.</item>
 /// <item><b>Side</b>: holds level with you (|ΔD| &lt; 3) in the neighbouring lane on the box side, at your speed but never
@@ -59,6 +60,11 @@ public sealed class ChaseDriver : IDriver
     const double FallBackLookAhead = 40, FallBackRoadblockSeconds = 1.5, WreckLookAhead = 120;
     /// <summary>Only a car this close ahead of you (or beside you) drops back past you that way; one farther ahead just takes the gap, metres.</summary>
     const double FallBackWithin = 30;
+    /// <summary>
+    /// A Trail car more than this far ahead of you never goes slower than <see cref="FrontMinSpeed"/>: dropping back at
+    /// your speed - 6 would stop it dead in its lane ahead of you when you are slow, metres.
+    /// </summary>
+    const double KeepsMovingAhead = 30;
     /// <summary>How much slower than you a car beside or ahead of you drops back near a roadblock, m/s (otherwise <see cref="TrailDropBack"/>).</summary>
     const double RoadblockDropBack = -10;
     /// <summary>Bumper-to-bumper room needed to cross your line ahead of you (plus the closing speed × <see cref="CrossSeconds"/>) or behind you, metres.</summary>
@@ -140,6 +146,7 @@ public sealed class ChaseDriver : IDriver
         // Near a roadblock a car beside or ahead of you drops back faster, so it is behind you before the barrier.
         double dropBack = roadblock && !behind ? RoadblockDropBack : TrailDropBack;
         double speed = Approach(p.Speed, dz, wanted, TrailGain, dropBack, CloseUp);
+        if (dz > KeepsMovingAhead) speed = Math.Max(FrontMinSpeed, speed);   // well ahead of a slow you, it moves on
         // From beside or ahead of you it gets out of your way in the box lane, never in a rolling roadblock's open lane.
         int gap = RollingRoadblock.GapToKeepClear(view.RollingRoadblocks, p.Distance);
         double? dropLane = gap >= 0 && boxLane == Track.LaneCentres[gap] ? OtherSideLane(home, boxLane) : boxLane;

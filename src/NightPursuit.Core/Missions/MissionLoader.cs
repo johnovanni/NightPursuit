@@ -87,7 +87,7 @@ public static class MissionLoader
             return new TrafficDefinition(Ranged(el, "carsPerKm", "traffic.carsPerKm", 0, MaxCarsPerKm));
         }
 
-        /// <summary>No section means no police; a section without presence means presence 1, without startingHeat means 0.</summary>
+        /// <summary>No section means no police; a section without presence means presence 1, without startingHeat means 0. Presence 0 needs starting heat 0.</summary>
         PoliceDefinition ReadPolice(JsonElement el)
         {
             if (el.ValueKind != JsonValueKind.Object) throw Fail("police must be an object");
@@ -96,6 +96,8 @@ public static class MissionLoader
                     throw Fail($"police.{prop.Name} is not a known field (presence, startingHeat)");
             double presence = el.TryGetProperty("presence", out _) ? Ranged(el, "presence", "police.presence", 0, MaxPresence) : 1;
             double heat = el.TryGetProperty("startingHeat", out _) ? Ranged(el, "startingHeat", "police.startingHeat", 0, 100) : 0;
+            // No police ever come at presence 0, so a starting heat there would mean nothing.
+            if (presence == 0 && heat > 0) throw Fail("police.startingHeat must be 0 when police.presence is 0");
             return new PoliceDefinition(presence, heat);
         }
 

@@ -31,6 +31,11 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
 
     const double TrapAhead = 700, TrapEvery = 1500;
     const double RoadblockAhead = 800, RoadblockEvery = 3000, RoadblockRetry = 500, RoadblockWreckRange = 150;
+    /// <summary>
+    /// A roadblock is not placed with a car in a lane it would block this far before it, or this many seconds away at the
+    /// car's speed if that is further: the car could not steer for the gap in time (metres, seconds).
+    /// </summary>
+    const double RoadblockCarReach = 150, RoadblockCarSeconds = 5;
     const double CarHalfWidth = 1.0;
     static readonly double[] TrapLimits = { 60, 70, 80 };
 
@@ -44,6 +49,13 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
     const double SwapMargin = 10;
     /// <summary>The cruise speed chasers fall back to when they back off, m/s.</summary>
     const double BackOffSpeed = 25;
+    /// <summary>
+    /// The cruise speed of every car chasing you (cruisers, interceptors, SUVs, and patrol cars once they chase), m/s. Their
+    /// drivers set their chasing speeds; this is only what "slower than its cruise speed" means for a police car you run
+    /// into (<see cref="Collisions"/>), and what a blinded one slows from. Fixed, so it no longer depends on how fast you
+    /// were going when the car appeared.
+    /// </summary>
+    public const double ChaseCruiseSpeed = 30;
 
     /// <summary>At Manhunt, at most this many interceptors (one per presence).</summary>
     const int MaxInterceptors = 2;
@@ -205,6 +217,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
             if (Math.Abs(a.Distance - w.Player.Distance) > ChaseRange) continue;
             a.Driver = ChaseDriver.Instance;
             a.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+            a.CruiseSpeed = ChaseCruiseSpeed;
         }
     }
 
@@ -248,6 +261,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         {
             if (!SpawnSpots.IsFree(w, distance, lane) || !PoliceLanes.LeavesALaneFree(view, lane, VehicleStats.PoliceCruiser.Width)) continue;
             var car = AgentCar.Create(w.NextId(), kind, distance, lane, p.Speed + ChaserFaster);
+            car.CruiseSpeed = ChaseCruiseSpeed;
             w.Agents.Add(car);
             return car;
         }
@@ -306,6 +320,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
                 var car = block.Cars[slot];
                 car.Driver = RollingRoadblockDriver.Instance;
                 car.DriverState = new RollingRoadblockDriver.State(block, slot);
+                car.CruiseSpeed = ChaseCruiseSpeed;
                 w.Agents.Add(car);
             }
             w.RollingRoadblockList.Add(block);
@@ -413,6 +428,7 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         if (car.State == VehicleState.Wrecked) return;
         car.Driver = ChaseDriver.Instance;
         car.DriverState = new ChaseDriver.State { Role = ChaseRole.Trail };
+        car.CruiseSpeed = ChaseCruiseSpeed;
     }
 
     /// <summary>Breaks up every rolling roadblock: its SUVs chase you as Trail (a boss fight has no roadblocks).</summary>
@@ -540,6 +556,11 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         w.Hazards.Add(new SpeedTrap { Distance = distance, Lateral = side * SpeedTrap.EdgeLateral, LimitMph = limit });
     }
 
+    /// <summary>
+    /// When due, a roadblock 800 m ahead with its gap in a random lane, or the next lane round: a gap fits when its lane
+    /// has no wreck within 150 m and no car is in either blocked lane just before the spot (<see cref="CarInBlockedLane"/>).
+    /// When no gap fits because of cars, it stays due and tries again next step; because of wrecks alone, 500 m later.
+    /// </summary>
     void PlaceRoadblock(World w)
     {
         if (w.Player.Distance < NextRoadblockAt) return;
@@ -552,15 +573,38 @@ public sealed class PoliceDispatcher(PoliceDefinition def)
         }
         double distance = NextRoadblockAt + RoadblockAhead;
         int first = w.TrafficRng.Next(Track.LaneCentres.Length);
+        bool carsInTheWay = false;
         for (int i = 0; i < Track.LaneCentres.Length; i++)
         {
             int gap = (first + i) % Track.LaneCentres.Length;
             if (WreckNear(w, distance, Track.LaneCentres[gap])) continue;
+            if (CarInBlockedLane(w, distance, gap)) { carsInTheWay = true; continue; }
             w.Hazards.Add(Roadblock.Place(distance, gap));
             NextRoadblockAt += RoadblockEvery;
             return;
         }
-        NextRoadblockAt += RoadblockRetry;   // every lane has a wreck near: skip this one
+        // Cars in the way: still due, and the schedule moves along with you (as above), so it goes 800 m ahead of you
+        // on the next step the cars allow.
+        if (carsInTheWay) NextRoadblockAt = w.Player.Distance;
+        else NextRoadblockAt += RoadblockRetry;   // every lane has a wreck near: skip this one
+    }
+
+    /// <summary>
+    /// True when a car on the road (driving or spinning) is in a lane that a roadblock at <paramref name="distance"/> with
+    /// its gap in <paramref name="gap"/> would block, anywhere from touching the barrier to 150 m before it (or 5 s at the
+    /// car's speed, if further). Such a car could not stop or steer for the gap in time.
+    /// </summary>
+    static bool CarInBlockedLane(World w, double distance, int gap)
+    {
+        foreach (var a in w.Agents)
+        {
+            if (!a.IsOnRoadDriving) continue;
+            double before = distance - a.Distance;
+            if (before <= -(a.Stats.Length + Roadblock.Depth) / 2) continue;   // already past it
+            if (before > Math.Max(RoadblockCarReach, a.Speed * RoadblockCarSeconds)) continue;
+            if (Roadblock.Blocks(gap, a.Lateral, a.Stats.Width / 2)) return true;
+        }
+        return false;
     }
 
     static bool WreckNear(World w, double distance, double lane)

@@ -81,7 +81,8 @@ public sealed class RollingRoadblock(AgentCar first, AgentCar second, int planne
 
     /// <summary>
     /// True when the pair can no longer work: an SUV is wrecked, blinded or gone from the road (a respawn clear or a cull,
-    /// F12), or, once formed, a wreck or roadblock blocks an SUV's lane ahead of it.
+    /// F12), or, once formed, a wreck or roadblock blocks an SUV's lane, or the open lane, within 120 m ahead of an SUV
+    /// (with the open lane blocked you would have no way past).
     /// </summary>
     internal bool IsBroken(IReadOnlyList<AgentCar> agents, IReadOnlyList<Hazard> hazards)
     {
@@ -89,7 +90,8 @@ public sealed class RollingRoadblock(AgentCar first, AgentCar second, int planne
         {
             var car = Cars[slot];
             if (car.State == VehicleState.Wrecked || car.Blinded > 0 || !Contains(agents, car)) return true;
-            if (Formed && LaneBlockedAhead(car, Track.LaneCentres[_lanes[slot]], hazards)) return true;
+            if (Formed && (LaneBlockedAhead(car, Track.LaneCentres[_lanes[slot]], hazards)
+                           || LaneBlockedAhead(car, Track.LaneCentres[OpenLane], hazards))) return true;
         }
         return false;
     }
@@ -100,7 +102,7 @@ public sealed class RollingRoadblock(AgentCar first, AgentCar second, int planne
         return false;
     }
 
-    /// <summary>How far ahead of an SUV a wreck or roadblock in its lane breaks the formation, metres (the wreck look-ahead).</summary>
+    /// <summary>How far ahead of an SUV a wreck or roadblock in its lane, or in the open lane, breaks the formation, metres (the wreck look-ahead).</summary>
     const double BlockedWithin = 120;
 
     static bool LaneBlockedAhead(AgentCar car, double lane, IReadOnlyList<Hazard> hazards)

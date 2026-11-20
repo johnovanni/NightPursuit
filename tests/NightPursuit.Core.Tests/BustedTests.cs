@@ -1,5 +1,6 @@
 using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
+using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Police;
 using NightPursuit.Core.Road;
@@ -217,5 +218,74 @@ public class BustedTests
         Assert.Equal(RunState.Playing, run.State);
         Assert.InRange(w.Heat.Value, 75, 80);
         Assert.DoesNotContain(w.Events, e => e is HeatChanged { Reason: "BUSTED" });
+    }
+
+    // ---- Final review fixes (I2, M3): only police that are chasing you, and not the Side car ----
+
+    /// <summary>A still police car <paramref name="dz"/> m along and <paramref name="dl"/> m across from you, driven as a chaser acting as <paramref name="actingAs"/>.</summary>
+    static AgentCar Chasing(World w, ChaseRole actingAs, double dz, double dl = 0, AgentKind kind = AgentKind.PoliceCruiser)
+    {
+        var car = Cruiser(w, dz, kind);
+        car.Lateral = w.Player.Lateral + dl;
+        var s = new ChaseDriver.State { Role = actingAs };
+        s.Acted(actingAs);
+        car.DriverState = s;
+        return car;
+    }
+
+    [Fact]
+    public void Stopping_beside_the_side_car_never_busts()
+    {
+        // The Side car rolls on past you at 3 m/s when you stop, so it stays within 15 m for up to 5 s: on its own it
+        // busted a player who braked to a stop to get out of a box-in.
+        var w = PursuitWorld(75);
+        Chasing(w, ChaseRole.Side, 0, 5);
+        Arm(w);
+        for (int i = 0; i < 600; i++)
+        {
+            Hold(w, Slow);
+            Assert.False(w.Busted.Counting);
+        }
+        Assert.Equal(VehicleState.Driving, w.Player.State);
+    }
+
+    [Theory]
+    [InlineData(AgentKind.PoliceCruiser, ChaseRole.Trail)]
+    [InlineData(AgentKind.PoliceCruiser, ChaseRole.Front)]
+    [InlineData(AgentKind.Interceptor, ChaseRole.Trail)]
+    [InlineData(AgentKind.ArmoredSuv, ChaseRole.Trail)]
+    public void A_chaser_behind_still_busts_with_the_side_car_beside(AgentKind kind, ChaseRole role)
+    {
+        var w = PursuitWorld(75);
+        Chasing(w, ChaseRole.Side, 0, 5);
+        Chasing(w, role, -8, 0, kind);
+        Arm(w);
+        int bustedAt = 0;
+        for (int i = 1; i <= 400 && bustedAt == 0; i++)
+        {
+            Hold(w, Slow);
+            if (w.Events.Any(e => e is PlayerBusted)) bustedAt = i;
+        }
+        Assert.Equal(360, bustedAt);
+    }
+
+    [Theory]
+    [InlineData(AgentKind.PolicePatrol)]
+    [InlineData(AgentKind.PoliceCruiser)]
+    [InlineData(AgentKind.Interceptor)]
+    public void A_police_car_on_patrol_never_busts(AgentKind kind)
+    {
+        // At Pursuit a patrol car within 600 m starts chasing; one that has backed off (or an interceptor on patrol, which
+        // only chases at Manhunt) is not chasing you, so it cannot bust you.
+        var w = PursuitWorld(75);
+        var car = Cruiser(w, -8, kind);
+        car.Driver = PatrolDriver.Instance;
+        car.CruiseSpeed = 0;   // it stays where it is
+        Arm(w);
+        for (int i = 0; i < 600; i++)
+        {
+            Hold(w, Slow);
+            Assert.False(w.Busted.Counting);
+        }
     }
 }

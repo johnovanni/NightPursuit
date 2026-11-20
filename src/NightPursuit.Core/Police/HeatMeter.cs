@@ -65,6 +65,16 @@ public sealed class HeatMeter
         return change;
     }
 
+    /// <summary>
+    /// Runs <paramref name="dt"/> seconds (whole steps) of the rise flash only, while the heat is held at the mission start
+    /// (<see cref="World.HeatHeldUntilMoved"/>), so a heat rise then still blinks for 1 s and stops.
+    /// </summary>
+    public void UpdateFlash(double dt)
+    {
+        int steps = (int)Math.Round(dt / World.Step);
+        _flashSteps = Math.Min(FlashSteps, _flashSteps + steps);
+    }
+
     /// <summary>Rising follows the thresholds; falling goes one level a step, and needs heat 5 below the level's threshold (Patrol and above also 20 s in the level).</summary>
     HeatLevel? Reevaluate()
     {

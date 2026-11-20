@@ -38,7 +38,7 @@ public sealed class MissionRun
     void Rebuild()
     {
         World = new World(new Track(_def.Road), _feel, new SeededRng(_seed)) { Loadout = new Loadout(_def.Loadout), TrafficRng = new SeededRng(_seed * 31 + 7) };
-        if (_def.Police is { } police) World.Heat.Set(police.StartingHeat);
+        if (_def.Police is { } police) World.StartPolice(police.StartingHeat);   // held until you move off; not again at a respawn
         Director = new MissionDirector(_def);
         State = RunState.Playing;
         StateTimer = 0;

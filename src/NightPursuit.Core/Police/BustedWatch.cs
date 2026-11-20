@@ -1,10 +1,11 @@
+using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
 
 namespace NightPursuit.Core.Police;
 
 /// <summary>
-/// The busted countdown: at Pursuit or above, a working police car within <see cref="Radius"/> m while you are slower
+/// The busted countdown: at Pursuit or above, a working police car chasing you within <see cref="Radius"/> m while you are slower
 /// than 5 mph for <see cref="Seconds"/> s busts you. It counts whole steps, so 3 s is exactly 360 steps, and it does
 /// not count until the player has first moved above 5 mph in this car (<see cref="World.BustedArmed"/>).
 /// </summary>
@@ -49,11 +50,17 @@ public sealed class BustedWatch
         return true;
     }
 
+    /// <summary>
+    /// A police car within <see cref="Radius"/> m that is chasing you: driving, not blinded, not on patrol (patrol cars,
+    /// and chasers that have backed off, drive on <see cref="PatrolDriver"/>) and not acting as the Side car, which rolls
+    /// on past you at 3 m/s when you stop. Trail, Front, interceptors and SUVs count.
+    /// </summary>
     static bool PoliceClose(World w)
     {
         foreach (var a in w.Agents)
         {
             if (a.Faction != Faction.Police || a.State != VehicleState.Driving || a.Blinded > 0) continue;
+            if (ReferenceEquals(a.Driver, PatrolDriver.Instance) || a.DriverState is ChaseDriver.State { ActingAs: ChaseRole.Side }) continue;
             double dz = a.Distance - w.Player.Distance, dl = a.Lateral - w.Player.Lateral;
             if (Math.Sqrt(dz * dz + dl * dl) <= Radius) return true;
         }

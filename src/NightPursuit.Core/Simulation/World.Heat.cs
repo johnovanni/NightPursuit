@@ -21,6 +21,25 @@ public sealed partial class World
         if (change is { } to) PublishLevelChange(from, to);
     }
 
+    /// <summary>
+    /// True from the start of a mission with a police section until the first step the player is driving faster than
+    /// 5 mph (<see cref="BustedWatch.SpeedLimit"/>). Until then the heat does not die down (nor does the time in its
+    /// level count) and the mission director does not run the police dispatcher, so nothing happens while the start help
+    /// is up. A respawn does not set it again. Offences still add heat.
+    /// </summary>
+    public bool HeatHeldUntilMoved { get; set; }
+
+    /// <summary>
+    /// A mission with police starts at <paramref name="startingHeat"/>, held until the player moves
+    /// (<see cref="HeatHeldUntilMoved"/>). Starting at Patrol or above says so once: "HEAT: PURSUIT", for example.
+    /// </summary>
+    public void StartPolice(double startingHeat)
+    {
+        Heat.Set(startingHeat);
+        HeatHeldUntilMoved = true;
+        if (Heat.Level >= HeatLevel.Patrol) Publish(new Message(Time, $"HEAT: {HeatRules.LevelName(Heat.Level)}", Tone.Bad));
+    }
+
     /// <summary>The countdown to being busted; runs in StepOnce after the heat update.</summary>
     public BustedWatch Busted { get; } = new();
     /// <summary>False until the player has moved above 5 mph since the mission start or the last respawn (F11); the watch counts nothing before.</summary>
@@ -106,9 +125,22 @@ public sealed partial class World
         else Publish(new Message(Time, $"{name} CRASHED", Tone.Info));
     }
 
-    /// <summary>Runs the meter's decay for this step, publishing a level change if there is one. Runs in StepOnce after the collisions.</summary>
+    /// <summary>
+    /// Runs the meter's decay for this step, publishing a level change if there is one. Runs in StepOnce after the
+    /// collisions. While <see cref="HeatHeldUntilMoved"/> only the rise flash runs; the first step the player drives
+    /// faster than 5 mph clears it, and the meter runs from that step on.
+    /// </summary>
     void StepHeat()
     {
+        if (HeatHeldUntilMoved)
+        {
+            if (Player.State != VehicleState.Driving || Player.Speed <= BustedWatch.SpeedLimit)
+            {
+                Heat.UpdateFlash(Step);
+                return;
+            }
+            HeatHeldUntilMoved = false;
+        }
         var from = Heat.Level;
         if (Heat.Update(Step, PoliceNear()) is { } to) PublishLevelChange(from, to);
     }
