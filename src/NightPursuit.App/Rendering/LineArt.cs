@@ -3,26 +3,18 @@ using System.Windows.Media;
 
 namespace NightPursuit.App.Rendering;
 
-/// <summary>SPIKE: the trial line-art styles. Classic is the game as it was; the others are being compared.</summary>
-internal enum ArtStyle { Classic, Laser, NewWave, Combined }
-
-/// <summary>A stroke in one of the trial styles: an optional wide soft halo, an optional glow, and the core line.</summary>
-internal sealed record ArtPen(Pen? Halo, Pen? Glow, Pen Core);
+/// <summary>A stroke: a wide soft halo, a glow, and the core line.</summary>
+internal sealed record ArtPen(Pen Halo, Pen Glow, Pen Core);
 
 /// <summary>
-/// SPIKE: shared rules for the trial styles.
-/// - Laser: luminous single strokes with a soft bloom, fading with distance.
-/// - New Wave: crisp lines with no glow, a heavy outline over light detail, and gaps where light would catch an edge.
-/// - Combined: New Wave's economy and gaps, with Laser's glow.
-/// All three draw only the edges that face you (no line along the bottom of a car, open windows) and fade with distance.
+/// Shared rules for the line art: luminous strokes with a soft bloom, a heavy outline over light detail, and gaps where
+/// light would catch an edge. Only the edges that face you are drawn (no line along the bottom of a car, open windows),
+/// and everything fades with distance.
 /// </summary>
 internal static class LineArt
 {
-    public static ArtStyle Style = ArtStyle.Classic;
-
-    public static bool Restyled => Style != ArtStyle.Classic;
-    static bool Glows => Style is ArtStyle.Laser or ArtStyle.Combined;
-    public static bool Breaks => Style is ArtStyle.NewWave or ArtStyle.Combined;
+    /// <summary>Gaps are left out of a line narrower than this many pixels: on a small shape they would read as damage.</summary>
+    const double MinGapWidth = 30;
 
     /// <summary>How bright and heavy a line is at <paramref name="ahead"/> metres: 1 close up, falling to about 0.25 far away.</summary>
     public static double Fade(double ahead)
@@ -34,7 +26,8 @@ internal static class LineArt
     const int Levels = 12;
     static int Level(double fade) => Math.Clamp((int)Math.Round(fade * Levels), 1, Levels);
 
-    static readonly Dictionary<(Color, int, int, ArtStyle), ArtPen> Cache = new();
+    static readonly Dictionary<(Color, int, int), ArtPen> Cache = new();
+    static readonly Dictionary<ArtPen, ArtPen> DashedCache = new();
 
     /// <summary>The silhouette: the heaviest line of a thing.</summary>
     public static ArtPen Outline(Color c, double fade) => Get(c, fade, 0);
@@ -46,30 +39,19 @@ internal static class LineArt
     static ArtPen Get(Color c, double fade, int role)
     {
         int level = Level(fade);
-        var key = (c, level, role, Style);
+        var key = (c, level, role);
         if (Cache.TryGetValue(key, out var pen)) return pen;
         double f = (double)level / Levels;
         // Weight falls with distance more slowly than brightness, so far lines stay visible but quiet.
         double weight = 0.45 + 0.55 * f;
-        (double width, double alpha) = (role, Style) switch
+        (double width, double alpha) = role switch
         {
-            (0, ArtStyle.NewWave) => (2.8 * weight, f),
-            (0, ArtStyle.Laser) => (1.7 * weight, f),
-            (0, _) => (2.3 * weight, f),
-            (1, ArtStyle.NewWave) => (1.2 * weight, 0.75 * f),
-            (1, _) => (1.0 * weight, 0.7 * f),
-            (_, ArtStyle.NewWave) => (2.0 * weight, f),
+            0 => (2.3 * weight, f),
+            1 => (1.0 * weight, 0.7 * f),
             _ => (1.6 * weight, f),
         };
         width = Math.Max(0.7, width);
-        Pen? halo = null, glow = null;
-        if (Glows)
-        {
-            double g = Style == ArtStyle.Laser ? 1.0 : 0.8;   // Laser blooms a little more
-            halo = Make(c, 0.10 * alpha * g, width + 9 * weight);
-            glow = Make(c, 0.30 * alpha * g, width + 3.5 * weight);
-        }
-        pen = new ArtPen(halo, glow, Make(c, alpha, width));
+        pen = new ArtPen(Make(c, 0.08 * alpha, width + 9 * weight), Make(c, 0.24 * alpha, width + 3.5 * weight), Make(c, alpha, width));
         Cache[key] = pen;
         return pen;
     }
@@ -89,23 +71,49 @@ internal static class LineArt
         return Color.FromRgb(c.R, c.G, c.B);
     }
 
+    /// <summary>The solid colour of a brush, at full strength.</summary>
+    public static Color ColorOf(Brush brush)
+    {
+        var c = ((SolidColorBrush)brush).Color;
+        return Color.FromRgb(c.R, c.G, c.B);
+    }
+
+    /// <summary>The same pen with a dashed halo, glow and core. Hostile outlines use it: their dashes are part of their shape.</summary>
+    public static ArtPen Dashed(ArtPen pen)
+    {
+        if (DashedCache.TryGetValue(pen, out var dashed)) return dashed;
+        dashed = new ArtPen(Dash(pen.Halo), Dash(pen.Glow), Dash(pen.Core));
+        DashedCache[pen] = dashed;
+        return dashed;
+    }
+
+    static Pen Dash(Pen p)
+    {
+        var d = p.Clone();
+        d.DashStyle = DashStyles.Dash;
+        d.Freeze();
+        return d;
+    }
+
     public static void Draw(DrawingContext dc, Geometry g, ArtPen pen)
     {
-        if (pen.Halo is not null) dc.DrawGeometry(null, pen.Halo, g);
-        if (pen.Glow is not null) dc.DrawGeometry(null, pen.Glow, g);
+        dc.DrawGeometry(null, pen.Halo, g);
+        dc.DrawGeometry(null, pen.Glow, g);
         dc.DrawGeometry(null, pen.Core, g);
     }
 
     /// <summary>
     /// An open polyline through <paramref name="pts"/>, leaving out the stretches given as fractions of its length
-    /// (only when the style breaks lines). The gaps are where light would catch the edge, and the eye fills them in.
+    /// (unless the line is narrower than <see cref="MinGapWidth"/>). The gaps are where light would catch the edge, and the eye fills them in.
     /// </summary>
     public static StreamGeometry Polyline(IReadOnlyList<Point> pts, params (double From, double To)[] gaps)
     {
         var geo = new StreamGeometry();
         using (var c = geo.Open())
         {
-            if (!Breaks || gaps.Length == 0)
+            double minX = double.MaxValue, maxX = double.MinValue;
+            foreach (var pt in pts) { minX = Math.Min(minX, pt.X); maxX = Math.Max(maxX, pt.X); }
+            if (gaps.Length == 0 || maxX - minX < MinGapWidth)
             {
                 c.BeginFigure(pts[0], false, false);
                 for (int i = 1; i < pts.Count; i++) c.LineTo(pts[i], true, true);

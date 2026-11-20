@@ -22,7 +22,7 @@ internal sealed class LineBatch
         _any = true;
     }
 
-    /// <summary>SPIKE: draws the batch in a trial line-art pen.</summary>
+    /// <summary>Draws the batch in a line-art pen (halo, glow and core).</summary>
     public void Draw(DrawingContext dc, ArtPen pen)
     {
         _ctx.Close();

@@ -91,7 +91,7 @@ public static class VehicleRenderer
     };
 
     // The right half of each body outline, bottom to roof: x as a fraction of the half-width, y in metres (the left half mirrors it).
-    // SPIKE: the rolling tread on the strip of tyre under the body (the body's bottom edge is at 0.224 m).
+    // The rolling tread on the strip of tyre under the body (the body's bottom edge is at 0.224 m).
     const double TreadVisibleMetres = 0.224, TreadCycle = 10.5, TreadMinPixels = 7;   // 3.5 m per bar: under half a bar per 60 Hz frame up to 100 m/s
     const int TreadBars = 3;
 
@@ -144,7 +144,6 @@ public static class VehicleRenderer
 
     static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s, double time, double fade)
     {
-        bool art = LineArt.Restyled;
         bool spinning = car.State == VehicleState.Spinning;
         double tilt = spinning ? Math.Sin(spinAngle) * 25 : 0;
         if (car.Punctured && !spinning)
@@ -170,16 +169,11 @@ public static class VehicleRenderer
         foreach (int side in Projector.Sides)
         {
             var tyre = new Rect(g.X + side * (w / 2 - ww / 2) - ww / 2, g.Y - wheel, ww, wheel);
-            if (!art)
-            {
-                dc.DrawRectangle(Neon.Black, pen.Core, tyre);
-                continue;
-            }
             // Only the tyre's outer side: the edge that faces you. No line along the road (it read as a tank's tread).
             dc.DrawRectangle(Neon.Black, null, tyre);
             double outer = side < 0 ? tyre.Left : tyre.Right;
             tyres.Line(new Point(outer, g.Y - 0.224 * s), new Point(outer, tyre.Bottom));
-            // SPIKE: the rolling tread. Seen from behind, the back of a turning wheel moves down, so short dim bars slide down
+            // The rolling tread. Seen from behind, the back of a turning wheel moves down, so short dim bars slide down
             // the strip of tyre under the body. Their phase comes from the distance the car has driven, so they stop when it
             // stops; a bar every 3.5 m driven keeps each step under half a bar per frame even at top speed (no backward roll).
             if (TreadVisibleMetres * s >= TreadMinPixels)
@@ -232,13 +226,6 @@ public static class VehicleRenderer
             dc.DrawGeometry(null, shield.Core, body);
             if (fins is not null) { dc.DrawGeometry(null, shield.Glow, fins); dc.DrawGeometry(null, shield.Core, fins); }
         }
-        if (!art)
-        {
-            if (fins is not null) { dc.DrawGeometry(Neon.Black, pen.Glow, fins); dc.DrawGeometry(null, pen.Core, fins); }
-            dc.DrawGeometry(Neon.Black, pen.Glow, body);
-            dc.DrawGeometry(null, pen.Core, body);
-        }
-        else
         {
             // Black fills hide what is behind; only the presenting edges are stroked. There is no line along the bottom of
             // the body (the road meets it there) and none along the base of a fin (the body hides it).
@@ -269,9 +256,9 @@ public static class VehicleRenderer
         tyres.Draw(dc, detailPen);
         tread.Draw(dc, LineArt.Detail(colour, fade * 0.55));
 
-        if (art && kind != AgentKind.Boss)
+        if (kind != AgentKind.Boss)
         {
-            // SPIKE: a short bumper line, broken in the middle and stopping short of the sides, so the open bottom of the
+            // A short bumper line, broken in the middle and stopping short of the sides, so the open bottom of the
             // body reads as a car standing on the road rather than an arch.
             const double bumperY = 0.30;   // just above the body's bottom edge (0.224 m)
             double outer = HalfWidthAt(shape, bumperY) * 0.9, inner = 0.1;
@@ -281,18 +268,12 @@ public static class VehicleRenderer
         }
 
         var detail = new LineBatch();
-        if (kind != AgentKind.Boss && !art)
-        {
-            double bumper = g.Y - 0.45 * s;
-            detail.Line(new Point(g.X - w / 2, bumper), new Point(g.X + w / 2, bumper));
-        }
         switch (kind)
         {
             case AgentKind.Blocker:
                 detail.Line(new Point(g.X, g.Y - 0.5 * s), new Point(g.X, g.Y - roof + 0.1 * s));   // cargo door line
                 break;
             case AgentKind.Gunner:   // the rear window (restyled: open at the bottom)
-                if (!art) detail.Line(P(-0.8, 0.9), P(0.8, 0.9));
                 detail.Line(P(0.8, 0.9), P(0.52, 1.22));
                 detail.Line(P(0.52, 1.22), P(-0.52, 1.22));
                 detail.Line(P(-0.52, 1.22), P(-0.8, 0.9));
@@ -300,7 +281,6 @@ public static class VehicleRenderer
             case AgentKind.Dropper:   // the tall flat hatch and its handle
                 foreach (int side in Projector.Sides) detail.Line(P(side * 0.8, 0.58), P(side * 0.8, 1.62));
                 detail.Line(P(-0.8, 1.62), P(0.8, 1.62));
-                if (!art) detail.Line(P(-0.8, 0.58), P(0.8, 0.58));
                 detail.Line(P(-0.12, 1.1), P(0.12, 1.1));
                 break;
             case AgentKind.Armored:   // two plate lines and a narrow slit window
@@ -311,11 +291,6 @@ public static class VehicleRenderer
                 }
                 detail.Line(P(-0.36, 1.2), P(0.36, 1.2));
                 detail.Line(P(-0.36, 1.32), P(0.36, 1.32));
-                if (!art)
-                {
-                    detail.Line(P(-0.36, 1.2), P(-0.36, 1.32));
-                    detail.Line(P(0.36, 1.2), P(0.36, 1.32));
-                }
                 break;
             case AgentKind.Boss:
                 break;
@@ -343,7 +318,6 @@ public static class VehicleRenderer
                 // The glass never pokes outside the outline: the top stays under the roof, the bottom inside the body at that height.
                 wt = Math.Min(wt, shape[^1].X * w / 2 - 0.05 * s);
                 wb = Math.Min(wb, HalfWidthAt(shape, bodyTop + 0.06) * w / 2 - 0.05 * s);
-                if (!art) detail.Line(new Point(g.X - wb, winBottom), new Point(g.X + wb, winBottom));   // restyled: the glass is open at the bottom
                 detail.Line(new Point(g.X + wb, winBottom), new Point(g.X + wt, winTop));
                 detail.Line(new Point(g.X + wt, winTop), new Point(g.X - wt, winTop));
                 detail.Line(new Point(g.X - wt, winTop), new Point(g.X - wb, winBottom));
@@ -354,8 +328,7 @@ public static class VehicleRenderer
                 }
                 break;
         }
-        if (art) detail.Draw(dc, detailPen);
-        else detail.Draw(dc, pen);
+        detail.Draw(dc, detailPen);
         if (IsPolice(kind)) LightBar(dc, P, shape[^1], time, s);
 
         switch (kind)

@@ -5,7 +5,7 @@ using NightPursuit.Core.Vehicles;
 namespace NightPursuit.App.Rendering;
 
 /// <summary>
-/// SPIKE: cracks in the driver's windshield. They appear and spread as the car's worst damage grows
+/// Cracks in the driver's windshield. They appear and spread as the car's worst damage grows
 /// (<see cref="PlayerCar.WorstDamage"/>), and stay when armor is regained; each new car gets a clean windshield and its own
 /// pattern. Each impact is a chip with jagged radial cracks that lengthen and branch, then broken rings of a spider web.
 /// Thin, pale and dim, so the road stays readable through them; they keep clear of the aim mark at first.

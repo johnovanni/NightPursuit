@@ -51,21 +51,7 @@ public static class SkyRenderer
         }
 
         double step = Math.Tau / Ridge.Length;
-        if (LineArt.Restyled)
-        {
-            DrawLayeredRidges(dc, p, heading, step);
-            return;
-        }
-
-        var ridge = new LineBatch();
-        for (int i = 0; i < Ridge.Length; i++)
-        {
-            double a = WrapPi(i * step - heading);
-            if (Math.Abs(a) > 1.05) continue;
-            ridge.Line(new Point(halfW + a * ppr, horizon - Ridge[i]),
-                       new Point(halfW + (a + step) * ppr, horizon - Ridge[(i + 1) % Ridge.Length]));
-        }
-        ridge.Draw(dc, Neon.Sky);
+        DrawLayeredRidges(dc, p, heading, step);
     }
 
     static readonly double[] FarRidge = MakeFarRidge();
@@ -79,7 +65,7 @@ public static class SkyRenderer
     }
 
     /// <summary>
-    /// SPIKE: two ridges for depth. The far range is taller and dim; the near one is brighter and filled black below its
+    /// Two ridges for depth. The far range is taller and dim; the near one is brighter and filled black below its
     /// line, so it hides the far range behind it, as real hills do.
     /// </summary>
     static void DrawLayeredRidges(DrawingContext dc, Projector p, double heading, double step)

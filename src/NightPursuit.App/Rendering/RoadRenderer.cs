@@ -17,9 +17,8 @@ public static class RoadRenderer
         int n = (int)(DrawDistance / seg);
         p.BeginClip(firstD, n + 1);
 
-        // SPIKE: the trial styles fade the road in finer steps (see ArtBands).
-        bool art = LineArt.Restyled;
-        int bands = art ? ArtBands.Length : 3;
+        // The road fades in finer steps with distance (see ArtBands).
+        int bands = ArtBands.Length;
         var edges = new LineBatch[bands];
         var lanes = new LineBatch[bands];
         var postBands = new LineBatch[bands];
@@ -44,9 +43,9 @@ public static class RoadRenderer
             {
                 // Coming out from behind a crest: start the line where it emerges.
                 double t = prevY > maxY ? (maxY - prevY) / (sy - prevY) : 0;
-                int band = art ? ArtBand(d) : d < 250 ? 0 : d < 700 ? 1 : 2;
-                var posts = postBands[art ? band : 0];
-                var lamps = lampBands[art ? band : 0];
+                int band = ArtBand(d);
+                var posts = postBands[band];
+                var lamps = lampBands[band];
                 Point From(int k) => prev[k] + (cur[k] - prev[k]) * t;
 
                 edges[band].Line(From(0), cur[0]);
@@ -92,14 +91,6 @@ public static class RoadRenderer
         const double margin = 60;   // covers the shake offset
         dc.DrawRectangle(Neon.Black, null, new Rect(-margin, groundTop, p.Width + 2 * margin, Math.Max(0, p.Height + margin - groundTop)));
 
-        if (!art)
-        {
-            postBands[0].Draw(dc, Neon.Post);
-            lampBands[0].Draw(dc, Neon.Lamp);
-            lanes[2].Draw(dc, Neon.LaneFar); lanes[1].Draw(dc, Neon.LaneMid); lanes[0].Draw(dc, Neon.LaneNear);
-            edges[2].Draw(dc, Neon.RoadFar); edges[1].Draw(dc, Neon.RoadMid); edges[0].Draw(dc, Neon.RoadNear);
-            return;
-        }
         // Far to near, so the brighter near lines sit on top.
         for (int b = bands - 1; b >= 0; b--)
         {
@@ -111,7 +102,7 @@ public static class RoadRenderer
         }
     }
 
-    /// <summary>SPIKE: the far edge of each fade band, in metres ahead.</summary>
+    /// <summary>The far edge of each fade band, in metres ahead.</summary>
     static readonly double[] ArtBands = { 40, 90, 160, 260, 400, 600, 850, 1200, double.MaxValue };
 
     static int ArtBand(double d)

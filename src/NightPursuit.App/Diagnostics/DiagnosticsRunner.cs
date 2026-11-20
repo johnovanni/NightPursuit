@@ -109,21 +109,7 @@ public static class DiagnosticsRunner
             return 2;
         }
 
-        // SPIKE: --style classic,laser,newwave,combined renders each scene in each trial style; --sheet also writes a 2x2
-        // comparison per scene (it needs exactly four styles).
-        var styles = new List<ArtStyle>();
-        foreach (string name in (Arg(args, "--style") ?? "classic").Split(','))
-        {
-            if (!Enum.TryParse<ArtStyle>(name, true, out var st) || name.All(char.IsDigit))
-            {
-                Error($"Unknown style '{name}'. Known styles: classic, laser, newwave, combined");
-                return 2;
-            }
-            styles.Add(st);
-        }
-        bool sheet = Has(args, "--sheet") && styles.Count == 4;
-
-        // SPIKE: --damage 0,40,80 renders each picture at each windshield damage level (file suffix -d<N>).
+        // --damage 0,40,80 renders each picture at each windshield damage level (file suffix -d<N>).
         var damages = new List<double>();
         foreach (string text in (Arg(args, "--damage") ?? "-1").Split(','))
         {
@@ -137,68 +123,23 @@ public static class DiagnosticsRunner
 
         foreach (string scene in scenes)
         {
-            var made = new List<(ArtStyle Style, string File)>();
-            foreach (var style in styles)
+            // With several scenes, out.png becomes out-<scene>.png; each starts from its own fresh run.
+            string file = scenes.Length > 1
+                ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + scene + Path.GetExtension(path))
+                : path;
+            foreach (double damage in damages)
             {
-                // With several scenes or styles, out.png becomes out-<scene>[-<style>].png; each starts from its own fresh run.
-                string suffix = (scenes.Length > 1 ? "-" + scene : "") + (styles.Count > 1 ? "-" + style.ToString().ToLowerInvariant() : "");
-                string file = suffix.Length > 0
-                    ? Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + suffix + Path.GetExtension(path))
-                    : path;
-                LineArt.Style = style;
-                foreach (double damage in damages)
-                {
-                    SnapshotDamage = damage;
-                    string f = damage < 0 ? file
-                        : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + "-d" + damage.ToString(CultureInfo.InvariantCulture) + Path.GetExtension(file));
-                    RenderScene(scene, mission, seconds, width, height, f);
-                }
-                SnapshotDamage = -1;
-                made.Add((style, file));
+                SnapshotDamage = damage;
+                string f = damage < 0 ? file
+                    : Path.Combine(Path.GetDirectoryName(file) ?? "", Path.GetFileNameWithoutExtension(file) + "-d" + damage.ToString(CultureInfo.InvariantCulture) + Path.GetExtension(file));
+                RenderScene(scene, mission, seconds, width, height, f);
             }
-            LineArt.Style = ArtStyle.Classic;
-            if (sheet)
-                WriteSheet(made, width, height,
-                    Path.Combine(Path.GetDirectoryName(path) ?? "", Path.GetFileNameWithoutExtension(path) + "-" + scene + "-sheet" + Path.GetExtension(path)));
+            SnapshotDamage = -1;
         }
         return 0;
     }
 
-    /// <summary>SPIKE: four renders side by side (2x2, full size), each labelled with its style.</summary>
-    static void WriteSheet(List<(ArtStyle Style, string File)> made, int width, int height, string path)
-    {
-        var visual = new DrawingVisual();
-        using (var dc = visual.RenderOpen())
-        {
-            dc.DrawRectangle(Brushes.Black, null, new Rect(0, 0, width * 2 + 8, height * 2 + 8));
-            for (int i = 0; i < made.Count; i++)
-            {
-                var img = new BitmapImage();
-                img.BeginInit();
-                img.CacheOption = BitmapCacheOption.OnLoad;
-                img.UriSource = new Uri(Path.GetFullPath(made[i].File));
-                img.EndInit();
-                double x = (i % 2) * (width + 8), y = (i / 2) * (height + 8);
-                dc.DrawImage(img, new Rect(x, y, width, height));
-                string label = made[i].Style switch
-                {
-                    ArtStyle.Classic => "NOW", ArtStyle.Laser => "LASER", ArtStyle.NewWave => "NEW WAVE", _ => "COMBINED",
-                };
-                var ft = new FormattedText(label, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-                                           new Typeface("Consolas"), 40, Brushes.White, 1.0);
-                dc.DrawRectangle(Brushes.Black, null, new Rect(x + width / 2 - ft.Width / 2 - 12, y + height - 70, ft.Width + 24, 56));
-                dc.DrawText(ft, new Point(x + width / 2 - ft.Width / 2, y + height - 64));
-            }
-        }
-        var bitmap = new RenderTargetBitmap(width * 2 + 8, height * 2 + 8, 96, 96, PixelFormats.Pbgra32);
-        bitmap.Render(visual);
-        var encoder = new PngBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(bitmap));
-        using var file = File.Create(path);
-        encoder.Save(file);
-    }
-
-    /// <summary>SPIKE: the windshield damage forced on the next snapshot, or -1 to leave the run's own.</summary>
+    /// <summary>The windshield damage forced on the next snapshot, or -1 to leave the run's own.</summary>
     static double SnapshotDamage = -1;
 
     static void RenderScene(string scene, string mission, double seconds, int width, int height, string path)
@@ -232,7 +173,7 @@ public static class DiagnosticsRunner
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
         if (SnapshotDamage >= 0)
         {
-            // SPIKE: --damage N shows the windshield as if the car's armor had fallen to 100 - N.
+            // --damage N shows the windshield as if the car's armor had fallen to 100 - N.
             run.World.Player.WorstDamage = SnapshotDamage;
             run.World.Player.Armor = Math.Max(1, 100 - SnapshotDamage);
         }
