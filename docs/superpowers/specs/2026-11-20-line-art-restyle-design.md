@@ -53,6 +53,9 @@ broken in the middle and stopping short of the sides, so near cars stand on the 
 
 - No gameplay change. Core is untouched; StateHash and all 869 tests stay as they are.
 - No new colours; each type keeps its colour.
+- No wreck "breakdown" effects. The trial tried a shattered windshield, a crumpled smoking bonnet, a nose dip and lean,
+  a dying dashboard and a dizzy double image circling the view; the owner played it and dropped them all as not needed
+  and too much (2026-11-20). A wreck keeps the existing WRECKED banner and countdown.
 - Plan 4's screens are not built here. Plan 4's boss portrait and briefing pictures will use these pens (a note is added
   to Plan 4, not a new task here).
 
