@@ -33,7 +33,7 @@ public static class HazardRenderer
     static Brush[] MakeSmokeFills()
     {
         var fills = new Brush[AlphaLevels];
-        for (int i = 0; i < fills.Length; i++) fills[i] = Neon.Solid(Colors.Black, 0.35 * (i + 1) / AlphaLevels);
+        for (int i = 0; i < fills.Length; i++) fills[i] = Neon.Solid(Neon.Gray, 0.24 * (i + 1) / AlphaLevels);
         return fills;
     }
 
