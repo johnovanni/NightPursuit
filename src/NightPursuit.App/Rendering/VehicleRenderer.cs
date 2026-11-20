@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Media;
 using NightPursuit.Core.Drivers;
 using NightPursuit.Core.Hazards;
+using NightPursuit.Core.Missions;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Simulation;
 using NightPursuit.Core.Vehicles;
@@ -101,8 +102,7 @@ public static class VehicleRenderer
     static readonly (double X, double Y)[] GunnerShape = { (1, 0.224), (1, 0.7), (0.9, 0.82), (0.6, 1.3) };    // fastback: the roof slopes down to the tail
     static readonly (double X, double Y)[] DropperShape = { (1, 0.224), (1, 1.62), (0.94, 1.8) };              // a tall flat-roofed van
     static readonly (double X, double Y)[] ArmoredShape = { (1, 0.224), (1, 0.62), (0.5, 1.6) };               // a wide wedge up to a narrow flat roof
-    static readonly (double X, double Y)[] BossShape = { (1, 0.224), (1, 0.62), (0.88, 0.8), (0.55, 1.02) };   // long and low
-    static readonly (double X, double Y)[] BossFin = { (0.92, 0.7), (0.84, 1.5), (0.68, 1.5), (0.62, 0.95) };
+    // The boss's body and fins come from BossShapes, by its look (Fin, Twin or Dome).
 
     // Civilians (all 1.45 m tall): a sedan with a clear trunk shelf under a narrow cabin (roof 0.55), a hatchback whose near-full-width
     // back slopes straight up to a wide roof (0.9), a boxy flat-roofed van.
@@ -119,6 +119,7 @@ public static class VehicleRenderer
 
     static (double X, double Y)[] ShapeOf(AgentCar car) => car.Kind switch
     {
+        AgentKind.Boss => BossShapes.Body(car is BossCar b ? b.Look : BossLook.Fin),
         AgentKind.Civilian => (car.Id % 3) switch { 0 => CivilianSedan, 1 => CivilianHatch, _ => CivilianVan },
         AgentKind.PolicePatrol or AgentKind.PoliceCruiser => PoliceSedan,
         AgentKind.Interceptor => InterceptorShape,
@@ -133,7 +134,6 @@ public static class VehicleRenderer
         AgentKind.Gunner => GunnerShape,
         AgentKind.Dropper => DropperShape,
         AgentKind.Armored => ArmoredShape,
-        AgentKind.Boss => BossShape,
         AgentKind.Runner => RunnerShape,
         _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "no enemy outline for this kind"),
     };
@@ -191,19 +191,9 @@ public static class VehicleRenderer
             }
         }
 
-        // The boss's two tall rear fins stand behind the body outline.
-        StreamGeometry? fins = null;
-        if (kind == AgentKind.Boss)
-        {
-            fins = new StreamGeometry();
-            using (var c = fins.Open())
-                foreach (int side in Projector.Sides)
-                {
-                    c.BeginFigure(P(side * BossFin[0].X, BossFin[0].Y), true, true);
-                    for (int i = 1; i < BossFin.Length; i++) c.LineTo(P(side * BossFin[i].X, BossFin[i].Y), true, false);
-                }
-            fins.Freeze();
-        }
+        // The boss's rear fins (or the dome's cabin) stand behind the body outline, by its look.
+        var look = boss?.Look ?? BossLook.Fin;
+        StreamGeometry? fins = kind == AgentKind.Boss ? BossShapes.PiecesFill(look, P) : null;
 
         // Body and cabin as one filled outline, so it hides the road lines behind it.
         var shape = ShapeOf(car);
@@ -251,12 +241,7 @@ public static class VehicleRenderer
         if (fins is not null)
         {
             dc.DrawGeometry(Neon.Black, null, fins);
-            foreach (int side in Projector.Sides)
-            {
-                var fin = new Point[BossFin.Length];
-                for (int i = 0; i < BossFin.Length; i++) fin[i] = P(side * BossFin[i].X, BossFin[i].Y);
-                LineArt.Draw(dc, LineArt.Polyline(fin, (0.42, 0.5)), outlinePen);
-            }
+            foreach (var line in BossShapes.PieceLines(look, P)) LineArt.Draw(dc, line, outlinePen);
         }
         dc.DrawGeometry(Neon.Black, null, body);
         LineArt.Draw(dc, LineArt.Polyline(edge, (0.1, 0.14), (sh + 0.02, sh + 0.07)), outlinePen);
@@ -388,7 +373,8 @@ public static class VehicleRenderer
         if (kind == AgentKind.Boss)
         {
             // A full-width tail strip trimmed in gold, and a central exhaust ring.
-            var strip = new Rect(P(-0.94, 0.66), P(0.94, 0.5));
+            double stripHalf = 0.94 * BossShapes.Widening(look);   // the strip is as much wider as the body is
+            var strip = new Rect(P(-stripHalf, 0.66), P(stripHalf, 0.5));
             dc.DrawRectangle(Neon.TailLight, null, strip);
             LineArt.Draw(dc, new RectangleGeometry(strip), LineArt.Detail(LineArt.ColorOf(Neon.BossTrim), fade));
             LineArt.Draw(dc, new EllipseGeometry(P(0, 0.33), Math.Max(2, 0.15 * s), Math.Max(1.5, 0.1 * s)), detailPen);
@@ -396,11 +382,11 @@ public static class VehicleRenderer
             {
                 var jag = new LineBatch();
                 // The x range follows the roof outline, so the teeth never poke outside it.
-                var prev = P(-0.92 * BossHalfWidth(0.8), 0.8);
+                var prev = P(-0.92 * BossShapes.HalfWidth(look, 0.8), 0.8);
                 for (int i = 1; i <= 8; i++)
                 {
                     double y = i % 2 == 1 ? 0.98 : 0.74;
-                    var next = P((-1 + 2.0 * i / 8) * 0.92 * BossHalfWidth(y), y);
+                    var next = P((-1 + 2.0 * i / 8) * 0.92 * BossShapes.HalfWidth(look, y), y);
                     jag.Line(prev, next);
                     prev = next;
                 }
@@ -477,18 +463,6 @@ public static class VehicleRenderer
                 return a.X + (b.X - a.X) * Math.Clamp((y - a.Y) / (b.Y - a.Y), 0, 1);
             }
         return shape[^1].X;
-    }
-
-    /// <summary>The boss body's half-width (fraction of the car's half-width) at a height in metres, read off <see cref="BossShape"/>.</summary>
-    static double BossHalfWidth(double y)
-    {
-        for (int i = 1; i < BossShape.Length; i++)
-            if (y <= BossShape[i].Y)
-            {
-                var (a, b) = (BossShape[i - 1], BossShape[i]);
-                return a.X + (b.X - a.X) * Math.Clamp((y - a.Y) / (b.Y - a.Y), 0, 1);
-            }
-        return BossShape[^1].X;
     }
 
     /// <summary>The Armored wedge's half-width (fraction of the car's half-width) at a height in metres.</summary>

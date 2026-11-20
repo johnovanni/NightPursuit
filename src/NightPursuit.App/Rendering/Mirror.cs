@@ -10,6 +10,7 @@ namespace NightPursuit.App.Rendering;
 /// <summary>The rear-view mirror: the road and the cars behind, as a mirror shows them (a car behind on your right appears on the right).</summary>
 internal static class Mirror
 {
+    // The mirror is too small to tell the boss looks apart: every boss is one box, at one scale, whatever its BossLook.
     const double BossScale = 1.3;
     /// <summary>The mirror's rectangle, so the world layer can keep clear of it.</summary>
     public static Rect Bounds(HudLayout l) => new(l.HalfWidth - 200 * l.K, 10 * l.K, 400 * l.K, 86 * l.K);

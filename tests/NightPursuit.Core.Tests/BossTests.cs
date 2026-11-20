@@ -43,6 +43,17 @@ public class BossTests
 
     // ---- the car and its numbers ----
 
+    [Theory]
+    [InlineData(BossLook.Fin)]
+    [InlineData(BossLook.Twin)]
+    [InlineData(BossLook.Dome)]
+    public void BossCar_takes_its_look_from_the_definition(BossLook look)
+    {
+        var def = Two with { Look = look };
+        Assert.Equal(look, BossCar.Create(3, def, 300, 0, 40).Look);
+        Assert.Equal(BossLook.Fin, BossCar.Create(4, Two, 300, 0, 40).Look);
+    }
+
     [Fact]
     public void Boss_car_is_built_from_its_definition()
     {

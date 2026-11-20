@@ -21,6 +21,7 @@ public sealed class ScreenHost : ContentControl
     readonly Grid _root = new();
     readonly Viewbox _fit = new() { Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly, Margin = new Thickness(40) };
     readonly MenuScreen _menu = new();
+    readonly BriefingScreen _briefing = new();
     readonly StackPanel _placeholder = new() { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
     readonly TextBlock _placeholderName = new() { HorizontalAlignment = HorizontalAlignment.Center, FontWeight = FontWeights.Bold };
     readonly TextBlock _placeholderNotice = new()
@@ -78,6 +79,11 @@ public sealed class ScreenHost : ContentControl
         {
             _menu.Update(flow);
             view = _menu;
+        }
+        else if (flow.Current == Screen.Briefing && flow.Game is not null)
+        {
+            _briefing.Update(flow);
+            view = _briefing;
         }
         else
         {

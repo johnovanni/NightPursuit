@@ -18,6 +18,8 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
     public const double ArrivalSlower = 10;
 
     public BossDefinition Definition { get; } = def;
+    /// <summary>How it is drawn, from its definition.</summary>
+    public BossLook Look => Definition.Look;
     /// <summary>Which phase it is in, 0-based.</summary>
     public int PhaseIndex { get; set; }
     public BossPhaseDefinition Phase => Definition.Phases[PhaseIndex];

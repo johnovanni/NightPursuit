@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -24,7 +25,8 @@ public static class ScreenSnapshots
     const double Dt = 1.0 / 120;
     const double DriveSeconds = 12;   // as the --scene default: far enough along that the frozen road behind a screen is real road
 
-    static readonly string[] ScreenNames = { "title", "settings", "pause", "quit" };
+    static readonly string[] ScreenNames = { "title", "settings", "pause", "quit", "briefing", "briefing-all" };
+    const string BriefingAll = "briefing-all";
     static readonly string[] TextSizeNames = { "normal", "large", "largest" };
 
     // Made up for the pictures: initials, score, mission reached, finished all six.
@@ -36,13 +38,17 @@ public static class ScreenSnapshots
 
     public static int Run(string path, string[] args)
     {
-        string[] screens = (DiagnosticsRunner.Arg(args, "--screen") ?? "").Split(',');
-        foreach (string screen in screens)
+        string[] requested = (DiagnosticsRunner.Arg(args, "--screen") ?? "").Split(',');
+        foreach (string screen in requested)
             if (Array.IndexOf(ScreenNames, screen) < 0)
             {
                 DiagnosticsRunner.Error($"Unknown screen '{screen}'. Known screens: {string.Join(", ", ScreenNames)}");
                 return 2;
             }
+        // briefing-all is one briefing per campaign mission: briefing-1 to briefing-N (so out.png becomes out-briefing-1.png ...).
+        string[] screens = requested.SelectMany(n => n == BriefingAll
+            ? Enumerable.Range(1, Campaign.MissionIds.Length).Select(i => "briefing-" + i)
+            : new[] { n }).ToArray();
 
         string? mission = DiagnosticsRunner.Arg(args, "--mission");
         if (mission is not null && (mission.Length == 0 || !mission.All(ch => char.IsAsciiLetterOrDigit(ch) || ch == '-')))
@@ -83,7 +89,7 @@ public static class ScreenSnapshots
                 : path;
             var view = new GameView { ShowHelp = false };
             var flow = NewFlow(campaign, practice, (TextSize)textSize);
-            DriveTo(flow, screen, view, practice is not null);
+            DriveTo(flow, screen, view, practice is not null, screen.StartsWith("briefing-", StringComparison.Ordinal) ? int.Parse(screen[9..], CultureInfo.InvariantCulture) - 1 : -1);
             Render(flow, view, width, height, file);
         }
         return 0;
@@ -103,11 +109,23 @@ public static class ScreenSnapshots
     }
 
     /// <summary>Presses the keys a player would to reach <paramref name="screen"/>, from the title.</summary>
-    static void DriveTo(ScreenFlow flow, string screen, GameView view, bool practice)
+    static void DriveTo(ScreenFlow flow, string screen, GameView view, bool practice, int briefingOf)
     {
+        if (briefingOf >= 0)
+        {
+            Choose(flow, "start");
+            Expect(flow, Screen.Briefing, screen);
+            ShowMissionBriefing(flow, briefingOf);
+            return;
+        }
         switch (screen)
         {
             case "title":
+                break;
+            case "briefing":
+                if (practice) flow.StartGame(practice: true);
+                else Choose(flow, "start");
+                Expect(flow, Screen.Briefing, screen);
                 break;
             case "settings":
                 Choose(flow, "settings");
@@ -148,6 +166,24 @@ public static class ScreenSnapshots
             view.Effects.Update(Dt);
         }
         Expect(flow, Screen.Play, "play");
+    }
+
+    /// <summary>
+    /// Makes the campaign game's briefing the one for mission <paramref name="index"/> (0-based), as a player would see it after
+    /// finishing the missions before it, without playing them: the diagnostic sets the game's own state (a sample score and
+    /// spare cars from mission 2 on). The last one also shows a sample notice, to check that a notice fits under the rest.
+    /// </summary>
+    static void ShowMissionBriefing(ScreenFlow flow, int index)
+    {
+        var game = flow.Game!;
+        const BindingFlags Any = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+        typeof(Game).GetProperty(nameof(Game.MissionIndex), Any)!.SetValue(game, index);
+        if (index > 0)
+        {
+            typeof(Game).GetField("_score", Any)!.SetValue(game, 4200 * index);
+            typeof(Game).GetField("_spareCars", Any)!.SetValue(game, 2);
+        }
+        if (index == game.Missions.Count - 1) flow.ShowNotice("SAMPLE NOTICE: THIS LINE IS ONLY IN THE DIAGNOSTIC PICTURE.");
     }
 
     /// <summary>Moves the menu down to the item <paramref name="id"/> and confirms it.</summary>
