@@ -1649,8 +1649,9 @@ fixes are D167 to D173.
   leaving that screen).
 - The cost of opening an MP3 when the boss arrives is not measured: do it when your first MP3 arrives (ruling R13).
 - Pressing M on a menu gives no on-screen notice that sound changed (left open, ruling R13); the SETTINGS line shows it.
-- A mistake in a mission file's `music` block stops that mission from loading (ruling R13 keeps the mission loader strict);
-  the error box names the file and the field. The music README now says so.
+- A mistake in a mission file's `music` block stops the whole game from starting, because every mission is loaded at
+  start-up (ruling R13 keeps the mission loader strict); the error box names the file and the field. The music README
+  now says so.
 
 ## Checks only you can do (sound)
 

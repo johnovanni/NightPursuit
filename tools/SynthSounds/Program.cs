@@ -26,7 +26,8 @@ foreach (var cue in Enum.GetValues<SoundCue>())
     string name = SoundCues.FileName(cue);
     string path = Path.Combine(dir, name);
     bool kept = keep.Contains(name) && File.Exists(path);
-    float[] samples = kept ? SoundFiles.LoadMono(path) : Recipes.Render(cue);
+    // A kept file is the owner's own sound and may be any normal WAV, as the game allows: only measure it, never rewrite it.
+    float[] samples = kept ? SoundFiles.LoadConvertedMono(path) : Recipes.Render(cue);
     if (!kept) SoundFiles.WriteMono16(path, samples);
 
     double seconds = samples.Length / (double)AudioFormat.SampleRate;

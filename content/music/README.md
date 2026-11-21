@@ -37,8 +37,8 @@ The end of a mission file then looks like this:
 (The last line before the closing brace has no comma after it.)
 
 A mistake in a mission file's `music` block (a wrong field name, a file name with a folder in it, a `volume` out of range)
-stops that mission from loading, and the error box names the mission file and the field.
-Fix it and start the game again.
+stops the whole game from starting (every mission is loaded when the game starts). An error box names the mission file
+and the field. Fix it and start the game again.
 
 ## Making a track louder or quieter
 
