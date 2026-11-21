@@ -13,9 +13,12 @@ public sealed class Smoothed
     private double _step;
     private int _remaining;
 
-    public Smoothed(double seconds)
+    /// <param name="seconds">How long a change takes.</param>
+    /// <param name="initial">The value to start at (it starts there, with no ramp from 0).</param>
+    public Smoothed(double seconds, double initial = 0)
     {
         _rampSamples = Math.Max(1, (int)Math.Round(seconds * AudioFormat.SampleRate));
+        _requested = _target = _current = initial;
     }
 
     /// <summary>Where the value is heading.</summary>
