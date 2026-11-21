@@ -129,6 +129,9 @@ public sealed class ScreenFlow
         new MenuEntry("steering", "LIGHTER STEERING AT SPEED", Settings.LighterSteering ? "ON" : "OFF"),
         new MenuEntry("shake", "SCREEN SHAKE", Settings.ScreenShake ? "ON" : "OFF"),
         new MenuEntry("text", "TEXT SIZE", TextSizeNames[(int)Settings.TextSize]),
+        new MenuEntry("sound", "SOUND", Settings.SoundOn ? "ON" : "OFF"),
+        new MenuEntry("music", "MUSIC VOLUME", Settings.MusicVolume.ToString()),
+        new MenuEntry("effects", "EFFECTS VOLUME", Settings.EffectsVolume.ToString()),
         new MenuEntry("keys", "KEY BINDINGS"),
         new MenuEntry("back", "BACK"),
     }, selected);
@@ -165,6 +168,13 @@ public sealed class ScreenFlow
 
     public void Handle(MenuKey key)
     {
+        // M switches sound on or off anywhere, except where it types a letter.
+        if (IsLetter(key, 'M') && Current is not (Screen.EnterInitials or Screen.Play))
+        {
+            ToggleSound();
+            Version++;
+            return;
+        }
         switch (Current)
         {
             case Screen.Play: return;
@@ -276,6 +286,9 @@ public sealed class ScreenFlow
                 Feel.SpeedSensitiveSteering = Settings.LighterSteering;
                 break;
             case "shake": Settings.ScreenShake = !Settings.ScreenShake; break;
+            case "sound": Settings.SoundOn = !Settings.SoundOn; break;
+            case "music": if (key.Input != MenuInput.Confirm) Settings.MusicVolume = Math.Clamp(Settings.MusicVolume + delta, 0, 10); break;
+            case "effects": if (key.Input != MenuInput.Confirm) Settings.EffectsVolume = Math.Clamp(Settings.EffectsVolume + delta, 0, 10); break;
             case "text": Settings.TextSize = (TextSize)(((int)Settings.TextSize + delta + 3) % 3); break;
             case "keys": if (key.Input == MenuInput.Confirm) Open(Screen.Controls); return;
             case "back": if (key.Input == MenuInput.Confirm) LeaveSettings(); return;
@@ -293,6 +306,15 @@ public sealed class ScreenFlow
 
     /// <summary>Saves the settings now (the window is closing while the Settings screen is open). Failures are ignored.</summary>
     public void SaveSettingsNow() => _store.SaveSettings(Settings.Clone());
+
+    /// <summary>Flips sound on or off and saves the settings at once.</summary>
+    public void ToggleSound()
+    {
+        Settings.SoundOn = !Settings.SoundOn;
+        Post(_store.SaveSettings(Settings.Clone()).Problem);
+        // Keep an open Settings menu in step.
+        if (Current == Screen.Settings && Menu is { } m) Menu = SettingsMenu(m.Selected);
+    }
 
     void LeaveSettings()
     {
@@ -375,6 +397,10 @@ public sealed class ScreenFlow
                 _pausedForHelp = run.State == RunState.Playing;
                 if (_pausedForHelp) run.Handle(new GameAction(ActionKind.Pause));
                 Open(Screen.Controls);
+                break;
+            case ActionKind.ToggleSound:
+                ToggleSound();   // never passed on to the game
+                Version++;
                 break;
             case ActionKind.SelectScheme:
                 int before = run.World.SchemeIndex;

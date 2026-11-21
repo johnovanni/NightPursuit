@@ -108,6 +108,10 @@ public sealed class FileGameStore : IGameStore
                 foreach (var size in Enum.GetValues<TextSize>())
                     if (size.ToString() == text) s.TextSize = size;
             }
+            if (root.TryGetProperty("soundOn", out var so) && (so.ValueKind == JsonValueKind.True || so.ValueKind == JsonValueKind.False))
+                s.SoundOn = so.GetBoolean();
+            if (root.TryGetProperty("musicVolume", out var mv) && ReadVolume(mv) is int music) s.MusicVolume = music;
+            if (root.TryGetProperty("effectsVolume", out var ev) && ReadVolume(ev) is int effects) s.EffectsVolume = effects;
             if (root.TryGetProperty("lastInitials", out var li) && li.ValueKind == JsonValueKind.String
                 && CleanInitials(li.GetString()) is { } ini)
                 s.LastInitials = ini;
@@ -155,6 +159,14 @@ public sealed class FileGameStore : IGameStore
         }
     }
 
+    // A volume is a JSON number, clamped to 0-10; anything else is ignored.
+    static int? ReadVolume(JsonElement el)
+    {
+        if (el.ValueKind != JsonValueKind.Number) return null;
+        if (el.TryGetInt32(out int n)) return Math.Clamp(n, 0, 10);
+        return el.TryGetDouble(out double d) ? (int)Math.Clamp(Math.Round(d), 0, 10) : null;
+    }
+
     static string? CleanInitials(string? s)
     {
         if (s is null || s.Length != 3) return null;
@@ -192,6 +204,9 @@ public sealed class FileGameStore : IGameStore
                 w.WriteBoolean("lighterSteering", s.LighterSteering);
                 w.WriteBoolean("screenShake", s.ScreenShake);
                 w.WriteString("textSize", s.TextSize.ToString());
+                w.WriteBoolean("soundOn", s.SoundOn);
+                w.WriteNumber("musicVolume", Math.Clamp(s.MusicVolume, 0, 10));
+                w.WriteNumber("effectsVolume", Math.Clamp(s.EffectsVolume, 0, 10));
                 w.WriteString("lastInitials", s.LastInitials);
                 w.WriteEndObject();
             });

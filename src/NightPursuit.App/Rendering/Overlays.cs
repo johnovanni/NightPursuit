@@ -32,6 +32,7 @@ internal static class Overlays
         "SPEED      C cruise     F2 ramp pedal     F3 speed lever",
         "           1-0 lever presets     mouse wheel moves the lever",
         "GAME       P / Esc pause   F1 controls (pauses)   R restart (practice only)",
+        "           M sound on/off",
         "HEAT       hurting civilians or police raises heat; drive clean to cool off",
         "GAMEPAD    right trigger gas     left trigger brake     left stick steer",
         "           A guns   B drop   X next rear   RB missile   LB strike   Y cruise",

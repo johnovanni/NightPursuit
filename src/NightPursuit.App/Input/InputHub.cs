@@ -41,6 +41,7 @@ public sealed class InputHub
             Key.F1 => new GameAction(ActionKind.ToggleHelp),
             Key.P or Key.Escape => new GameAction(ActionKind.Pause),
             Key.R => new GameAction(ActionKind.Restart),
+            Key.M => new GameAction(ActionKind.ToggleSound),
             _ => null,
         };
         if (a is GameAction ga && !isRepeat) _actions.Enqueue(ga);

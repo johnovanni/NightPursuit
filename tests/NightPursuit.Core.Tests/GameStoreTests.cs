@@ -51,6 +51,56 @@ public sealed class GameStoreTests : IDisposable
     }
 
     [Fact]
+    public void New_settings_have_sound_on_music_7_effects_8()
+    {
+        var s = new GameSettings();
+        Assert.True(s.SoundOn); Assert.Equal(7, s.MusicVolume); Assert.Equal(8, s.EffectsVolume);
+        var c = new GameSettings { SoundOn = false, MusicVolume = 3, EffectsVolume = 2 }.Clone();
+        Assert.False(c.SoundOn); Assert.Equal(3, c.MusicVolume); Assert.Equal(2, c.EffectsVolume);
+    }
+
+    [Fact]
+    public void Sound_settings_save_and_load()
+    {
+        var store = new FileGameStore(_dir);
+        Assert.True(store.SaveSettings(new GameSettings { SoundOn = false, MusicVolume = 3, EffectsVolume = 10 }).Ok);
+        var (r, problem) = store.LoadSettings();
+        Assert.Null(problem);
+        Assert.False(r.SoundOn); Assert.Equal(3, r.MusicVolume); Assert.Equal(10, r.EffectsVolume);
+        using var doc = JsonDocument.Parse(File.ReadAllText(P("settings.json")));
+        Assert.False(doc.RootElement.GetProperty("soundOn").GetBoolean());
+        Assert.Equal(3, doc.RootElement.GetProperty("musicVolume").GetInt32());
+        Assert.Equal(10, doc.RootElement.GetProperty("effectsVolume").GetInt32());
+    }
+
+    [Fact]
+    public void An_old_settings_file_without_sound_fields_loads_the_defaults()
+    {
+        Write("settings.json", "{ \"version\": 1, \"screenShake\": false }");
+        var (s, problem) = new FileGameStore(_dir).LoadSettings();
+        Assert.Null(problem);
+        Assert.False(s.ScreenShake);
+        Assert.True(s.SoundOn); Assert.Equal(7, s.MusicVolume); Assert.Equal(8, s.EffectsVolume);
+    }
+
+    [Fact]
+    public void Volume_42_loads_as_10_and_minus_3_as_0()
+    {
+        Write("settings.json", "{ \"musicVolume\": 42, \"effectsVolume\": -3 }");
+        var (s, _) = new FileGameStore(_dir).LoadSettings();
+        Assert.Equal(10, s.MusicVolume); Assert.Equal(0, s.EffectsVolume);
+    }
+
+    [Fact]
+    public void A_volume_of_the_wrong_type_keeps_the_default()
+    {
+        Write("settings.json", "{ \"musicVolume\": \"loud\", \"effectsVolume\": true, \"soundOn\": 1 }");
+        var (s, problem) = new FileGameStore(_dir).LoadSettings();
+        Assert.Null(problem);
+        Assert.Equal(7, s.MusicVolume); Assert.Equal(8, s.EffectsVolume); Assert.True(s.SoundOn);
+    }
+
+    [Fact]
     public void Text_scale_follows_text_size_and_clone_copies_everything()
     {
         Assert.Equal(1.25, new GameSettings { TextSize = TextSize.Large }.TextScale);

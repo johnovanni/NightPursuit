@@ -396,6 +396,98 @@ public class ScreenFlowTests
     }
 
     [Fact]
+    public void Settings_menu_lists_sound_music_and_effects_after_text_size()
+    {
+        var r = new Rig();
+        r.ToPause();
+        r.Select("settings"); r.Key(MenuInput.Confirm);
+        var items = r.Flow.Menu!.Items;
+        Assert.Equal(new[] { "scheme", "steering", "shake", "text", "sound", "music", "effects", "keys", "back" }, items.Select(i => i.Id));
+        Assert.Equal(new[] { "SOUND", "MUSIC VOLUME", "EFFECTS VOLUME" }, items.Skip(4).Take(3).Select(i => i.Label));
+        Assert.Equal(new[] { "ON", "7", "8" }, items.Skip(4).Take(3).Select(i => i.Value));
+        r.Select("sound"); r.Key(MenuInput.Confirm);
+        Assert.False(r.Settings.SoundOn);
+        Assert.Equal("OFF", r.Flow.Menu!.Current.Value);
+        r.Key(MenuInput.Left);
+        Assert.True(r.Settings.SoundOn);
+        r.Key(MenuInput.Right);
+        Assert.False(r.Settings.SoundOn);
+        r.Select("music"); r.Key(MenuInput.Confirm);
+        Assert.Equal(7, r.Settings.MusicVolume);
+        r.Key(MenuInput.Left);
+        Assert.Equal(6, r.Settings.MusicVolume);
+        Assert.Equal("6", r.Flow.Menu!.Current.Value);
+    }
+
+    [Fact]
+    public void Right_on_music_volume_raises_it_and_stops_at_10()
+    {
+        var r = new Rig();
+        r.ToPause();
+        r.Select("settings"); r.Key(MenuInput.Confirm);
+        r.Select("music");
+        for (int i = 0; i < 6; i++) r.Key(MenuInput.Right);
+        Assert.Equal(10, r.Settings.MusicVolume);
+        Assert.Equal("10", r.Flow.Menu!.Current.Value);
+        r.Select("effects");
+        for (int i = 0; i < 12; i++) r.Key(MenuInput.Left);
+        Assert.Equal(0, r.Settings.EffectsVolume);
+    }
+
+    [Fact]
+    public void M_in_play_toggles_sound_and_saves()
+    {
+        var r = new Rig();
+        r.ToPlay();
+        r.Flow.HandleGameAction(new GameAction(ActionKind.ToggleSound));
+        Assert.False(r.Settings.SoundOn);
+        Assert.Equal(1, r.Store.SettingsSaves);
+        Assert.False(r.Store.LastSettings!.SoundOn);
+        r.Flow.HandleGameAction(new GameAction(ActionKind.ToggleSound));
+        Assert.True(r.Settings.SoundOn);
+        Assert.Equal(2, r.Store.SettingsSaves);
+    }
+
+    [Fact]
+    public void M_on_the_title_toggles_sound()
+    {
+        var r = new Rig();
+        Assert.Equal(Screen.Title, r.Flow.Current);
+        r.Letter('M');
+        Assert.False(r.Settings.SoundOn);
+        Assert.Equal(1, r.Store.SettingsSaves);
+        Assert.Equal(Screen.Title, r.Flow.Current);
+    }
+
+    [Fact]
+    public void M_on_the_initials_screen_types_an_M_and_leaves_sound_alone()
+    {
+        var r = new Rig();
+        r.ToPlay();
+        r.G.Run!.World.Score = 500;
+        r.PauseNow();
+        r.QuitFromPause();
+        r.Key(MenuInput.Confirm);
+        Assert.Equal(Screen.EnterInitials, r.Flow.Current);
+        r.Letter('M');
+        Assert.Equal('M', r.Flow.Initials!.Text[0]);
+        Assert.True(r.Settings.SoundOn);
+        Assert.Equal(0, r.Store.SettingsSaves);
+    }
+
+    [Fact]
+    public void ToggleSound_never_reaches_the_game()
+    {
+        var r = new Rig();
+        r.ToPlay();
+        var w = r.G.Run!.World;
+        ulong before = w.StateHash();
+        r.Flow.HandleGameAction(new GameAction(ActionKind.ToggleSound));
+        Assert.Equal(before, w.StateHash());
+        Assert.Equal(Screen.Play, r.Flow.Current);
+    }
+
+    [Fact]
     public void Return_stack_unwinds()
     {
         var r = new Rig();
