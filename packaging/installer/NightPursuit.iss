@@ -36,6 +36,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0.17763
 PrivilegesRequired=admin
 UninstallDisplayIcon={app}\{#AppExe}
+SetupIconFile=..\..\src\NightPursuit.App\NightPursuit.ico
 UninstallDisplayName={#AppName}
 WizardStyle=modern
 Compression=lzma2/max
