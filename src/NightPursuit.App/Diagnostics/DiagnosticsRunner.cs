@@ -48,7 +48,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off" };
 
     static string _logPath = "diagnostics.log";
 
@@ -210,6 +210,7 @@ public static class DiagnosticsRunner
         else if (scene == "police") { PlaceOnOpenRoad(run.World); PlacePolice(run.World, view.Effects); }
         else if (scene == "roadblock") { PlaceOnOpenRoad(run.World); PlaceRoadblock(run.World, view.Effects); }
         else if (scene == "busted") { PlaceOnOpenRoad(run.World); PlaceBusted(run.World, view.Effects); }
+        else if (scene == "sound-off") view.SoundOff = true;   // the default scene with the SOUND OFF mark
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
         if (SnapshotDamage >= 0)
         {

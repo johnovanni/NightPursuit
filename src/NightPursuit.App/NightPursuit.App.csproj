@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\NightPursuit.Core\NightPursuit.Core.csproj" />
+    <PackageReference Include="NAudio" Version="3.3.0" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\content\**\*" Link="content\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />

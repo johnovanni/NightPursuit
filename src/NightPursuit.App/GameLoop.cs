@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using NightPursuit.App.Audio;
 using NightPursuit.App.Input;
 using NightPursuit.App.Rendering;
 using NightPursuit.App.Screens;
@@ -20,6 +21,8 @@ public sealed class GameLoop
     readonly GameView _view;
     readonly ScreenHost _host;
     readonly InputHub _input;
+    readonly SoundSystem? _sound;   // null when sound could not be built
+    bool _soundBroken;   // a sound failure stops the sound work for good; the game carries on silently
     TimeSpan _last;
     bool _haveLast;
     bool _everActive;   // the window has had focus at least once since it opened
@@ -30,8 +33,9 @@ public sealed class GameLoop
     readonly ReleaseFirstGate _resultGate = new();
     Screen _lastScreen;
 
-    public GameLoop(Window window, ScreenFlow flow, GameView view, ScreenHost host, InputHub input)
+    public GameLoop(Window window, ScreenFlow flow, GameView view, ScreenHost host, InputHub input, SoundSystem? sound)
     {
+        _sound = sound;
         _window = window;
         _flow = flow;
         _view = view;
@@ -82,6 +86,7 @@ public sealed class GameLoop
             {
                 if (holdConfirm && k.Input == MenuInput.Confirm) continue;
                 _flow.Handle(k);
+                if (!_soundBroken) _sound?.NoteMenuKey(k);
             }
             foreach (var _ in _input.Drain()) { }   // dropped: on a screen, keys are menu keys
         }
@@ -94,6 +99,11 @@ public sealed class GameLoop
         }
 
         _flow.Update(held, seconds);   // Core caps a long stall at 0.25 s
+        if (!_soundBroken && _sound is not null)
+        {
+            try { _sound.Update(_flow, seconds); }
+            catch (Exception) { _soundBroken = true; }   // audio must never crash or freeze the game
+        }
         if (_flow.Current != _lastScreen)
         {
             _lastScreen = _flow.Current;
@@ -106,6 +116,7 @@ public sealed class GameLoop
         _view.ShakeEnabled = _flow.Settings.ScreenShake;
         _view.TextScale = _flow.Settings.TextScale;
         _view.Covered = _flow.Current != Screen.Play;
+        _view.SoundOff = !_flow.Settings.SoundOn;
         _view.Notice = _flow.Current == Screen.Play ? _flow.Notice : null;
         if (run is not null)
         {

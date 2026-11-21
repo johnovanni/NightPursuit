@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using NightPursuit.App.Audio;
 using NightPursuit.App.Diagnostics;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
@@ -52,7 +53,21 @@ public partial class App : Application
             foreach (string? problem in new[] { settingsProblem, scoresProblem })
                 if (problem is not null) flow.ShowNotice(problem);
 
-            new MainWindow(flow).Show();
+            // Sound never stops the game starting: if it cannot be built, the game runs silently with a notice.
+            SoundSystem? sound = null;
+            try
+            {
+                sound = new SoundSystem(Path.Combine(AppContext.BaseDirectory, "content"),
+                                        practice is null ? campaign : campaign.Append(practice), openDevice: true);
+                foreach (string problem in sound.Problems) flow.ShowNotice(problem);
+            }
+            catch (Exception ex)
+            {
+                string reason = ex.Message.Split('\n')[0].Trim().TrimEnd('.').ToUpperInvariant();
+                flow.ShowNotice("SOUND IS OFF: " + (reason.Length == 0 ? "COULD NOT START" : reason.Length > 60 ? reason[..60] : reason));
+            }
+
+            new MainWindow(flow, sound).Show();
         }
         catch (MissionFormatException ex)
         {

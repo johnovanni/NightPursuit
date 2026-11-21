@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using NightPursuit.App.Audio;
 using NightPursuit.App.Input;
 using NightPursuit.Core.Session;
 
@@ -10,7 +11,7 @@ public partial class MainWindow : Window
     readonly InputHub _input = new();
     readonly GameLoop _loop;
 
-    public MainWindow(ScreenFlow flow)
+    public MainWindow(ScreenFlow flow, SoundSystem? sound)
     {
         InitializeComponent();
 #if DEBUG
@@ -46,8 +47,12 @@ public partial class MainWindow : Window
             e.Handled = true;
         };
 
-        _loop = new GameLoop(this, flow, View, Host, _input);
-        Closed += (_, _) => _loop.Stop();
+        _loop = new GameLoop(this, flow, View, Host, _input, sound);
+        Closed += (_, _) =>
+        {
+            _loop.Stop();
+            try { sound?.Dispose(); } catch { /* closing: the device is stopped first inside */ }
+        };
         // Settings changed on the Settings screen are saved when it is left; closing the window from it must save them too.
         Closing += (_, _) =>
         {
