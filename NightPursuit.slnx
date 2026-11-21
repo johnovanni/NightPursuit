@@ -6,4 +6,7 @@
   <Folder Name="/tests/">
     <Project Path="tests/NightPursuit.Core.Tests/NightPursuit.Core.Tests.csproj" />
   </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/SynthSounds/SynthSounds.csproj" />
+  </Folder>
 </Solution>

@@ -1,0 +1,2 @@
+# Sound files named here (one file name per line, for example gun-player.wav) are never overwritten by the SynthSounds tool,
+# so an effect you have swapped for your own survives a re-run. Lines starting with # are ignored.
