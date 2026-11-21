@@ -27,17 +27,32 @@ Each mission's own file (in `content/missions`) can name its tunes. Add this blo
 - `theme` plays during the mission.
 - `boss` takes over when the boss appears. If empty, the theme carries on.
 
+Put the block just before the last `}` of the mission file. The line before it needs a comma at the end.
+The end of a mission file then looks like this:
+
+    "crates": [ ...your crates... ],
+    "music": { "theme": "glass-canyon.mp3", "boss": "red-lantern.mp3" }
+    }
+
+(The last line before the closing brace has no comma after it.)
+
 ## Making a track louder or quieter
 
 Instead of a plain name you can write an entry with a `volume`:
 
     "theme": { "file": "glass-canyon.mp3", "volume": 0.8 }
 
-`1` leaves it as it is. `0.5` is half as loud. `2` is the most (twice as loud).
+`1` leaves it as it is. `0.5` is half as loud. `2` is the most (twice as loud),
+but a loud track can distort at 2, so try a lower number first.
 This works in `music.json` too.
 
 ## Good to know
 
-- Use a plain file name only. No folders.
+- Use a plain file name only. No folders. It must end in `.mp3` or `.wav`.
 - If a named file is missing, the game shows a notice with its name when it starts. That track stays silent.
+- If something in `music.json` is wrong, a notice names the slot and says what is wrong,
+  for example `MUSIC LIST: RESULTS VOLUME MUST BE FROM 0 TO 2`. Only that slot is silent. The others still play.
+- If `music.json` has a typing mistake the game cannot follow, a notice says `MUSIC LIST COULD NOT BE READ`
+  and gives the line number. No screen music plays until it is fixed.
+- A comma after the last entry, and `//` notes, are fine in `music.json`.
 - The track files are committed to the repo with the game.

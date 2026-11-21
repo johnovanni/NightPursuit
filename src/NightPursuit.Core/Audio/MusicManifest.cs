@@ -12,6 +12,10 @@ public sealed record MusicTrack(string File, double Volume = 1)
         name.Length > 0 && name.Trim() == name && name is not ("." or "..") &&
         Path.GetFileName(name) == name && name.IndexOfAny(Path.GetInvalidFileNameChars()) < 0;
 
+    /// <summary>True for a name ending in .mp3 or .wav, in any case.</summary>
+    public static bool HasMusicExtension(string name) =>
+        name.EndsWith(".mp3", StringComparison.OrdinalIgnoreCase) || name.EndsWith(".wav", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>
     /// Reads a music entry: "" (empty, gives null), "file.mp3", or { "file": "...", "volume": 0.8 }.
     /// On a mistake returns false and says what is wrong, starting with <paramref name="path"/>.
@@ -49,6 +53,7 @@ public sealed record MusicTrack(string File, double Volume = 1)
 
         if (string.IsNullOrEmpty(file)) return true;   // "" means no music here
         if (!IsPlainName(file)) { error = $"{path} must be a plain file name with no folders (got '{file}')"; return false; }
+        if (!HasMusicExtension(file)) { error = $"{path} must be an .mp3 or .wav file (got '{file}')"; return false; }
         track = new MusicTrack(file, volume);
         return true;
     }
@@ -67,8 +72,9 @@ public sealed class MusicManifest
     public MusicTrack? Finished { get; init; }
 
     /// <summary>
-    /// Reads music.json from <paramref name="musicDir"/>. No file is an empty list with no problem. A file that
-    /// cannot be read, or has anything wrong in it, is an empty list and one problem.
+    /// Reads music.json from <paramref name="musicDir"/>. No file is an empty list with no problem. A file that cannot
+    /// be parsed is an empty list and one problem (with the line). A bad entry skips only its own slot, with one
+    /// problem line naming the slot and the reason.
     /// </summary>
     public static (MusicManifest Manifest, IReadOnlyList<string> Problems) Load(string musicDir)
     {
@@ -76,13 +82,19 @@ public sealed class MusicManifest
         if (!File.Exists(path)) return (new MusicManifest(), Array.Empty<string>());
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
-            if (doc.RootElement.ValueKind != JsonValueKind.Object) return Unreadable();
+            var options = new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true };
+            using var doc = JsonDocument.Parse(File.ReadAllText(path), options);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return Unreadable(" (IT MUST BE A LIST IN { } BRACES)");
+            var problems = new List<string>();
             var slots = new Dictionary<string, MusicTrack?>();
             foreach (var prop in doc.RootElement.EnumerateObject())
             {
-                if (prop.Name is not ("title" or "briefing" or "results" or "gameOver" or "finished")) return Unreadable();
-                if (!MusicTrack.TryRead(prop.Value, prop.Name, out var track, out _)) return Unreadable();
+                if (prop.Name is not ("title" or "briefing" or "results" or "gameOver" or "finished"))
+                {
+                    problems.Add($"MUSIC LIST: \"{prop.Name.ToUpperInvariant()}\" IS NOT A KNOWN SLOT (TITLE, BRIEFING, RESULTS, GAMEOVER, FINISHED)");
+                    continue;
+                }
+                if (!MusicTrack.TryRead(prop.Value, prop.Name, out var track, out var error)) { problems.Add(Notice(error)); continue; }
                 slots[prop.Name] = track;
             }
             var manifest = new MusicManifest
@@ -93,15 +105,28 @@ public sealed class MusicManifest
                 GameOver = slots.GetValueOrDefault("gameOver"),
                 Finished = slots.GetValueOrDefault("finished"),
             };
-            return (manifest, Array.Empty<string>());
+            return (manifest, problems);
         }
-        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        catch (JsonException e)
         {
-            return Unreadable();
+            return Unreadable(e.LineNumber is long line ? $" (LINE {line + 1})" : "");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            return Unreadable("");
         }
     }
 
-    static (MusicManifest, IReadOnlyList<string>) Unreadable() => (new MusicManifest(), new[] { UnreadableProblem });
+    // "results.volume must be ..." becomes "MUSIC LIST: RESULTS VOLUME MUST BE ...".
+    static string Notice(string error)
+    {
+        int space = error.IndexOf(' ');
+        string head = space < 0 ? error : error[..space];
+        return "MUSIC LIST: " + (head.Replace('.', ' ') + error[head.Length..]).ToUpperInvariant();
+    }
+
+    static (MusicManifest, IReadOnlyList<string>) Unreadable(string detail) =>
+        (new MusicManifest(), new[] { UnreadableProblem + detail });
 
     /// <summary>Every slot's track, empty ones skipped.</summary>
     public IEnumerable<MusicTrack> Tracks() =>

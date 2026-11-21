@@ -28,6 +28,8 @@ public class MusicMissionTests
     [InlineData(""", "music": { "theme": "songs/glass.mp3" }""", "music.theme must be a plain file name with no folders (got 'songs/glass.mp3')")]
     [InlineData(""", "music": { "theme": "..\\glass.mp3" }""", "music.theme must be a plain file name with no folders")]
     [InlineData(""", "music": { "boss": "C:\\glass.mp3" }""", "music.boss must be a plain file name with no folders")]
+    [InlineData(""", "music": { "theme": "glass.ogg" }""", "music.theme must be an .mp3 or .wav file (got 'glass.ogg')")]
+    [InlineData(""", "music": { "boss": { "file": "lantern" } }""", "music.boss must be an .mp3 or .wav file (got 'lantern')")]
     [InlineData(""", "music": { "intro": "a.mp3" }""", "music.intro is not a known field (theme, boss)")]
     [InlineData(""", "music": { "theme": { "file": "a.mp3", "loud": 1 } }""", "music.theme.loud is not a known field (file, volume)")]
     [InlineData(""", "music": { "theme": { "file": "a.mp3", "volume": 2.5 } }""", "music.theme.volume must be from 0 to 2 (got 2.5)")]
