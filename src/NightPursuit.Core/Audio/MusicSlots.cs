@@ -12,7 +12,11 @@ public enum MusicSlot { None, Title, Briefing, MissionTheme, BossTheme, Results,
 /// briefing track reports Briefing and carries on without a restart). A null <see cref="Track"/> is silence.
 /// <see cref="Generation"/> goes up when the same slot must start again from the beginning.
 /// </summary>
-public readonly record struct MusicCue(MusicSlot Slot, MusicTrack? Track, double Level, int Generation);
+public readonly record struct MusicCue(MusicSlot Slot, MusicTrack? Track, double Level, int Generation)
+{
+    /// <summary>True when the same music carries on: same slot, track and generation (only the level may differ).</summary>
+    public bool SameMusic(MusicCue other) => Slot == other.Slot && Track == other.Track && Generation == other.Generation;
+}
 
 /// <summary>Decides, once a frame, which music slot plays for the screen the game is on.</summary>
 public sealed class MusicSlots(MusicManifest manifest)
@@ -35,7 +39,9 @@ public sealed class MusicSlots(MusicManifest manifest)
         var screen = flow.Current;
         if (IsSide(screen))
         {
-            double level = screen != Screen.Settings && _lastMain == Screen.Pause ? PauseLevel : 1.0;
+            // Quiet whenever the run is paused (the pause menu, or help opened from play, which pauses it); Settings stays full so volumes can be judged.
+            bool paused = _lastMain == Screen.Pause || flow.Game?.Run?.State == RunState.Paused;
+            double level = screen != Screen.Settings && paused ? PauseLevel : 1.0;
             return new MusicCue(_slot, _track, level, _generation);
         }
 

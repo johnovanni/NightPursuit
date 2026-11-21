@@ -49,7 +49,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off", "no-sound" };
 
     static string _logPath = "diagnostics.log";
 
@@ -212,6 +212,7 @@ public static class DiagnosticsRunner
         else if (scene == "roadblock") { PlaceOnOpenRoad(run.World); PlaceRoadblock(run.World, view.Effects); }
         else if (scene == "busted") { PlaceOnOpenRoad(run.World); PlaceBusted(run.World, view.Effects); }
         else if (scene == "sound-off") view.SoundOff = true;   // the default scene with the SOUND OFF mark
+        else if (scene == "no-sound") view.NoSound = true;   // the default scene with the NO SOUND mark
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
         if (SnapshotDamage >= 0)
         {
@@ -564,7 +565,7 @@ public static class DiagnosticsRunner
         var report = new System.Text.StringBuilder();
         report.AppendLine($"perf: {onRender.Count} frames at {Width}x{Height} (after {PerfWarmUp} warm-up frames), close-cars scene + {PerfCars} cars of all {NonBossKinds.Length} non-boss kinds, {PerfExtraCivilians} extra civilians, {PerfExtraPolice} police, heat 80, a roadblock at 300 m and a speed trap at 200 m, the boss, 3 smoke clouds, 4 crates, 2 missiles and a strike sweep");
         report.AppendLine($"strike sweeping in {strikeFrames} frames, boss bar showing in {bossFrames}; the autopilot drove {run.World.Player.Distance - startDistance:0} m, ended in state {run.State}");
-        report.AppendLine($"OnRender: mean {mean:0.000} ms, 95th percentile {p95:0.000} ms, max {onRender.Max():0.000} ms   (budget: mean < {PerfBudgetMs} ms: {(pass ? "PASS" : "FAIL")})");
+        report.AppendLine($"OnRender: mean {mean:0.000} ms, 95th percentile {p95:0.000} ms, max {onRender.Max():0.000} ms   (budget: mean < {PerfBudgetMs} ms: {(mean < PerfBudgetMs ? "PASS" : "FAIL")})");
         report.AppendLine($"OnRender + rasterising into a bitmap (information only): mean {totalMean:0.000} ms, 95th percentile {totalP95:0.000} ms");
         report.AppendLine($"Sound update (SoundSystem.Update on the game thread, no device, a practice mission on the autopilot): mean {soundMean:0.000} ms, 95th percentile {soundP95:0.000} ms   (budget: mean < {PerfSoundBudgetMs} ms: {(soundPass ? "PASS" : "FAIL")})");
         WriteReport(path, report.ToString());

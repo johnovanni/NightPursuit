@@ -658,4 +658,31 @@ public class ScreenFlowTests
         r.Key(MenuInput.Down);
         Assert.True(r.Flow.Version > v);
     }
+
+    [Fact]
+    public void Settings_sound_row_reads_ON_NO_DEVICE_when_sound_is_on_but_cannot_play()
+    {
+        var r = new Rig();
+        r.ToPause();
+        r.Select("settings"); r.Key(MenuInput.Confirm);
+        Assert.Equal("ON", r.Flow.Menu!.Items.Single(i => i.Id == "sound").Value);
+
+        int v = r.Flow.Version;
+        r.Flow.SoundUnavailable = true;   // the open Settings menu follows at once
+        Assert.True(r.Flow.Version > v);
+        Assert.Equal("ON (NO DEVICE)", r.Flow.Menu!.Items.Single(i => i.Id == "sound").Value);
+        Assert.Equal("sound", r.Flow.Menu!.Items.Single(i => i.Value == "ON (NO DEVICE)").Id);
+
+        v = r.Flow.Version;
+        r.Flow.SoundUnavailable = true;   // no change: nothing to redraw
+        Assert.Equal(v, r.Flow.Version);
+
+        r.Select("sound"); r.Key(MenuInput.Confirm);   // switched off: plainly OFF
+        Assert.Equal("OFF", r.Flow.Menu!.Current.Value);
+        r.Key(MenuInput.Confirm);                       // back on: still no device
+        Assert.Equal("ON (NO DEVICE)", r.Flow.Menu!.Current.Value);
+
+        r.Flow.SoundUnavailable = false;
+        Assert.Equal("ON", r.Flow.Menu!.Items.Single(i => i.Id == "sound").Value);
+    }
 }

@@ -15,7 +15,6 @@ public readonly record struct CuePlay(SoundCue Cue, double Volume = 1, double Pa
 public sealed class AudioMixer : ISampleProvider
 {
     private const double RampSeconds = 0.02;
-    private const float Ceiling = 0.891f; // -1 dBFS
 
     private readonly SoundBank _bank;
     private readonly MixingSampleProvider _effects = new(AudioFormat.Stereo) { ReadFully = true };
@@ -42,7 +41,7 @@ public sealed class AudioMixer : ISampleProvider
         master.AddMixerInput(new EffectSampleProvider(_effects, _effectsGain));
         master.AddMixerInput(new EffectSampleProvider(_music, _musicGain));
         var limiter = new LimiterEffect { CeilingDb = -1, LookaheadMs = 2, ReleaseMs = 100 };
-        _output = new HardClamp(new EffectSampleProvider(master, limiter), Ceiling);
+        _output = new HardClamp(new EffectSampleProvider(master, limiter), AudioFormat.Ceiling);
     }
 
     public WaveFormat WaveFormat => AudioFormat.Stereo;
@@ -99,7 +98,7 @@ public sealed class AudioMixer : ISampleProvider
     /// <summary>How many one-off effects are playing now.</summary>
     public int ActiveVoices => _voices.Count;
 
-    /// <summary>Starts a one-off effect. A cue with no loaded sound is ignored. Safe from any thread.</summary>
+    /// <summary>Starts a one-off effect. A cue with no loaded sound is ignored. For the game thread.</summary>
     public void Play(CuePlay p)
     {
         var samples = _bank.Samples(p.Cue);

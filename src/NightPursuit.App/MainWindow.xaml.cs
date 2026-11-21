@@ -40,6 +40,7 @@ public partial class MainWindow : Window
             _input.ReleaseAll();
             // Cruise or the lever would keep driving an unattended car (decision D12); on any other screen nothing changes.
             flow.FocusLost();
+            _loop?.OnDeactivated();
         };
         PreviewMouseWheel += (_, e) =>
         {
@@ -61,6 +62,10 @@ public partial class MainWindow : Window
         };
     }
 
-    /// <summary>Stops the game loop (used when a fatal error is being shown).</summary>
-    public void StopLoop() => _loop.Stop();
+    /// <summary>Stops the game loop and its sound (used when a fatal error is being shown).</summary>
+    public void StopLoop()
+    {
+        _loop.Stop();
+        _loop.StopSound();
+    }
 }

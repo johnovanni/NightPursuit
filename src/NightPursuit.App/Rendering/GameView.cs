@@ -39,6 +39,9 @@ public sealed class GameView : FrameworkElement
     /// <summary>Sound is switched off (the game loop sets it from the settings): a small SOUND OFF mark shows in play.</summary>
     public bool SoundOff { get; set; }
 
+    /// <summary>Sound is wanted but cannot play (no device, a lost device or a sound failure): a small NO SOUND mark shows in play. SOUND OFF takes its place.</summary>
+    public bool NoSound { get; set; }
+
     /// <summary>A screen covers the road (the game loop sets it): the frozen world's text overlays are left out, so no stale text shows through: the warnings, messages, announcement, busted countdown and respawn box.</summary>
     public bool Covered { get; set; }
 
@@ -110,7 +113,7 @@ public sealed class GameView : FrameworkElement
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
         if (!Covered) Overlays.DrawState(dc, _layout, run);   // after the help, so the respawn countdown is never hidden under it
-        if (SoundOff && !Covered && !ShowHelp) Hud.DrawSoundOff(dc, _layout);
+        if ((SoundOff || NoSound) && !Covered && !ShowHelp) Hud.DrawSoundMark(dc, _layout, SoundOff ? "SOUND OFF" : "NO SOUND");
         if (Notice is not null) Overlays.DrawNotice(dc, _layout, Notice);
 
 #if DEBUG

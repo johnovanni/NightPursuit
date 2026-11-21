@@ -3,7 +3,7 @@ using NAudio.Wave;
 namespace NightPursuit.Core.Audio;
 
 /// <summary>The safety net after the limiter: no output sample ever goes past the ceiling.</summary>
-public sealed class HardClamp(ISampleProvider source, float ceiling = 0.891f) : ISampleProvider
+public sealed class HardClamp(ISampleProvider source, float ceiling = AudioFormat.Ceiling) : ISampleProvider
 {
     public WaveFormat WaveFormat => source.WaveFormat;
 

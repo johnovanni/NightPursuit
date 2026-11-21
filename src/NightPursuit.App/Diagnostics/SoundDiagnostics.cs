@@ -18,7 +18,9 @@ static class SoundDiagnostics
 {
     const double Step = 1.0 / 60;
     const int FramesPerStep = 735;          // 44,100 / 60 stereo frames
-    const float Ceiling = 0.891f;           // -1 dBFS, the mixer's hard clamp
+    const float Ceiling = AudioFormat.Ceiling;   // -1 dBFS, the mixer's hard clamp
+    /// <summary>The longest check: the whole mix is kept in memory (about 2.5 GB for an hour), so it is capped at ten minutes.</summary>
+    const double MaxSeconds = 600;
 
     /// <summary>A practice game of the mission, on the Briefing screen, sound defaults on.</summary>
     static (ScreenFlow Flow, MissionDefinition Def) NewFlow(string mission)
@@ -71,9 +73,9 @@ static class SoundDiagnostics
         string? secondsText = DiagnosticsRunner.Arg(args, "--seconds");
         if (secondsText is not null
             && !(double.TryParse(secondsText, NumberStyles.Float, CultureInfo.InvariantCulture, out seconds)
-                 && double.IsFinite(seconds) && seconds > 0 && seconds <= 3600))
+                 && double.IsFinite(seconds) && seconds > 0 && seconds <= MaxSeconds))
         {
-            DiagnosticsRunner.Error($"--seconds needs a number of seconds above 0 and up to 3600, not '{secondsText}'");
+            DiagnosticsRunner.Error($"--seconds needs a number of seconds above 0 and up to {MaxSeconds:0} (the whole mix is kept in memory), not '{secondsText}'");
             return 2;
         }
 
@@ -116,7 +118,7 @@ static class SoundDiagnostics
                 Edge(log, inv, t, "MissileWhine", f.Live.Whine01 > 0, ref whine, counts);
                 Edge(log, inv, t, "OffRoadRumble", f.Live.OffRoad01 > 0, ref offRoad, counts);
                 Edge(log, inv, t, "Skid", f.Live.Skid01 > 0, ref skid, counts);
-                if (lastMusic is not { } m || m.Slot != f.Music.Slot || m.Track != f.Music.Track || m.Generation != f.Music.Generation)
+                if (lastMusic is not { } m || !m.SameMusic(f.Music))
                 {
                     log.AppendLine(string.Create(inv, $"t={t:0.00} Music slot={f.Music.Slot} file={f.Music.Track?.File ?? "(silence)"}"));
                     counts["Music change"] = counts.GetValueOrDefault("Music change") + 1;

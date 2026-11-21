@@ -63,6 +63,9 @@ public sealed record MusicTrack(string File, double Volume = 1)
 public sealed class MusicManifest
 {
     public const string FileName = "music.json";
+    // Slot names are matched in any case, so "GAMEOVER" and "GameOver" work as well as "gameOver".
+    static readonly HashSet<string> KnownSlots = new(["title", "briefing", "results", "gameOver", "finished"], StringComparer.OrdinalIgnoreCase);
+
     public const string UnreadableProblem = "MUSIC LIST COULD NOT BE READ";
 
     public MusicTrack? Title { get; init; }
@@ -86,10 +89,10 @@ public sealed class MusicManifest
             using var doc = JsonDocument.Parse(File.ReadAllText(path), options);
             if (doc.RootElement.ValueKind != JsonValueKind.Object) return Unreadable(" (IT MUST BE A LIST IN { } BRACES)");
             var problems = new List<string>();
-            var slots = new Dictionary<string, MusicTrack?>();
+            var slots = new Dictionary<string, MusicTrack?>(StringComparer.OrdinalIgnoreCase);
             foreach (var prop in doc.RootElement.EnumerateObject())
             {
-                if (prop.Name is not ("title" or "briefing" or "results" or "gameOver" or "finished"))
+                if (!KnownSlots.Contains(prop.Name))
                 {
                     problems.Add($"MUSIC LIST: \"{prop.Name.ToUpperInvariant()}\" IS NOT A KNOWN SLOT (TITLE, BRIEFING, RESULTS, GAMEOVER, FINISHED)");
                     continue;

@@ -466,4 +466,37 @@ public class SoundDirectorTests
         Assert.Equal((without.Hash, without.Time), (with.Hash, with.Time));
         Assert.True(with.Cues > 10, $"the director should have had work to do (got {with.Cues} cues)");
     }
+
+    [Fact]
+    public void The_same_cue_twice_in_one_frame_plays_once_as_the_loudest_with_its_pan()
+    {
+        var r = new Rig();
+        r.ToPlay();
+        var far = r.Car(AgentKind.Runner, 120, right: -8);    // quiet, from the left
+        var near = r.Car(AgentKind.Runner, 30, right: 8);     // loud, from the right
+        r.Publish(
+            new VehicleDestroyed(0, far.Id, AgentKind.Runner, KillCause.Gunfire, 100),
+            new VehicleDestroyed(0, near.Id, AgentKind.Runner, KillCause.Gunfire, 100));
+        var play = Assert.Single(r.Update().Cues);
+        Assert.Equal(SoundCue.Explosion, play.Cue);
+        Assert.Equal(1 / (1 + 0.25), play.Volume, 9);   // 30 m away
+        Assert.True(play.Pan > 0);
+
+        // The loud one first gives the same answer.
+        r.Publish(
+            new VehicleDestroyed(0, near.Id, AgentKind.Runner, KillCause.Gunfire, 100),
+            new VehicleDestroyed(0, far.Id, AgentKind.Runner, KillCause.Gunfire, 100));
+        var again = Assert.Single(r.Update().Cues);
+        Assert.Equal((play.Volume, play.Pan), (again.Volume, again.Pan));
+    }
+
+    [Fact]
+    public void Two_player_hits_in_one_frame_play_the_harder_one()
+    {
+        var r = new Rig();
+        r.ToPlay();
+        r.Publish(new PlayerDamaged(0, 4, "SCRAPE"), new PlayerDamaged(0, 30, "RAM"));
+        var play = Assert.Single(r.Update().Cues);
+        Assert.Equal(1.0, play.Volume, 9);
+    }
 }

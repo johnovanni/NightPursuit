@@ -22,15 +22,16 @@ internal static class Hud
     }
 
     /// <summary>
-    /// The SOUND OFF mark, in the small HUD text, at the bottom left of the road: under the weapon panel and clear of the
-    /// speed and steering readouts. When the weapon panel reaches that row (a tiny window at the largest text) no corner
-    /// is free, so the mark is left out rather than cover play information. Only drawn in play (the menus show the setting).
+    /// The SOUND OFF or NO SOUND mark, in the small HUD text, at the bottom left of the road: under the weapon panel and clear of the
+    /// speed and steering readouts. When the left warning chevron (which sits under the weapon panel) would reach that row, as in a
+    /// tiny window or at the largest text, no corner is free, so the mark is left out rather than cover play information.
+    /// Only drawn in play (the menus show the setting).
     /// </summary>
-    public static void DrawSoundOff(DrawingContext dc, HudLayout l)
+    public static void DrawSoundMark(DrawingContext dc, HudLayout l, string text)
     {
         double x = 16 * l.K, y = l.Height - l.T(22);
-        if (WeaponPanel.Bounds(l).Bottom > y - 2 * l.K) return;
-        l.Text(dc, "SOUND OFF", x, y, 13, Neon.TextAmber, bold: true);
+        if (!Overlays.LeftChevronClear(l, y)) return;
+        l.Text(dc, text, x, y, 13, Neon.TextAmber, bold: true);
     }
 
     static void DrawDriving(DrawingContext dc, HudLayout l, World w)

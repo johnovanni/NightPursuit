@@ -126,17 +126,29 @@ internal static class Overlays
         l.Centered(dc, "SPEED UP TO BREAK FREE", top + 56 * kt, 18, Neon.TextAmber);
     }
 
+    /// <summary>Half the height of a warning chevron, in 1280x720 pixels (times the scale).</summary>
+    const double ChevronHalfHeight = 26;
+
+    /// <summary>Screen row of the right chevron's point: clears the radar's top edge.</summary>
+    static double RightChevronY(HudLayout l) => Math.Min(l.Height * 0.55, l.Height - 332 * l.K);
+
+    /// <summary>Screen row of the left chevron's point: as the right one, but below the weapon panel, which owns the left edge down to its bottom.</summary>
+    internal static double LeftChevronY(HudLayout l) => Math.Max(RightChevronY(l), WeaponPanel.Bounds(l).Bottom + 34 * l.K);
+
+    /// <summary>True when a row of small text starting at <paramref name="textTop"/> would stay clear of the left chevron (with a 2-unit gap).</summary>
+    internal static bool LeftChevronClear(HudLayout l, double textTop) =>
+        LeftChevronY(l) + ChevronHalfHeight * l.K <= textTop - 2 * l.K;
+
     /// <summary>A chevron on the screen edge pointing out toward the side a warning comes from (both sides when it is dead behind): pursuers, missiles, blockers, the boss and hostiles.</summary>
     static void DrawEdgeArrow(DrawingContext dc, HudLayout l, int side)
     {
-        // The left chevron sits below the weapon panel, which owns the left edge down to its bottom; the right one clears the radar's top edge.
-        double k = l.K, rightY = Math.Min(l.Height * 0.55, l.Height - 332 * k), leftY = Math.Max(rightY, WeaponPanel.Bounds(l).Bottom + 34 * k);
+        double k = l.K, rightY = RightChevronY(l), leftY = LeftChevronY(l);
         foreach (int dir in side == 0 ? Projector.Sides : side < 0 ? LeftOnly : RightOnly)
         {
             double ax = dir < 0 ? 18 * k : l.Width - 18 * k, y = dir < 0 ? leftY : rightY;
             var arrow = new LineBatch();
-            arrow.Line(new Point(ax - dir * 22 * k, y - 26 * k), new Point(ax, y));
-            arrow.Line(new Point(ax, y), new Point(ax - dir * 22 * k, y + 26 * k));
+            arrow.Line(new Point(ax - dir * 22 * k, y - ChevronHalfHeight * k), new Point(ax, y));
+            arrow.Line(new Point(ax, y), new Point(ax - dir * 22 * k, y + ChevronHalfHeight * k));
             arrow.Draw(dc, Neon.PursuerCar);
         }
     }

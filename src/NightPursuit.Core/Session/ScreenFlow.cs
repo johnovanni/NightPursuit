@@ -14,6 +14,7 @@ public sealed class ScreenFlow
     readonly IGameStore _store;
     readonly Stack<(Screen Screen, int Selected)> _returns = new();
     bool _pausedForHelp;
+    bool _soundUnavailable;
     bool _noticeShown;
 
     public ScreenFlow(Func<bool, Game> newGame, FeelSettings feel, GameSettings settings, HighScoreTable scores, IGameStore store)
@@ -47,6 +48,22 @@ public sealed class ScreenFlow
         if (!ShowIntroHelp) return;
         ShowIntroHelp = false;
         Version++;
+    }
+
+    /// <summary>
+    /// True when sound is wanted but cannot play (no device, a lost device or a sound failure). The App sets it from the
+    /// sound system each frame. The Settings SOUND row then reads ON (NO DEVICE).
+    /// </summary>
+    public bool SoundUnavailable
+    {
+        get => _soundUnavailable;
+        set
+        {
+            if (_soundUnavailable == value) return;
+            _soundUnavailable = value;
+            if (Current == Screen.Settings && Menu is { } m) Menu = SettingsMenu(m.Selected);
+            Version++;
+        }
     }
 
     /// <summary>Shows a notice on the current screen (null clears it). Several notices join with " / ".</summary>
@@ -129,7 +146,7 @@ public sealed class ScreenFlow
         new MenuEntry("steering", "LIGHTER STEERING AT SPEED", Settings.LighterSteering ? "ON" : "OFF"),
         new MenuEntry("shake", "SCREEN SHAKE", Settings.ScreenShake ? "ON" : "OFF"),
         new MenuEntry("text", "TEXT SIZE", TextSizeNames[(int)Settings.TextSize]),
-        new MenuEntry("sound", "SOUND", Settings.SoundOn ? "ON" : "OFF"),
+        new MenuEntry("sound", "SOUND", !Settings.SoundOn ? "OFF" : _soundUnavailable ? "ON (NO DEVICE)" : "ON"),
         new MenuEntry("music", "MUSIC VOLUME", Settings.MusicVolume.ToString()),
         new MenuEntry("effects", "EFFECTS VOLUME", Settings.EffectsVolume.ToString()),
         new MenuEntry("keys", "KEY BINDINGS"),

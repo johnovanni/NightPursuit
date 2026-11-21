@@ -36,6 +36,10 @@ The end of a mission file then looks like this:
 
 (The last line before the closing brace has no comma after it.)
 
+A mistake in a mission file's `music` block (a wrong field name, a file name with a folder in it, a `volume` out of range)
+stops that mission from loading, and the error box names the mission file and the field.
+Fix it and start the game again.
+
 ## Making a track louder or quieter
 
 Instead of a plain name you can write an entry with a `volume`:
@@ -49,6 +53,7 @@ This works in `music.json` too.
 ## Good to know
 
 - Use a plain file name only. No folders. It must end in `.mp3` or `.wav`.
+- The slot names in `music.json` can be written in any case (`gameOver`, `GAMEOVER` and `GameOver` all work).
 - If a named file is missing, the game shows a notice with its name when it starts. That track stays silent.
 - If something in `music.json` is wrong, a notice names the slot and says what is wrong,
   for example `MUSIC LIST: RESULTS VOLUME MUST BE FROM 0 TO 2`. Only that slot is silent. The others still play.

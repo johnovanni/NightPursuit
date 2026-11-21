@@ -94,4 +94,17 @@ public class MusicManifestTests : IDisposable
         Assert.Equal(new MusicTrack("a.mp3"), m.Title);
         Assert.Equal(new MusicTrack("b.MP3"), m.Briefing);
     }
+
+    [Theory]
+    [InlineData("GAMEOVER")]
+    [InlineData("GameOver")]
+    [InlineData("gameover")]
+    public void Slot_names_match_in_any_case(string key)
+    {
+        Write("{ \"" + key + "\": \"over.mp3\", \"TITLE\": \"t.mp3\" }");
+        var (m, problems) = MusicManifest.Load(_dir);
+        Assert.Empty(problems);
+        Assert.Equal(new MusicTrack("over.mp3"), m.GameOver);
+        Assert.Equal(new MusicTrack("t.mp3"), m.Title);
+    }
 }

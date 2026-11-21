@@ -72,6 +72,9 @@ public sealed class SoundSystem : IDisposable
     /// <summary>True when a sound device is playing (it can still be lost later).</summary>
     public bool HasOutput => _output is not null;
 
+    /// <summary>True when sound can actually be heard: a device is open and has not been lost.</summary>
+    public bool Working => _output is { Lost: false };
+
     /// <summary>Hands the director each menu key given to the flow this frame, before <see cref="Update"/>.</summary>
     public void NoteMenuKey(MenuKey key) => _director.NoteMenuKey(key);
 
@@ -110,8 +113,7 @@ public sealed class SoundSystem : IDisposable
     // Opens the new track on the game thread (the slot, track or generation changed) and fades to it.
     void ChangeMusic(MusicCue cue)
     {
-        bool changed = _cue is not { } o || o.Slot != cue.Slot || o.Track != cue.Track || o.Generation != cue.Generation;
-        if (!changed) return;   // only the level moved: the mixer ramps that itself
+        if (_cue is { } old && old.SameMusic(cue)) return;   // only the level moved: the mixer ramps that itself
 
         MusicDecoder? next = null;
         if (cue.Track is { } track && !_badFiles.Contains(track.File))

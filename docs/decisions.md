@@ -1436,7 +1436,8 @@ followed by a hard clamp at the same ceiling as a safety net.
 
 **D154. The 32 sounds, one line each.** All are made by `tools/SynthSounds` (a rerun gives identical files) and
 normalised to -3 dBFS, so balance between sounds is set by their playing volume, not the files. You can replace any WAV
-by one of the same name.
+by one of the same name. Any normal WAV works for a swapped-in effect (any sample rate, 16 or 24-bit or float, mono or
+stereo): the game converts it when it starts (see D171).
 - Player gun: a low thunk falling in pitch with a short click, driven for grit. Enemy gun: thinner and higher, a
   rattling burst.
 - Oil: a wet bubbling blorp. Smoke: a hiss closing down. Caltrops: a dozen small scattered pings.
@@ -1518,16 +1519,18 @@ stub), so `WaveOut` is used: 27 ms by 3 buffers, about 80 ms. No sound device fo
 notice and the game runs silently. If the device goes away while playing there is one notice ("SOUND STOPPED: THE SOUND
 DEVICE WENT AWAY") and no reconnecting: restart the game to get sound back (design §11 left this to me). If any sound
 code fails while playing, sound is switched off for the session, the details go to `sound-error.log` in the game's data
-folder, and one notice appears. The game carries on. Music files open on the game thread at a screen change, so a very
-large MP3 could pause one frame; start-up opens each named file once to check it. A bad file found later gives one
-notice, then silence.
+folder, and one notice appears. The game carries on. A music file opens on the game thread whenever the music slot
+changes, which includes a screen change, the boss's arrival and a practice restart, so a very large MP3 could pause
+one frame at those moments; start-up opens each named file once to check it. The difference: a file that fails when it
+is opened gives one notice, then that slot is silent. A file that fails in the middle of playing goes silent with no
+notice (an open item below).
 *Cost to change:* medium.
 
 **D164. The SOUND OFF mark.** An amber SOUND OFF shows bottom-left in play while sound is off. It is hidden behind any
 screen (those show the setting), while the intro help shows, and in the one size where the weapon panel fills that
 corner (320x200 at the largest text), because there it would cover play information (NFR-3). The mark carries no game
 information; the SETTINGS line and M still show the state. After a sound failure the mark is not shown (the notice
-covers it).
+covers it); D168 later added the NO SOUND mark for that case, and D170 changed the corner rule.
 *Cost to change:* small.
 
 **D165. How the sound was checked without listening.** Neither diagnostic opens a sound device.
@@ -1561,16 +1564,69 @@ on the game's thread, no device) mean 0.008 ms, 95th percentile 0.014 ms (budget
 
 *Cost to change:* none to a few lines each.
 
+**D167. Minimising the window silences the sound at once.** Losing focus pauses play, but the sound only learned of it
+on the next drawn frame, and WPF usually stops drawing while its only window is minimised. So `MainWindow` now calls
+`GameLoop.OnDeactivated()` right after `FocusLost()`. It runs one sound update with no time passing (guarded like the
+per-frame call, and skipped once sound has failed), so the engine, siren and whine go quiet and the music drops to 40% at
+once.
+*Cost to change:* small.
+
+**D168. A lasting sign that sound is not working.** Before, a missing device, a lost device or a sound failure gave one
+notice that the next screen change cleared, while Settings still said SOUND ON. Now `SoundSystem.Working` is true only
+when a device is open and not lost; the game loop also counts a failed or missing sound system as not working, and tells
+the screen flow through a plain flag, `ScreenFlow.SoundUnavailable` (Core knows no App types). Two things follow:
+- the SETTINGS sound row reads `ON (NO DEVICE)` when sound is on but cannot play (still `OFF` when you switched it off);
+- the in-play mark reads `NO SOUND` (same amber, same place and same hiding rules as SOUND OFF). If you switched sound
+  off, SOUND OFF shows instead, since that is the more useful thing to say.
+The row is named for the commonest cause (no device) though it also shows after a sound failure; the notice says which.
+*Cost to change:* small.
+
+**D169. Music list slot names match in any case.** The notice for an unknown slot is upper case and lists `GAMEOVER`, but
+only `gameOver` was accepted. Now `GAMEOVER`, `GameOver` and `gameover` all work (and so does `TITLE`, and so on).
+*Cost to change:* none.
+
+**D170. The SOUND OFF / NO SOUND mark clears the left warning chevron.** The chevron's row is now one shared function
+(`Overlays.LeftChevronY`), used by both the chevron and the mark, so they cannot drift apart. The mark is left out when
+the chevron's lower tip (its row plus 26 units) would reach within 2 units of the mark's top. This replaces the weapon-panel
+test, which is now covered by it (the chevron is always 34 units below the panel). Worked out by hand, mark shown or left
+out (normal text / largest text): 960x540 shown / shown; 320x260 shown / left out; 320x200 left out / left out;
+2560x600 shown / shown. The App has no test project, so this is arithmetic, not a unit test; the `no-sound` and
+`sound-off` snapshot scenes can show it. The mark is now left out in more small windows than before, on purpose: it
+carries no game information.
+*Cost to change:* small.
+
+**D171. Swapped-in effect WAVs can be any normal WAV.** `SoundBank` now converts each file as it loads, with NAudio's own
+blocks: WAV reader, then stereo to mono (average), then the WDL resampler to 44,100 Hz. Any PCM (8, 16, 24 or 32-bit)
+or float WAV, mono or stereo, at any rate works. `SoundFiles.LoadMono` stays strict, because the tests use it to check
+that the shipped files really are 44.1 kHz 16-bit mono. A problem is now `SOUND FILE name.wav: REASON IN UPPER CASE`: the
+file name keeps its real spelling (so you can find it) and appears once. `SoundBank.Load` now survives any error from one
+file except the fatal ones (out of memory and the like), so one bad file can never stop the game starting. More than 2
+channels, or a kind of WAV NAudio cannot read (for example compressed), is still refused with a plain message.
+*Cost to change:* small.
+
+**D172. Smaller fixes from the final review.**
+- An unexpected game error now also switches the sound off, so nothing plays under the error box.
+- `--perf`: the OnRender line prints PASS or FAIL for the render alone (the sound check has its own line).
+- `--sound-check --seconds` is capped at 600 (a plain error and exit 2 above that), because the whole mix is held in
+  memory (an hour needed about 2.5 GB). Streaming to a file was the other choice; ten minutes is plenty for a check.
+- `AudioFormat.Ceiling` (0.891) is now the one place for the limiter ceiling; `MusicCue.SameMusic` is the one "same
+  music?" test, used by the sound system and the sound check.
+- `AudioMixer.Play` is documented as for the game thread (it said "any thread", which was too strong).
+*Cost to change:* none.
+
+**D173. Music level when paused, and the loudest cue in a frame.**
+- The music is at 40% whenever the run is paused: the pause menu, and also Controls opened with F1 straight from play
+  (which pauses the run; before, that stayed at full level). Settings stays at full level so volumes can be judged, and
+  Controls from the title is full level.
+- If the same effect would start more than once in one frame (two explosions, two hits), it plays once, as the loudest
+  of them with its own side, whichever came first. Before, the first one won. This applies to every cue, as the enemy
+  gun already did for itself.
+*Cost to change:* small.
+
 ## Open items after Plan 5
 
-Carried forward from the earlier lists (still open as listed under Plan 4 and before). New from Plan 5; "FR" marks the
-ones the final review may fix.
-- FR: a music notice upper-cases the whole message, so it shows the slot as `GAMEOVER` while the key is `gameOver`
-  (case-sensitive): match slot names without regard to case. The music README also does not say that a wrong music block
-  in a mission file rejects that whole mission.
-- FR: the free-corner test for SOUND OFF ignores the left warning chevron, so the two can overlap at some window
-  heights when a left warning shows.
-- The same sound twice in one frame keeps the first, not the loudest (player hit, explosion), unlike the enemy gun.
+Carried forward from the earlier lists (still open as listed under Plan 4 and before). New from Plan 5. The final review's
+fixes are D167 to D173.
 - A dropped sound (24 limit) is cut with no fade; the voice rank ignores how far along the sound is in its envelope.
 - A fifth fading music track is cut abruptly (it needs five changes inside one fade).
 - Pickup's last arpeggio note is cut at 0.5 s. The siren's square tone is not band-limited, so it may sound gritty.
@@ -1578,7 +1634,8 @@ ones the final review may fix.
 - A music file that fails in the middle of playing stays silent with no notice.
 - The sound-failure reason is formatted in two places (App.xaml.cs and AudioOutput).
 - The Debug frame counter shares the SOUND OFF mark's spot (Debug builds only).
-- A minimised window may stop drawing; the steady sounds then hold their last state (not checked).
+- A minimised window may stop drawing. The steady sounds are now silenced by the Deactivated hook (D167), but that was not
+  tried on a real minimise (see the checks below).
 - The `--sound-check` run does not reach the boss in 90 s, so the boss cue and music switch are covered by unit tests
   only, not by a mixed run.
 - Not tested: playback on a real device, MP3 looping and 48 kHz music, the device-lost path, and M on the Pause or
@@ -1587,6 +1644,13 @@ ones the final review may fix.
 - NAudio's gain block has its volume written from the game thread while the audio thread reads it; NAudio does not
   document that as safe (a stress test passes).
 - Noise-voice levels are calibrated by peak, not loudness; the steady sounds' balance is for your ears to judge.
+- NAudio's `PanningSampleProvider` allocates about 4 KB for each new sound on the audio thread (small, but not free).
+- Pressing M on Settings saves edits you have not left Settings to keep, a little early (the settings are normally saved on
+  leaving that screen).
+- The cost of opening an MP3 when the boss arrives is not measured: do it when your first MP3 arrives (ruling R13).
+- Pressing M on a menu gives no on-screen notice that sound changed (left open, ruling R13); the SETTINGS line shows it.
+- A mistake in a mission file's `music` block stops that mission from loading (ruling R13 keeps the mission loader strict);
+  the error box names the file and the field. The music README now says so.
 
 ## Checks only you can do (sound)
 
@@ -1603,3 +1667,7 @@ ones the final review may fix.
 9. Add your first music track by following `content/music/README.md`: does it cross-fade and loop cleanly, and does the
    boss switch land well? A wrong entry should give a notice that names what is wrong.
 10. Unplug or disable the sound device in play: one notice, and the game goes on silently.
+11. With no sound device plugged in: the NO SOUND mark shows in play (with sound on) and the SETTINGS sound row reads
+    ON (NO DEVICE).
+12. Minimise the window in the middle of a mission: the engine and siren stop at once (and come back, paused, when you
+    return).

@@ -1,2 +1,4 @@
 # Sound files named here (one file name per line, for example gun-player.wav) are never overwritten by the SynthSounds tool,
 # so an effect you have swapped for your own survives a re-run. Lines starting with # are ignored.
+# Any normal WAV works for a swapped-in effect: any sample rate, 16 or 24-bit or float, mono or stereo. The game converts it
+# when it starts. Keep it short (under a second for most effects).

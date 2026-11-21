@@ -231,6 +231,13 @@ public sealed class SoundDirector(MusicSlots music)
 
     bool Play(SoundCue cue, double volume = 1, double pan = 0)
     {
+        // The same cue twice in one frame plays once, as the loudest of them (with its own side).
+        for (int i = 0; i < _cues.Count; i++)
+            if (_cues[i].Cue == cue)
+            {
+                if (volume > _cues[i].Volume) _cues[i] = new CuePlay(cue, volume, pan);
+                return false;
+            }
         if (!_gaps.TryStart(cue, _now)) return false;
         _cues.Add(new CuePlay(cue, volume, pan));
         return true;

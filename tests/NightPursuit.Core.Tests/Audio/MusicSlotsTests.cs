@@ -323,4 +323,45 @@ public class MusicSlotsTests
         Assert.Equal(new[] { "same.mp3", "results.mp3", "a-theme.mp3", "a-boss.mp3" }, files);
         Assert.Empty(new MusicSlots(new MusicManifest()).FilesNamed(new[] { Def("c", null) }));
     }
+
+    [Fact]
+    public void Help_opened_straight_from_play_holds_the_music_at_40_percent()
+    {
+        var r = new Rig(Full, Alpha);
+        r.ToPlay();
+        r.Tick();
+        var playing = r.Cue();
+        Assert.Equal(1.0, playing.Level);
+
+        r.Flow.HandleGameAction(new GameAction(ActionKind.ToggleHelp));   // F1: pauses the run and opens Controls
+        Assert.Equal(Screen.Controls, r.Flow.Current);
+        var help = r.Cue();
+        Assert.Equal((playing.Slot, playing.Track, 0.4), (help.Slot, help.Track, help.Level));
+        Assert.True(help.SameMusic(playing));   // only the level moved: no restart
+
+        r.Key(MenuInput.Back);   // closing the help resumes the run
+        Assert.Equal(Screen.Play, r.Flow.Current);
+        Assert.Equal(1.0, r.Cue().Level);
+    }
+
+    [Fact]
+    public void Controls_from_the_title_is_full_level()
+    {
+        var r = new Rig(Full);
+        r.Cue();
+        r.Select("controls"); r.Key(MenuInput.Confirm);
+        Assert.Equal(Screen.Controls, r.Flow.Current);
+        Assert.Equal(1.0, r.Cue().Level);
+    }
+
+    [Fact]
+    public void SameMusic_ignores_the_level_only()
+    {
+        var a = new MusicCue(MusicSlot.Title, T("t.mp3"), 1.0, 3);
+        Assert.True(a.SameMusic(a with { Level = 0.4 }));
+        Assert.False(a.SameMusic(a with { Generation = 4 }));
+        Assert.False(a.SameMusic(a with { Slot = MusicSlot.Briefing }));
+        Assert.False(a.SameMusic(a with { Track = T("u.mp3") }));
+        Assert.False(a.SameMusic(a with { Track = null }));
+    }
 }

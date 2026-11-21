@@ -48,6 +48,26 @@ public sealed class GameLoop
 
     public void Stop() => CompositionTarget.Rendering -= OnFrame;
 
+    /// <summary>
+    /// The window lost focus (it may be minimised, when WPF stops raising frames): the flow has just paused play, so tell the sound
+    /// at once. Silent live voices and the quieter pause level then reach the mixer without waiting for a frame.
+    /// </summary>
+    public void OnDeactivated()
+    {
+        if (_soundBroken || _sound is null) return;
+        try { _sound.Update(_flow, 0); }
+        catch (Exception ex) { SoundFailed(ex); }
+    }
+
+    /// <summary>Switches the sound off for good (a fatal error is being shown), so nothing plays under the error box.</summary>
+    public void StopSound()
+    {
+        if (_sound is null) return;
+        try { _sound.Mixer.SoundOn = false; } catch { /* best effort */ }
+        try { _sound.Dispose(); } catch { /* best effort */ }
+        _soundBroken = true;
+    }
+
     void OnFrame(object? sender, EventArgs e)
     {
         var now = ((RenderingEventArgs)e).RenderingTime;
@@ -121,6 +141,9 @@ public sealed class GameLoop
         _view.TextScale = _flow.Settings.TextScale;
         _view.Covered = _flow.Current != Screen.Play;
         _view.SoundOff = !_flow.Settings.SoundOn;
+        bool soundUnavailable = _soundBroken || _sound is not { Working: true };
+        _view.NoSound = _flow.Settings.SoundOn && soundUnavailable;
+        _flow.SoundUnavailable = soundUnavailable;
         _view.Notice = _flow.Current == Screen.Play ? _flow.Notice : null;
         if (run is not null)
         {
