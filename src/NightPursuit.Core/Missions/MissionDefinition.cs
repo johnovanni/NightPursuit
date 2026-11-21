@@ -1,3 +1,4 @@
+using NightPursuit.Core.Audio;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
@@ -18,7 +19,8 @@ public sealed record MissionDefinition(
     BossDefinition? Boss = null,
     TrafficDefinition? Traffic = null,
     PoliceDefinition? Police = null,
-    int Bonus = 1000)
+    int Bonus = 1000,
+    MissionMusic? Music = null)
 {
     /// <summary>What the player starts with; oil always follows <see cref="StartingOil"/>.</summary>
     public LoadoutDefinition Loadout => (StartingLoadout ?? LoadoutDefinition.Default) with { Oil = StartingOil };
@@ -29,3 +31,6 @@ public sealed record MissionDefinition(
 /// <paramref name="SpawnOffset"/> places them ahead of the player, a negative one behind; the cars of a wave are 40 m apart.
 /// </summary>
 public sealed record WaveDefinition(double AtDistance, AgentKind Kind, int Count, double SpawnOffset);
+
+/// <summary>The mission's own music: its theme, and the boss theme that takes over when the boss appears. Either may be empty.</summary>
+public sealed record MissionMusic(MusicTrack? Theme, MusicTrack? Boss);

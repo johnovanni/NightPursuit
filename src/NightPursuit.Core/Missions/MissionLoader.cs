@@ -1,4 +1,5 @@
 using System.Text.Json;
+using NightPursuit.Core.Audio;
 using NightPursuit.Core.Road;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
@@ -77,6 +78,8 @@ public static class MissionLoader
             TrafficDefinition? traffic = root.TryGetProperty("traffic", out var trafficEl) ? ReadTraffic(trafficEl) : null;
             PoliceDefinition? police = root.TryGetProperty("police", out var policeEl) ? ReadPolice(policeEl) : null;
 
+            MissionMusic? music = root.TryGetProperty("music", out var musicEl) ? ReadMusic(musicEl) : null;
+
             int bonus = 1000;
             if (root.TryGetProperty("bonus", out var bonusEl))
             {
@@ -84,7 +87,20 @@ public static class MissionLoader
                     throw Fail($"bonus must be a whole number from 0 to {MaxBonus}");
             }
 
-            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss, traffic, police, bonus);
+            return new MissionDefinition(id, title, briefing, road, approach, oil, waves, loadout, crates, boss, traffic, police, bonus, music);
+        }
+
+        MissionMusic ReadMusic(JsonElement el)
+        {
+            if (el.ValueKind != JsonValueKind.Object) throw Fail("music must be an object");
+            MusicTrack? theme = null, boss = null;
+            foreach (var prop in el.EnumerateObject())
+            {
+                if (prop.Name is not ("theme" or "boss")) throw Fail($"music.{prop.Name} is not a known field (theme, boss)");
+                if (!MusicTrack.TryRead(prop.Value, $"music.{prop.Name}", out var track, out var error)) throw Fail(error);
+                if (prop.Name == "theme") theme = track; else boss = track;
+            }
+            return new MissionMusic(theme, boss);
         }
 
         TrafficDefinition ReadTraffic(JsonElement el)
