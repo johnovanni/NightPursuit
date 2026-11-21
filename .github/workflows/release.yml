@@ -1,0 +1,167 @@
+name: Release
+
+# Builds a signed Windows installer, NightPursuit-Setup.exe, that puts the game in C:\Program Files\Qapow\NightPursuit
+# by default (the user can pick another folder; the script is packaging/installer/NightPursuit.iss),
+# plus a self-contained Windows x64 zip for people who'd rather not install.
+# Pull requests: the installer and zip are uploaded as a workflow artifact so the build can be checked (unsigned).
+# Version tags (v1.0.0): both files and their SHA-256 checksums are attached to a GitHub Release.
+#
+# Tag and manual runs sign NightPursuit.exe and the game's own DLLs, then the installer, with Azure Artifact Signing
+# as John Apolloni (account JohnApolloni, profile JohnApolloniPublic), the same identity as the other QAPOW apps.
+# They run in the "release" environment and sign in to Azure with GitHub's OIDC token, which needs
+# repository variables AZURE_CLIENT_ID, AZURE_TENANT_ID and AZURE_SUBSCRIPTION_ID, and an Entra app
+# with a federated credential for the "release" environment that holds the "Artifact Signing
+# Certificate Profile Signer" role on the account. This repo uses GitHub's immutable OIDC subject,
+# so the credential's subject is repo:johnovanni@11181099/NightPursuit@1466030058:environment:release.
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+    paths: ['.github/workflows/release.yml', 'packaging/installer/**', 'src/**', 'content/**', 'Directory.Build.props']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write # OIDC sign-in to Azure for code signing
+
+env:
+  PROJECT: src/NightPursuit.App/NightPursuit.App.csproj
+  ZIP: NightPursuit-win-x64.zip
+  SETUP: NightPursuit-Setup.exe
+  # Pull request builds skip signing, so they never need Azure access.
+  SIGN: ${{ github.event_name != 'pull_request' }}
+
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    # The Azure federated credential trusts this environment, so only runs that use it can sign.
+    environment: ${{ github.event_name != 'pull_request' && 'release' || '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      # The version comes from the tag (v1.2.3 -> 1.2.3); other runs build 0.0.0.
+      - name: Version
+        shell: pwsh
+        run: |
+          $version = '0.0.0'
+          if ('${{ github.ref_type }}' -eq 'tag') { $version = '${{ github.ref_name }}'.TrimStart('v') }
+          "VERSION=$version" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Test
+        run: dotnet test tests/NightPursuit.Core.Tests/NightPursuit.Core.Tests.csproj -c Release
+
+      # The mission files under content/ are copied next to the exe, which is where the game reads them.
+      - name: Publish
+        run: dotnet publish $env:PROJECT -c Release -r win-x64 --self-contained true -p:Version=$env:VERSION -o publish
+
+      - name: Sign in to Azure
+        if: env.SIGN == 'true'
+        uses: azure/login@v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # Signs only the files we build; third-party DLLs keep their publishers' signatures.
+      - name: Sign
+        if: env.SIGN == 'true'
+        uses: Azure/artifact-signing-action@v2.0.0
+        with:
+          endpoint: https://cus.codesigning.azure.net/
+          signing-account-name: JohnApolloni
+          certificate-profile-name: JohnApolloniPublic
+          files: |
+            ${{ github.workspace }}\publish\NightPursuit.exe
+            ${{ github.workspace }}\publish\NightPursuit.dll
+            ${{ github.workspace }}\publish\NightPursuit.Core.dll
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify signatures
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $bad = 'NightPursuit.exe', 'NightPursuit.dll', 'NightPursuit.Core.dll' |
+            ForEach-Object { Get-AuthenticodeSignature "publish\$_" } |
+            Where-Object Status -ne 'Valid'
+          if ($bad) { $bad | Format-Table Path, Status, StatusMessage; throw 'Signature check failed.' }
+          (Get-AuthenticodeSignature publish\NightPursuit.exe).SignerCertificate.Subject
+
+      - name: Build installer
+        shell: pwsh
+        run: |
+          $iscc = Get-Command iscc -ErrorAction SilentlyContinue
+          if (-not $iscc) {
+            $iscc = Get-Item "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" -ErrorAction SilentlyContinue
+          }
+          if (-not $iscc) {
+            choco install innosetup --no-progress -y | Out-Null
+            $iscc = Get-Item "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          }
+          & $iscc.Source "/DAppVersion=$env:VERSION" "/DPublishDir=$PWD\publish" "/DOutputDir=$PWD\out" packaging\installer\NightPursuit.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
+
+      - name: Sign installer
+        if: env.SIGN == 'true'
+        uses: Azure/artifact-signing-action@v2.0.0
+        with:
+          endpoint: https://cus.codesigning.azure.net/
+          signing-account-name: JohnApolloni
+          certificate-profile-name: JohnApolloniPublic
+          files: ${{ github.workspace }}\out\${{ env.SETUP }}
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+
+      - name: Verify installer signature
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature "out\$env:SETUP"
+          if ($sig.Status -ne 'Valid') { $sig | Format-Table Path, Status, StatusMessage; throw 'Installer signature check failed.' }
+          $sig.SignerCertificate.Subject
+
+      - name: Zip and checksums
+        shell: pwsh
+        run: |
+          Compress-Archive -Path publish\* -DestinationPath $env:ZIP
+          $hash = (Get-FileHash $env:ZIP -Algorithm SHA256).Hash.ToLower()
+          "$hash  $env:ZIP" | Out-File "$env:ZIP.sha256" -Encoding ascii -NoNewline
+          Move-Item "out\$env:SETUP" $env:SETUP
+          $hash = (Get-FileHash $env:SETUP -Algorithm SHA256).Hash.ToLower()
+          "$hash  $env:SETUP" | Out-File "$env:SETUP.sha256" -Encoding ascii -NoNewline
+          Get-Item $env:ZIP, $env:SETUP | Select-Object Name, Length
+
+      - name: Upload build
+        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: NightPursuit-win-x64
+          path: |
+            ${{ env.SETUP }}
+            ${{ env.SETUP }}.sha256
+            ${{ env.ZIP }}
+            ${{ env.ZIP }}.sha256
+
+      - name: Publish release
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "${{ github.ref_name }}"
+          $files = $env:SETUP, "$env:SETUP.sha256", $env:ZIP, "$env:ZIP.sha256"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            gh release upload $tag @files --clobber
+          } else {
+            gh release create $tag @files --title "$tag" --generate-notes
+          }
