@@ -222,6 +222,32 @@ public class AudioMixerTests : IDisposable
     }
 
     [Fact]
+    public void A_second_music_change_mid_fade_starts_from_the_current_level_without_a_step()
+    {
+        var mixer = MakeMixer();
+        mixer.SetMusic(new Constant(0.5f), 0);
+        mixer.SetMusic(new Constant(0.5f), 1.0);
+        Read(mixer, 0.1);
+        mixer.SetMusic(new Constant(0.5f), 1.0);
+        var b = Read(mixer, 0.6);
+        mixer.SetMusic(new Constant(0.5f), 1.0);
+        var c = Read(mixer, 1.5);
+        float largestStep = 0;
+        foreach (var x in new[] { b, c })
+            for (int i = 1; i < x.Length / 2; i++)
+                largestStep = Math.Max(largestStep, Math.Abs(Left(x, i) - Left(x, i - 1)));
+        Assert.True(largestStep < 0.002f, $"largest step was {largestStep}");
+    }
+
+    [Fact]
+    public void Many_music_changes_without_reading_do_not_pile_up_or_throw()
+    {
+        var mixer = MakeMixer();
+        for (int i = 0; i < 2000; i++) mixer.SetMusic(new Constant(0.1f), 1.0);
+        Read(mixer, 0.1);
+    }
+
+    [Fact]
     public void Music_set_to_null_fades_to_silence()
     {
         var mixer = MakeMixer();

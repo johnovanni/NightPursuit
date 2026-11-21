@@ -1,22 +1,22 @@
-using System.Collections.Concurrent;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 
 namespace NightPursuit.Core.Audio;
 
 /// <summary>
-/// The music bus: the current track and, while it fades out, the one before it, each in a fade, mixed together.
-/// Also holds the pause level (1.0, or 0.4 while paused), which ramps over 0.3 s. Always fills the buffer.
+/// The music bus: the current track and, while they fade out, the ones before it, each in its own fade, mixed
+/// together. Also holds the pause level (1.0, or 0.4 while paused), which ramps over 0.3 s. Always fills the buffer.
 /// </summary>
 public sealed class MusicChannel : ISampleProvider
 {
     private const double LevelRampSeconds = 0.3;
+    private const int MaxFading = 4; // more than this and the oldest fading track is cut, so nothing piles up
 
     private readonly MixingSampleProvider _mixer = new(AudioFormat.Stereo) { ReadFully = true };
     private readonly Smoothed _level = new(LevelRampSeconds, 1.0);
-    private readonly ConcurrentQueue<ISampleProvider> _finished = new();
+    private readonly List<MusicTrack> _fading = new();
     private readonly Lock _lock = new();
-    private FadeInOutSampleProvider? _current;
+    private MusicTrack? _current;
 
     public WaveFormat WaveFormat => AudioFormat.Stereo;
 
@@ -28,39 +28,50 @@ public sealed class MusicChannel : ISampleProvider
     }
 
     /// <summary>
-    /// Fades the current track out and <paramref name="next"/> in over <paramref name="fadeSeconds"/>.
-    /// Null fades to silence. The track must be stereo, 44,100 Hz, float.
+    /// Fades the current track out and <paramref name="next"/> in over <paramref name="fadeSeconds"/>, each from
+    /// the level it has reached. Null fades to silence. The track must be stereo, 44,100 Hz, float.
     /// </summary>
     public void Set(ISampleProvider? next, double fadeSeconds)
     {
         if (next != null && !next.WaveFormat.Equals(AudioFormat.Stereo))
             throw new ArgumentException("Music must be 44,100 Hz stereo 32-bit float.", nameof(next));
-        double ms = Math.Max(1.0, fadeSeconds * 1000.0);
+        double seconds = Math.Max(0.001, fadeSeconds);
 
-        FadeInOutSampleProvider? fresh = null;
-        if (next != null)
-        {
-            fresh = new FadeInOutSampleProvider(next, initiallySilent: true);
-            fresh.FadeOutComplete += (_, _) => _finished.Enqueue(fresh);
-        }
-        FadeInOutSampleProvider? old;
+        var fresh = next == null ? null : new MusicTrack(next);
+        MusicTrack? old;
+        List<MusicTrack>? cut = null;
         lock (_lock)
         {
             old = _current;
             _current = fresh;
+            if (old != null) _fading.Add(old);
+            while (_fading.Count > MaxFading)
+            {
+                (cut ??= new()).Add(_fading[0]);
+                _fading.RemoveAt(0);
+            }
         }
-        old?.BeginFadeOut(ms);
+        old?.Fade(0, seconds);
+        if (cut != null) foreach (var t in cut) _mixer.RemoveMixerInput(t);
         if (fresh != null)
         {
+            fresh.Fade(1, seconds);
             _mixer.AddMixerInput(fresh);
-            fresh.BeginFadeIn(ms);
         }
     }
 
     public int Read(Span<float> buffer)
     {
-        // A finished fade-out is removed here, not inside the mixer's own read, which would disturb its loop.
-        while (_finished.TryDequeue(out var done)) _mixer.RemoveMixerInput(done);
+        // Finished fade-outs are removed here, never from inside the mixer's own read loop.
+        lock (_lock)
+        {
+            for (int i = _fading.Count - 1; i >= 0; i--)
+            {
+                if (!_fading[i].Finished) continue;
+                _mixer.RemoveMixerInput(_fading[i]);
+                _fading.RemoveAt(i);
+            }
+        }
 
         int n = _mixer.Read(buffer);
         if (n < buffer.Length) buffer[n..].Clear();
