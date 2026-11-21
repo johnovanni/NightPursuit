@@ -110,4 +110,20 @@ public class SmallPiecesTests
         }
         finally { File.Delete(eight); File.Delete(fortyEight); }
     }
+
+    [Theory]
+    [InlineData(OscillatorWave.Sine)]
+    [InlineData(OscillatorWave.Triangle)]
+    public void GlideOscillator_frequency_change_keeps_the_phase_continuous(OscillatorWave wave)
+    {
+        var osc = new GlideOscillator { Wave = wave, Frequency = 100 };
+        var all = new float[992 + 1000];
+        osc.Read(all.AsSpan(0, 992)); // 2.25 cycles at 100 Hz
+        osc.Frequency = 200;
+        osc.Read(all.AsSpan(992));
+        float largestStep = 0;
+        for (int i = 1; i < all.Length; i++) largestStep = Math.Max(largestStep, Math.Abs(all[i] - all[i - 1]));
+        Assert.True(largestStep < 0.03f, $"largest step was {largestStep}"); // a 200 Hz sine steps by at most 0.0285
+        Assert.True(all.Max() > 0.9f && all.Min() < -0.9f);
+    }
 }

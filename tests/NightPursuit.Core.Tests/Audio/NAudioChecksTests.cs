@@ -53,28 +53,22 @@ public class NAudioChecksTests
         Assert.InRange(crossings, 880, 884);
     }
 
-    // Observed (NAudio.Core 3.3.0): SignalGenerator keeps its own phase accumulator, so changing Frequency
-    // mid-stream bends the pitch without a jump. The live voices can use SignalGenerator directly and
-    // no GlideOscillator is needed.
+    // Observed (NAudio.Core 3.3.0): SignalGenerator works out each sample from its running sample count times the
+    // CURRENT frequency, with no phase accumulator, so changing Frequency mid-stream makes the wave jump.
+    // That is why the live voices use our GlideOscillator instead (see GlideOscillator and its test).
     [Theory]
     [InlineData(SignalGeneratorType.Sin)]
     [InlineData(SignalGeneratorType.Triangle)]
-    public void SignalGenerator_stays_phase_continuous_when_frequency_changes(SignalGeneratorType type)
+    public void SignalGenerator_jumps_phase_when_frequency_changes(SignalGeneratorType type)
     {
         var gen = new SignalGenerator(Rate, 1) { Type = type, Frequency = 100, Gain = 1 };
-        // 1103 samples is not a whole number of cycles at 100 or 200 Hz, so a phase reset would show as a jump.
-        var first = ReadAll(gen, 1103);
+        // 992 samples is 2.25 cycles at 100 Hz: the wave is at a peak. A phase-continuous change would step by at
+        // most 0.0285 here; recomputing from the sample index lands at a different point of the cycle instead.
+        var first = ReadAll(gen, 992);
         gen.Frequency = 200;
         var second = ReadAll(gen, 1000);
-        var all = first.Concat(second).ToArray();
-        float largestStep = 0;
-        for (int i = 1; i < all.Length; i++) largestStep = Math.Max(largestStep, Math.Abs(all[i] - all[i - 1]));
-        // The steepest a 200 Hz sine goes is 2*pi*200/44100 = 0.0285 per sample; a triangle's slope is 4*200/44100 = 0.0181.
-        Assert.True(largestStep < 0.03f, $"largest step was {largestStep}");
-
-        // The change really took effect: the second part has about twice the zero crossings per sample.
-        static int Crossings(float[] s) { int c = 0; for (int i = 1; i < s.Length; i++) if ((s[i - 1] < 0) != (s[i] < 0)) c++; return c; }
-        Assert.True(Crossings(second) > 1.7 * Crossings(first) * 1000 / 1103);
+        float stepAtChange = Math.Abs(second[0] - first[^1]);
+        Assert.True(stepAtChange > 0.5f, $"step at the change was {stepAtChange}");
     }
 
     [Fact]
