@@ -6,7 +6,7 @@ namespace NightPursuit.Core.Audio;
 /// One music track with its own fade. A fade always starts from the level the track has reached, so changing
 /// your mind mid-fade never jumps. <see cref="Fade"/> is for the game thread; <see cref="Read"/> for the audio thread.
 /// </summary>
-internal sealed class MusicTrack(ISampleProvider source) : ISampleProvider
+internal sealed class FadingTrack(ISampleProvider source) : ISampleProvider
 {
     private readonly Lock _lock = new();
     private bool _requested;

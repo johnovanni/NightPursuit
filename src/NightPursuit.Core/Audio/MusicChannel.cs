@@ -14,9 +14,9 @@ public sealed class MusicChannel : ISampleProvider
 
     private readonly MixingSampleProvider _mixer = new(AudioFormat.Stereo) { ReadFully = true };
     private readonly Smoothed _level = new(LevelRampSeconds, 1.0);
-    private readonly List<MusicTrack> _fading = new();
+    private readonly List<FadingTrack> _fading = new();
     private readonly Lock _lock = new();
-    private MusicTrack? _current;
+    private FadingTrack? _current;
 
     public WaveFormat WaveFormat => AudioFormat.Stereo;
 
@@ -37,9 +37,9 @@ public sealed class MusicChannel : ISampleProvider
             throw new ArgumentException("Music must be 44,100 Hz stereo 32-bit float.", nameof(next));
         double seconds = Math.Max(0.001, fadeSeconds);
 
-        var fresh = next == null ? null : new MusicTrack(next);
-        MusicTrack? old;
-        List<MusicTrack>? cut = null;
+        var fresh = next == null ? null : new FadingTrack(next);
+        FadingTrack? old;
+        List<FadingTrack>? cut = null;
         lock (_lock)
         {
             old = _current;
