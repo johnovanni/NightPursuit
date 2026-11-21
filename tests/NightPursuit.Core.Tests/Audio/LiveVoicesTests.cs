@@ -39,23 +39,38 @@ public class LiveVoicesTests
         return Channel(Read(v, settle + seconds), 0, settle);
     }
 
-    /// <summary>
-    /// Zero crossings per second. With <paramref name="hysteresis"/> a crossing only counts once the signal has
-    /// gone a quarter of its peak past zero, so ripple around zero (the engine's two detuned saws) is not counted.
-    /// </summary>
-    private static double CrossingsPerSecond(float[] x, bool hysteresis = false)
+    private static double CrossingsPerSecond(float[] x)
     {
-        float h = hysteresis ? 0.25f * Peak(x) : 0f;
         int n = 0;
-        int side = 0; // -1 below, +1 above
-        foreach (float s in x)
-        {
-            int now = s > h ? 1 : s < -h ? -1 : 0;
-            if (now == 0) continue;
-            if (side != 0 && now != side) n++;
-            side = now;
-        }
+        for (int i = 1; i < x.Length; i++)
+            if ((x[i - 1] < 0) != (x[i] < 0)) n++;
         return n / (x.Length / (double)Rate);
+    }
+
+    /// <summary>The size of one frequency in a Hann-windowed one-bin DFT.</summary>
+    private static double Magnitude(float[] x, double freq)
+    {
+        int n = x.Length;
+        double re = 0, im = 0, step = 2 * Math.PI * freq / Rate;
+        for (int i = 0; i < n; i++)
+        {
+            double w = x[i] * (0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (n - 1)));
+            re += w * Math.Cos(step * i);
+            im += w * Math.Sin(step * i);
+        }
+        return Math.Sqrt(re * re + im * im);
+    }
+
+    /// <summary>The strongest frequency between 25 and 200 Hz, scanned in 0.5 Hz steps.</summary>
+    private static double Strongest(float[] x)
+    {
+        double best = 0, bestF = 0;
+        for (double f = 25; f <= 200; f += 0.5)
+        {
+            double mag = Magnitude(x, f);
+            if (mag > best) { best = mag; bestF = f; }
+        }
+        return bestF;
     }
 
     private static double Rms(float[] x) => Math.Sqrt(x.Sum(v => (double)v * v) / x.Length);
@@ -88,10 +103,13 @@ public class LiveVoicesTests
     [Fact]
     public void Engine_pitch_rises_with_speed()
     {
-        var slow = Play(new LiveState { EngineOn = true, Speed01 = 0, Throttle01 = 0 });
-        var fast = Play(new LiveState { EngineOn = true, Speed01 = 1, Throttle01 = 0 });
-        Assert.True(CrossingsPerSecond(fast, true) > 2.5 * CrossingsPerSecond(slow, true),
-            $"fast {CrossingsPerSecond(fast, true):F0}/s, slow {CrossingsPerSecond(slow, true):F0}/s");
+        // "the engine pitch" is the saws' fundamental, 38 Hz at speed 0 and 110 Hz at top speed (the sub is an octave below).
+        // A short window keeps clear of the two saws' slow beat, which can cancel the fundamental in a 1 s window.
+        double slow = Strongest(Play(new LiveState { EngineOn = true, Speed01 = 0, Throttle01 = 0.5 }, 0.1, 0.3));
+        double fast = Strongest(Play(new LiveState { EngineOn = true, Speed01 = 1, Throttle01 = 0.5 }, 0.1, 0.3));
+        Assert.InRange(slow, 34, 42);
+        Assert.InRange(fast, 104, 116);
+        Assert.True(fast > 2.5 * slow, $"fast {fast} Hz, slow {slow} Hz");
     }
 
     [Fact]
@@ -106,6 +124,70 @@ public class LiveVoicesTests
         double open = Bright(1), closed = Bright(0);
         Assert.True(open > 2 * closed, $"throttle 1: {open:E2}, throttle 0: {closed:E2}");
     }
+    public static TheoryData<string> Voices => ["engine", "whine", "rumble", "skid"];
+
+    private static LiveState Only(string voice) => voice switch
+    {
+        "engine" => new LiveState { EngineOn = true, Speed01 = 1, Throttle01 = 1 },
+        "whine" => new LiveState { Whine01 = 1, WhineCloseness01 = 1 },
+        "rumble" => new LiveState { OffRoad01 = 1 },
+        "skid" => new LiveState { Skid01 = 1 },
+        _ => new LiveState { Siren01 = 1, SirenPan = 0 },
+    };
+
+    private static float[] JumpOnAndOff(LiveState on)
+    {
+        var v = new LiveVoices();
+        var parts = new List<float[]>();
+        foreach (var s in new[] { LiveState.Silent, on, LiveState.Silent, on, on, LiveState.Silent })
+        {
+            v.Set(s);
+            parts.Add(Read(v, 0.13));
+        }
+        return Channel(parts.SelectMany(p => p).ToArray(), 0);
+    }
+
+    [Theory]
+    [MemberData(nameof(Voices))]
+    public void One_voice_jumping_on_and_off_causes_no_click(string voice)
+    {
+        var x = JumpOnAndOff(Only(voice));
+        Assert.True(Peak(x) > 0.05f, "it really was playing");
+        // under 0.05, and no steeper than the voice is on its own: an unfaded jump steps by up to its whole level
+        float steady = MaxStep(Channel(Read(Settled(Only(voice)), 8.0), 0));
+        float limit = Math.Min(0.05f, steady * 1.2f);
+        Assert.True(MaxStep(x) <= limit, $"{voice}: largest step {MaxStep(x)}, limit {limit}");
+    }
+
+    [Fact]
+    public void Siren_jumping_on_and_off_steps_no_more_than_it_does_steadily()
+    {
+        // the siren's own square edges are steep (more than 0.05 a sample), so its limit is its steady-state step
+        float steady = MaxStep(Channel(Read(Settled(Only("siren")), 2.0), 0));
+        var x = JumpOnAndOff(Only("siren"));
+        Assert.True(MaxStep(x) <= steady * 1.2f, $"largest step {MaxStep(x)}, steady {steady}");
+    }
+
+    [Fact]
+    public void Bad_numbers_in_the_state_cannot_poison_the_voices()
+    {
+        var v = new LiveVoices();
+        double[] bad = [double.NaN, double.PositiveInfinity, double.NegativeInfinity];
+        foreach (double b in bad)
+        {
+            v.Set(new LiveState
+            {
+                EngineOn = true, Speed01 = b, Throttle01 = b, OffRoad01 = b, Skid01 = b,
+                Siren01 = b, SirenPan = b, Whine01 = b, WhineCloseness01 = b,
+            });
+            Assert.All(Read(v, 0.2), s => Assert.True(float.IsFinite(s), "output must stay finite"));
+        }
+        v.Set(Everything);
+        var after = Read(v, 0.5);
+        Assert.All(after, s => Assert.True(float.IsFinite(s)));
+        Assert.True(Peak(Channel(after, 1, 0.2)) > 0.05f, "normal sound resumes");
+    }
+
 
     [Fact]
     public void Switching_the_engine_off_fades_without_a_click()
@@ -219,15 +301,14 @@ public class LiveVoicesTests
     [Fact]
     public void Punctured_engine_wobbles_in_pitch()
     {
-        // crossing counts per 0.1 s window vary more than for a healthy engine
-        double Spread(bool punctured)
+        // a 6 Hz wobble puts sidebands 6 Hz either side of the 110 Hz fundamental; a healthy engine has none
+        double Sidebands(bool punctured)
         {
             var x = Play(new LiveState { EngineOn = true, Speed01 = 1, Throttle01 = 0, Punctured = punctured });
-            var counts = Enumerable.Range(0, 10)
-                .Select(i => CrossingsPerSecond(x[(i * Rate / 10)..((i + 1) * Rate / 10)])).ToArray();
-            return counts.Max() - counts.Min();
+            return (Magnitude(x, 104) + Magnitude(x, 116)) / 2 / Magnitude(x, 110);
         }
-        Assert.True(Spread(true) > Spread(false) + 10);
+        double wobbling = Sidebands(true), healthy = Sidebands(false);
+        Assert.True(wobbling > 0.2 && healthy < 0.05, $"punctured {wobbling:F3}, healthy {healthy:F3}");
     }
 
     [Fact]

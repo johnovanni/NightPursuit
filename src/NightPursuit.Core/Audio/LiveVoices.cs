@@ -71,7 +71,7 @@ public sealed class LiveVoices : ISampleProvider
         return v;
     }
 
-    private static double Unit(double v) => Math.Clamp(v, 0.0, 1.0);
+    private static double Unit(double v) => double.IsNaN(v) ? 0.0 : Math.Clamp(v, 0.0, 1.0);
 
     /// <summary>A voice's level: moves over 30 ms, and says when it is fully off so the voice can be skipped.</summary>
     private sealed class Fader
@@ -98,7 +98,7 @@ public sealed class LiveVoices : ISampleProvider
     private sealed class EngineVoice
     {
         private const double Detune = 0.0034717; // 2^(6/1200) - 1
-        private const double Peak = 0.0565;      // puts the engine peak at about -18 dBFS (measured over 10 s)
+        private const double Peak = 0.0468;      // puts the engine peak at about -18 dBFS (measured over 10 s)
 
         private readonly GlideOscillator _sawA = new() { Wave = OscillatorWave.Saw };
         private readonly GlideOscillator _sawB = new() { Wave = OscillatorWave.Saw };
@@ -136,7 +136,7 @@ public sealed class LiveVoices : ISampleProvider
             _sawA.Read(mono);
             _sawB.Read(b);
             _sub.Read(c);
-            for (int i = 0; i < n; i++) mono[i] += b[i] + 0.12f * c[i];
+            for (int i = 0; i < n; i++) mono[i] += b[i] + 0.6f * c[i];
             _lowPass.UpdateLowPassFilter(AudioFormat.SampleRate, (float)(300 + 1500 * Step(_throttle, n)), FilterQ);
             _lowPass.Transform(mono, mono);
             _fader.Apply(mono, Peak);
@@ -212,7 +212,7 @@ public sealed class LiveVoices : ISampleProvider
         public void Apply(LiveState s)
         {
             _fader.Target = Unit(s.Siren01);
-            _pan.Target = Math.Clamp(s.SirenPan, -1.0, 1.0);
+            _pan.Target = double.IsNaN(s.SirenPan) ? 0.0 : Math.Clamp(s.SirenPan, -1.0, 1.0);
         }
 
         public bool Render(Span<float> mono)
