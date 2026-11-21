@@ -23,14 +23,13 @@ internal static class Hud
 
     /// <summary>
     /// The SOUND OFF mark, in the small HUD text, at the bottom left of the road: under the weapon panel and clear of the
-    /// speed and steering readouts. In a window so small and a text size so large that the weapon panel reaches the
-    /// bottom edge, it moves to the clear band just right of the panel instead. Only drawn in play (the menus show the setting).
+    /// speed and steering readouts. When the weapon panel reaches that row (a tiny window at the largest text) no corner
+    /// is free, so the mark is left out rather than cover play information. Only drawn in play (the menus show the setting).
     /// </summary>
     public static void DrawSoundOff(DrawingContext dc, HudLayout l)
     {
         double x = 16 * l.K, y = l.Height - l.T(22);
-        var panel = WeaponPanel.Bounds(l);
-        if (panel.Bottom > y - 2 * l.K) (x, y) = (panel.Right + 8 * l.K, l.Height * 0.38);
+        if (WeaponPanel.Bounds(l).Bottom > y - 2 * l.K) return;
         l.Text(dc, "SOUND OFF", x, y, 13, Neon.TextAmber, bold: true);
     }
 

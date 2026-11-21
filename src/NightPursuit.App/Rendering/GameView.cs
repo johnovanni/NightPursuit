@@ -110,7 +110,7 @@ public sealed class GameView : FrameworkElement
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);
         if (!Covered) Overlays.DrawState(dc, _layout, run);   // after the help, so the respawn countdown is never hidden under it
-        if (SoundOff && !Covered) Hud.DrawSoundOff(dc, _layout);
+        if (SoundOff && !Covered && !ShowHelp) Hud.DrawSoundOff(dc, _layout);
         if (Notice is not null) Overlays.DrawNotice(dc, _layout, Notice);
 
 #if DEBUG

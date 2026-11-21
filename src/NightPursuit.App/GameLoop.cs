@@ -22,7 +22,7 @@ public sealed class GameLoop
     readonly ScreenHost _host;
     readonly InputHub _input;
     readonly SoundSystem? _sound;   // null when sound could not be built
-    bool _soundBroken;   // a sound failure stops the sound work for good; the game carries on silently
+    bool _soundBroken;   // a sound failure silences and disposes the sound system for good; the game carries on
     TimeSpan _last;
     bool _haveLast;
     bool _everActive;   // the window has had focus at least once since it opened
@@ -86,7 +86,11 @@ public sealed class GameLoop
             {
                 if (holdConfirm && k.Input == MenuInput.Confirm) continue;
                 _flow.Handle(k);
-                if (!_soundBroken) _sound?.NoteMenuKey(k);
+                if (!_soundBroken && _sound is not null)
+                {
+                    try { _sound.NoteMenuKey(k); }
+                    catch (Exception ex) { SoundFailed(ex); }
+                }
             }
             foreach (var _ in _input.Drain()) { }   // dropped: on a screen, keys are menu keys
         }
@@ -102,7 +106,7 @@ public sealed class GameLoop
         if (!_soundBroken && _sound is not null)
         {
             try { _sound.Update(_flow, seconds); }
-            catch (Exception) { _soundBroken = true; }   // audio must never crash or freeze the game
+            catch (Exception ex) { SoundFailed(ex); }   // audio must never crash or freeze the game
         }
         if (_flow.Current != _lastScreen)
         {
@@ -133,6 +137,23 @@ public sealed class GameLoop
             Stop();
             _window.Close();
         }
+    }
+
+    // A sound failure silences the sound system for good (so a frozen engine or music cannot keep playing), shows one
+    // notice and writes the exception to sound-error.log in the data folder. The game itself carries on.
+    void SoundFailed(Exception ex)
+    {
+        if (_soundBroken) return;
+        _soundBroken = true;
+        try { _sound?.Mixer.SoundOn = false; } catch { /* best effort */ }
+        try { _sound?.Dispose(); } catch { /* best effort */ }
+        try
+        {
+            System.IO.Directory.CreateDirectory(AppPaths.DataDirectory);
+            System.IO.File.AppendAllText(System.IO.Path.Combine(AppPaths.DataDirectory, "sound-error.log"), $"{DateTime.Now:s} {ex}{Environment.NewLine}");
+        }
+        catch { /* nothing more to do */ }
+        _flow.ShowNotice("SOUND STOPPED: SOMETHING WENT WRONG");
     }
 
     static bool IsResultScreen(Screen s) => s is Screen.MissionComplete or Screen.GameOver or Screen.Finished or Screen.EnterInitials;
