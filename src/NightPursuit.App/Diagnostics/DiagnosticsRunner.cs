@@ -18,7 +18,7 @@ namespace NightPursuit.App.Diagnostics;
 
 /// <summary>
 /// Command-line diagnostics run instead of the game window:
-/// <c>--snapshot out.png [--seconds S] [--scene name[,name]] [--size WxH[,WxH]] [--text-size normal|large|largest[,...]]</c>, <c>--snapshot out.png --screen name</c> (see <see cref="ScreenSnapshots"/>), <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c> and <c>--perf report.txt</c>.
+/// <c>--snapshot out.png [--seconds S] [--scene name[,name]] [--size WxH[,WxH]] [--text-size normal|large|largest[,...]]</c>, <c>--snapshot out.png --screen name</c> (see <see cref="ScreenSnapshots"/>), <c>--damage 0,40,80</c> (windshield damage levels for a snapshot), <c>--stress report.txt</c>, <c>--perf report.txt</c> and <c>--sound-check out.wav [--mission name] [--seconds S]</c> (see <see cref="SoundDiagnostics"/>).
 /// </summary>
 public static class DiagnosticsRunner
 {
@@ -34,6 +34,7 @@ public static class DiagnosticsRunner
             if (Has(args, "--snapshot")) return Snapshot(args);
             if (Has(args, "--stress")) return Stress(args);
             if (Has(args, "--perf")) return Perf(args);
+            if (Has(args, "--sound-check")) return SoundDiagnostics.SoundCheck(args);
             return 2;
         }
         catch (MissionFormatException ex)
@@ -62,7 +63,7 @@ public static class DiagnosticsRunner
 
     static string LogPathFor(string[] args)
     {
-        string? output = Arg(args, "--snapshot") ?? Arg(args, "--stress") ?? Arg(args, "--perf");
+        string? output = Arg(args, "--snapshot") ?? Arg(args, "--stress") ?? Arg(args, "--perf") ?? Arg(args, "--sound-check");
         return output is null || output.StartsWith("--") ? "diagnostics.log" : output + ".log";
     }
 
@@ -497,7 +498,7 @@ public static class DiagnosticsRunner
     // ---- --perf ---------------------------------------------------------------------------------------------
 
     const int PerfFrames = 600, PerfWarmUp = 30, PerfPlaceEvery = 60;
-    const double PerfBudgetMs = 8;
+    const double PerfBudgetMs = 8, PerfSoundBudgetMs = 0.5;
     const int PerfCars = 25, PerfExtraCivilians = 8, PerfExtraPolice = 3;
     static readonly AgentKind[] PerfPolice = { AgentKind.PolicePatrol, AgentKind.PoliceCruiser, AgentKind.Interceptor };
 
@@ -557,12 +558,15 @@ public static class DiagnosticsRunner
 
         var (mean, p95) = Stats(onRender);
         var (totalMean, totalP95) = Stats(total);
-        bool pass = mean < PerfBudgetMs;
+        var (soundMean, soundP95) = Stats(SoundDiagnostics.TimeUpdate(PerfWarmUp, PerfFrames));
+        bool soundPass = soundMean < PerfSoundBudgetMs;
+        bool pass = mean < PerfBudgetMs && soundPass;
         var report = new System.Text.StringBuilder();
         report.AppendLine($"perf: {onRender.Count} frames at {Width}x{Height} (after {PerfWarmUp} warm-up frames), close-cars scene + {PerfCars} cars of all {NonBossKinds.Length} non-boss kinds, {PerfExtraCivilians} extra civilians, {PerfExtraPolice} police, heat 80, a roadblock at 300 m and a speed trap at 200 m, the boss, 3 smoke clouds, 4 crates, 2 missiles and a strike sweep");
         report.AppendLine($"strike sweeping in {strikeFrames} frames, boss bar showing in {bossFrames}; the autopilot drove {run.World.Player.Distance - startDistance:0} m, ended in state {run.State}");
         report.AppendLine($"OnRender: mean {mean:0.000} ms, 95th percentile {p95:0.000} ms, max {onRender.Max():0.000} ms   (budget: mean < {PerfBudgetMs} ms: {(pass ? "PASS" : "FAIL")})");
         report.AppendLine($"OnRender + rasterising into a bitmap (information only): mean {totalMean:0.000} ms, 95th percentile {totalP95:0.000} ms");
+        report.AppendLine($"Sound update (SoundSystem.Update on the game thread, no device, a practice mission on the autopilot): mean {soundMean:0.000} ms, 95th percentile {soundP95:0.000} ms   (budget: mean < {PerfSoundBudgetMs} ms: {(soundPass ? "PASS" : "FAIL")})");
         WriteReport(path, report.ToString());
         return pass ? 0 : 1;
     }

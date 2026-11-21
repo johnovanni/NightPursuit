@@ -1403,3 +1403,203 @@ New from Plan 4:
 11. Use the gamepad in every menu.
 12. Read a briefing: is the mixed-case prose (D146) fine, or do you want capitals?
 13. The stress test's new length (D144): keep it, or ask for the full cadence back.
+
+## Plan 5 calls (2026-11-21, branch `plan-5-sound`)
+
+Sound effects and music: 32 effect sounds, the engine and other steady sounds, the owner's music files (none yet),
+volume settings and the M key. These are my calls, for you to check. Numbers continue from Plan 4 (D150). I could not
+listen to any of it; every call below rests on measurements and tests, not on my ears.
+
+**D151. Where the sound lives, and what it must never do.** The rules that decide what to play (the "director", the
+music choice, the mixer and the steady sounds) are in Core, so they are unit-tested. Only the parts that touch Windows
+(the sound device, the music file reader) are in the App. NAudio 3.3.0 is the one new package: Core uses only its
+small `NAudio.Core` part; the full package is in the App only. The director only reads the game; it never changes it,
+never steps it and never touches the game's random numbers (it has its own, with a fixed seed). A test checks the
+game's state hash is the same with and without it. Every cue repeats something already on screen (NFR-3), so the game
+plays fully with sound off.
+*Cost to change:* large.
+
+**D152. Our own gliding oscillator.** NAudio's tone generator jumps in phase when its pitch changes, which clicks.
+Task 1 first decided it was fine: the test changed pitch at a point where the wave crosses zero, so it could not see the
+jump. A reviewer caught that; with the change made at a wave peak the jump was plain (a step of 0.99 in a wave that
+goes from -1 to 1). So `GlideOscillator` was made (it keeps its own phase), and every tone that changes pitch uses it:
+the engine, siren, whine and all the effect sounds. It is one of the few places we wrote our own code instead of using
+NAudio's.
+*Cost to change:* small.
+
+**D153. Volume changes are ramped, not jumped.** NAudio's gain block ramps by itself, so it is used for the music and
+effects volumes. The ramp takes about 45 ms to settle (I first read it as 20 ms; the reviewer measured it). The music
+pause level (40%) uses a slower 0.3 s ramp. SOUND OFF is applied after the limiter as a 20 ms ramp to exact silence,
+so "off" is truly zero. The master limiter is NAudio's, with a ceiling of -1 dBFS, 2 ms look-ahead and 100 ms release,
+followed by a hard clamp at the same ceiling as a safety net.
+*Cost to change:* small.
+
+**D154. The 32 sounds, one line each.** All are made by `tools/SynthSounds` (a rerun gives identical files) and
+normalised to -3 dBFS, so balance between sounds is set by their playing volume, not the files. You can replace any WAV
+by one of the same name.
+- Player gun: a low thunk falling in pitch with a short click, driven for grit. Enemy gun: thinner and higher, a
+  rattling burst.
+- Oil: a wet bubbling blorp. Smoke: a hiss closing down. Caltrops: a dozen small scattered pings.
+- Missile launch: a rising whoosh. Strike call: two radio blips then a zap. Strike boom: a very deep 3.6 s boom.
+- Explosion: bright noise closing to a rumble with a thump. Player hit: a metallic crunch. Wrecked: a long explosion
+  over a dying engine. Busted: a siren stab, then a slow falling chord.
+- Puncture: a pop and a leaking hiss. Spin: a tyre squeal.
+- Pickup: a rising four-note run. Armor pickup: a slow, deeper chord swell. (Both are low and soft on purpose.)
+- Warning and missile alarm: bright, saturated and loud, on purpose (the only bright sounds). Warning is two notes
+  falling; the alarm flips quickly between two high notes.
+- Boss appears: a deep 3 s brass stab. Boss phase: a shorter, snappier one. Boss hit: a metallic clank.
+- Enemy missile launch: a low whump with crackle. Dodged: a pass-by swoosh. Shot down: a small pop and sparks.
+- Heat up: a rising siren whoop. Heat down: a gentle falling tone. Speed trap: a camera-flash zap.
+  Roadblock crash: five metal impacts.
+- Menus: a soft tick for move, two rising steps to confirm, two falling to go back, a tiny high tick for letters.
+
+*Cost to change:* small per sound (edit its recipe, run the tool).
+
+**D155. At most 24 sounds at once.** When a 25th would start, the one with the lowest rank is dropped. Rank is the
+volume times how much of the sound is still to play, and the new sound competes too, so a quiet newcomer is itself
+dropped. A dropped sound is cut off, not faded (a minor click risk in a rare case).
+*Cost to change:* small.
+
+**D156. Music cross-fades.** Our own fade block (`FadingTrack`) is used instead of NAudio's, because NAudio's fade-out
+starts from full volume: a second change in the middle of a fade made the half-faded track jump back to loud. Ours
+always fades from the level it has reached. At most 4 tracks fade out at once; a fifth change cuts the oldest. The
+fade is 1.5 s between screens and 2 s into the boss theme. Music must be 44.1 kHz stereo; the App converts files.
+*Cost to change:* small.
+
+**D157. Which music plays.** Title uses its own track, else the briefing's. Briefing, mission theme, results, game over
+and finished each have a slot; game over and finished fall back to the results track. The boss theme starts when the boss
+appears (if the mission has one) and stays for that run. Pause plays the same track at 40% level; the side screens
+(Controls, Quit, High scores, Initials) carry on with what was playing, at 40% if opened from Pause. Settings keeps full
+level so you can judge the music volume. A restart or the next mission starts the track again. A fallback reports the
+slot that supplies the track, so a track that continues does not restart. Results carries on from Mission complete to
+Finished. The slot tracking is inside the music code (the screen flow is unchanged).
+*Cost to change:* small.
+
+**D158. The music list is forgiving.** `content/music/music.json` and each mission's `music` block: a bad entry silences
+only that slot, with a notice naming the slot and the reason. A file with a syntax error gives one notice with the line
+number. Trailing commas and comments are allowed. File names must be plain names ending `.mp3` or `.wav`. Volume is 0 to
+2 (2 can distort). You hand-edit these files and cannot hear what broke, so the notice has to say. The game ships with
+every slot empty (silent music) until your tracks arrive.
+*Cost to change:* small.
+
+**D159. The steady sounds.** Engine: two saw tones a few cents apart plus a low sine (0.6 of one saw), pitch 38 to 110 Hz
+from speed, darker off the gas, a 6 Hz wobble with a puncture; peak about -18 dBFS. Off-road: a low rumble. Skid: a
+band of noise at 2.5 kHz that wobbles. Siren: a square tone switching 650/900 Hz every 0.45 s, softened, panned to the
+police car (a linear balance, so it never exceeds -20 dBFS). Whine: a sine from 900 to 2,200 Hz as a missile gets close.
+Levels are peaks (noise voices come out about 11 dB lower by loudness). Filters retune every 32 samples (0.7 ms), not
+with NAudio's cross-fading filter: tests show no clicks and it is simpler. Each voice fades over 30 ms on and off. A bad
+number (NaN) in the sound state cannot poison the filters. Tests check pitch by an exact frequency scan, and check clicks
+per voice against its own steady-state step.
+*Cost to change:* small.
+
+**D160. What each game event sounds like.** Distance: heard at half volume at 60 m, not at all from 400 m, panned fully
+at 10 m to the side. A car "driving" for the siren includes a spinning one; wrecks are silent. The boss, phase change,
+enemy missile, strike landing and warnings play centred (their events carry no car). The same warning is not repeated
+within 1.5 s. Rate limits are per cue (the gun at most every 0.06 s). More than one new enemy shot in a frame gives one
+sound, the loudest. Cues are read on every screen while a run exists, so the last step's explosion before Mission
+complete is heard. A cue too far to hear does not use up its rate-limit time. No sound for the cursor moving across
+initials, or for a screen change that was not a Confirm or Back.
+*Cost to change:* small.
+
+**D161. The player's speed.** The plan said to use `VehicleStats.Player.TopSpeed`, but that is 0 for the player (the real
+top speed is `World.Feel.MaxSpeed`), so the plan's sum would divide by zero. The engine uses `Feel.MaxSpeed`. Pan follows
+where the car is drawn (a car to the right pans right; a test pins it).
+*Cost to change:* none.
+
+**D162. Settings and the M key.** New rows: SOUND (on/off), MUSIC and EFFECTS volume 0 to 10, defaults on, 7 and 8. Each
+step is 3 dB (10 is full, 0 is silent). Saved in `settings.json` with the rest; an older file without them loads with the
+defaults; out-of-range numbers are clamped, odd numbers rounded. M toggles sound on every screen except entering
+initials, and saves at once. In play it arrives as a game action, never reaching the game. The help box gained a line,
+"M sound on/off". The gamepad has no sound toggle.
+*Cost to change:* small.
+
+**D163. The sound device and failures.** NAudio 3.0 renamed `WaveOutEvent` to `WaveOut` (the old name is an empty
+stub), so `WaveOut` is used: 27 ms by 3 buffers, about 80 ms. No sound device found, or one that fails to start, gives a
+notice and the game runs silently. If the device goes away while playing there is one notice ("SOUND STOPPED: THE SOUND
+DEVICE WENT AWAY") and no reconnecting: restart the game to get sound back (design §11 left this to me). If any sound
+code fails while playing, sound is switched off for the session, the details go to `sound-error.log` in the game's data
+folder, and one notice appears. The game carries on. Music files open on the game thread at a screen change, so a very
+large MP3 could pause one frame; start-up opens each named file once to check it. A bad file found later gives one
+notice, then silence.
+*Cost to change:* medium.
+
+**D164. The SOUND OFF mark.** An amber SOUND OFF shows bottom-left in play while sound is off. It is hidden behind any
+screen (those show the setting), while the intro help shows, and in the one size where the weapon panel fills that
+corner (320x200 at the largest text), because there it would cover play information (NFR-3). The mark carries no game
+information; the SETTINGS line and M still show the state. After a sound failure the mark is not shown (the notice
+covers it).
+*Cost to change:* small.
+
+**D165. How the sound was checked without listening.** Neither diagnostic opens a sound device.
+`--sound-check out.wav [--mission m] [--seconds S]` runs a practice mission on the autopilot (confirming the briefing as a
+menu Confirm, as a player would), mixes the sound into a WAV file and writes a log of every cue and music change. The
+autopilot only drives, so the check also holds the guns down, otherwise no gun sound would ever be exercised. The mixing
+must take less time than the audio, and no sample may pass the -1 dBFS ceiling.
+Result on the Release build, mission-01, 90 s: exit 0; peak -2.65 dBFS (0.737), 0 samples over the 0.891 ceiling; cues:
+player gun 810, explosion 12, warning 15, heat up 6, heat down 3, speed trap 2, pickup 2, player hit 3; the engine
+started once at 0.00 s and the siren once (at 61.77 s); mixing 1,889 ms for 90,000 ms of audio (2.1%); every cue has
+its file. The boss was NOT reached in 90 s, so the boss cue and boss music were not exercised. The music slot was the
+mission theme with no file (silence), as shipped. A first run without the guns held also passed (peak -8.69 dBFS) but
+showed no gun sounds, hence the change.
+`--perf`: render mean 2.483 ms (budget 8 ms), 95th percentile 4.492 ms; sound update (the director and the live sounds
+on the game's thread, no device) mean 0.008 ms, 95th percentile 0.014 ms (budget 0.5 ms). Both pass.
+*Cost to change:* none.
+
+**D166. Smaller rulings made during the build.**
+- Every sound effect has a length limit (0.8 s; longer for the big ones) and a test that its file exists.
+- `Smoothed` ramps gained an optional starting value (a bus that must start at 1 would otherwise fade in).
+- The tone and noise helpers in the generator are small array arithmetic that NAudio has no block for.
+- The limiter's true-peak mode stays on (NAudio's default).
+- Volume setters clamp 0 to 10; a cue's volume 0 to 1 and pan -1 to 1.
+- A track's own `volume` in the music list is passed to the decoder; `{ "file": "" }` counts as empty.
+- File names with Windows-invalid characters are refused; the duplicate check on named files ignores case.
+- More than 2 channels in a music file counts as "could not be read". Looping restarts the file; an empty file is silent.
+- A faded-out music track is closed 0.5 s after its fade, and the decoder's own lock makes a late read harmless.
+- A boss sighting is read once per new game time (as the effects do), so a paused frame cannot repeat or lose it.
+- `THIRD-PARTY-NOTICES.md` credits NAudio and System.Numerics.Tensors (MIT).
+- The `Problems` order at start-up is: sound files, music list, music files, device.
+
+*Cost to change:* none to a few lines each.
+
+## Open items after Plan 5
+
+Carried forward from the earlier lists (still open as listed under Plan 4 and before). New from Plan 5; "FR" marks the
+ones the final review may fix.
+- FR: a music notice upper-cases the whole message, so it shows the slot as `GAMEOVER` while the key is `gameOver`
+  (case-sensitive): match slot names without regard to case. The music README also does not say that a wrong music block
+  in a mission file rejects that whole mission.
+- FR: the free-corner test for SOUND OFF ignores the left warning chevron, so the two can overlap at some window
+  heights when a left warning shows.
+- The same sound twice in one frame keeps the first, not the loudest (player hit, explosion), unlike the enemy gun.
+- A dropped sound (24 limit) is cut with no fade; the voice rank ignores how far along the sound is in its envelope.
+- A fifth fading music track is cut abruptly (it needs five changes inside one fade).
+- Pickup's last arpeggio note is cut at 0.5 s. The siren's square tone is not band-limited, so it may sound gritty.
+- The siren is 3 dB louder at centre than at the sides (linear balance).
+- A music file that fails in the middle of playing stays silent with no notice.
+- The sound-failure reason is formatted in two places (App.xaml.cs and AudioOutput).
+- The Debug frame counter shares the SOUND OFF mark's spot (Debug builds only).
+- A minimised window may stop drawing; the steady sounds then hold their last state (not checked).
+- The `--sound-check` run does not reach the boss in 90 s, so the boss cue and music switch are covered by unit tests
+  only, not by a mixed run.
+- Not tested: playback on a real device, MP3 looping and 48 kHz music, the device-lost path, and M on the Pause or
+  Settings screens.
+- The 320x200 help box is cut at the right and bottom at the largest text (not compared with before the new M line).
+- NAudio's gain block has its volume written from the game thread while the audio thread reads it; NAudio does not
+  document that as safe (a stress test passes).
+- Noise-voice levels are calibrated by peak, not loudness; the steady sounds' balance is for your ears to judge.
+
+## Checks only you can do (sound)
+
+1. Does the whole thing sound like an 80s night drive?
+2. Audition each of the 32 sounds (play and provoke them, or open the WAVs in `content/sounds`). Check that hits,
+   pickups and warnings are easy to tell apart.
+3. The engine is not tiring over a whole mission.
+4. The warnings, the siren and the missile whine are noticeable but not irritating.
+5. Watchers (your girlfriend, family) can tell the main moments apart by sound.
+6. The volume steps feel even from 0 to 10, for music and effects.
+7. M works on every screen, and the three SETTINGS lines (SOUND, MUSIC, EFFECTS) change and are kept after a restart.
+8. The SOUND OFF mark at small window sizes: it was not seen in a snapshot (the check was refused). Try a small window,
+   and the 320x200 case, with sound off.
+9. Add your first music track by following `content/music/README.md`: does it cross-fade and loop cleanly, and does the
+   boss switch land well? A wrong entry should give a notice that names what is wrong.
+10. Unplug or disable the sound device in play: one notice, and the game goes on silently.

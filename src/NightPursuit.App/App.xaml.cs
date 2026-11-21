@@ -16,7 +16,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         // Diagnostics run without any window and exit with their own code.
-        if (e.Args.Any(a => a is "--snapshot" or "--stress" or "--perf"))
+        if (e.Args.Any(a => a is "--snapshot" or "--stress" or "--perf" or "--sound-check"))
         {
             Shutdown(DiagnosticsRunner.Run(e.Args));
             return;

@@ -63,6 +63,9 @@ public sealed class SoundSystem : IDisposable
 
     public AudioMixer Mixer { get; }
 
+    /// <summary>What the last <see cref="Update"/> asked for (for the diagnostics' log); null before the first.</summary>
+    public SoundFrame? LastFrame { get; private set; }
+
     /// <summary>Notices for start-up problems: the sound files, the music list, the music files and the device.</summary>
     public IReadOnlyList<string> Problems { get; }
 
@@ -77,6 +80,7 @@ public sealed class SoundSystem : IDisposable
     {
         if (seconds > 0) _now += seconds;
         var frame = _director.Update(flow, seconds);
+        LastFrame = frame;
 
         var s = flow.Settings;
         if (Mixer.SoundOn != s.SoundOn) Mixer.SoundOn = s.SoundOn;
