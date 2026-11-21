@@ -225,17 +225,26 @@ public class AudioMixerTests : IDisposable
     public void A_second_music_change_mid_fade_starts_from_the_current_level_without_a_step()
     {
         var mixer = MakeMixer();
-        mixer.SetMusic(new Constant(0.5f), 0);
-        mixer.SetMusic(new Constant(0.5f), 1.0);
+        mixer.SetMusic(new Constant(0.2f), 0);
         Read(mixer, 0.1);
-        mixer.SetMusic(new Constant(0.5f), 1.0);
-        var b = Read(mixer, 0.6);
-        mixer.SetMusic(new Constant(0.5f), 1.0);
-        var c = Read(mixer, 1.5);
+        // Steady tracks (constants), so any step is a gain change. The step is measured within each read and
+        // across each SetMusic call, from the last sample before it to the first sample after it.
+        float last = Left(Read(mixer, 0.01), 440);
         float largestStep = 0;
-        foreach (var x in new[] { b, c })
+        void ReadAndMeasure(double seconds)
+        {
+            var x = Read(mixer, seconds);
+            largestStep = Math.Max(largestStep, Math.Abs(Left(x, 0) - last));
             for (int i = 1; i < x.Length / 2; i++)
                 largestStep = Math.Max(largestStep, Math.Abs(Left(x, i) - Left(x, i - 1)));
+            last = Left(x, x.Length / 2 - 1);
+        }
+        mixer.SetMusic(new Constant(0.5f), 1.0);
+        ReadAndMeasure(0.5);
+        mixer.SetMusic(new Constant(0.8f), 1.0); // second change, B half faded in
+        ReadAndMeasure(0.3);
+        mixer.SetMusic(new Constant(0.4f), 1.0); // third change, C part way
+        ReadAndMeasure(1.5);
         Assert.True(largestStep < 0.002f, $"largest step was {largestStep}");
     }
 
