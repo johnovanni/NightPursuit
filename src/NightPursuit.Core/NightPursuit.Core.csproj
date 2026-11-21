@@ -3,6 +3,9 @@
     <TargetFramework>net10.0</TargetFramework>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="NAudio.Core" Version="3.3.0" />
+  </ItemGroup>
+  <ItemGroup>
     <!-- The tests build rolling roadblocks directly, to check the state hash and the warnings. -->
     <InternalsVisibleTo Include="NightPursuit.Core.Tests" />
   </ItemGroup>
