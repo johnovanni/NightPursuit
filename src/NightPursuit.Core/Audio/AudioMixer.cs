@@ -33,6 +33,8 @@ public sealed class AudioMixer : ISampleProvider
     {
         _bank = bank;
         _voices = new VoiceLimit(_effects);
+        Live = new LiveVoices();
+        AddEffectsInput(Live);
         MusicVolume = 7;
         EffectsVolume = 8;
 
@@ -44,6 +46,9 @@ public sealed class AudioMixer : ISampleProvider
     }
 
     public WaveFormat WaveFormat => AudioFormat.Stereo;
+
+    /// <summary>The continuous sounds (engine, rumble, skid, siren, whine). The game calls <see cref="LiveVoices.Set"/>.</summary>
+    public LiveVoices Live { get; }
 
     /// <summary>The linear gain for a volume setting: 0 at 0, otherwise 3 dB a step with 10 = 1.0.</summary>
     public static double Gain(int volume) =>
