@@ -106,6 +106,10 @@
       "amount": 1
     }
   ],
+  "music": {
+    "theme": "Midnight_At_The_Embassy.mp3",
+    "boss": "Full_Throttle_Pursuit.mp3"
+  },
   "boss": {
     "name": "Grey Warden",
     "health": 300,

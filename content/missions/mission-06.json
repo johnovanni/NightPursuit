@@ -130,6 +130,10 @@
       "amount": 1
     }
   ],
+  "music": {
+    "theme": "Midnight_At_The_Embassy.mp3",
+    "boss": "The_Final_Decree.mp3"
+  },
   "boss": {
     "name": "Obsidian Crown",
     "health": 400,

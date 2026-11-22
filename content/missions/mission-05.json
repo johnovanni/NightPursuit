@@ -111,6 +111,10 @@
       "amount": 1
     }
   ],
+  "music": {
+    "theme": "Midnight_At_The_Embassy.mp3",
+    "boss": "Calculated_Strike.mp3"
+  },
   "boss": {
     "name": "Silver Kite",
     "health": 340,

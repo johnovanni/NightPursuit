@@ -93,6 +93,10 @@
       "amount": 1
     }
   ],
+  "music": {
+    "theme": "Midnight_At_The_Embassy.mp3",
+    "boss": "Asphalt_Teeth.mp3"
+  },
   "boss": {
     "name": "Iron Gull",
     "health": 220,

@@ -99,6 +99,10 @@
       "amount": 1
     }
   ],
+  "music": {
+    "theme": "Midnight_At_The_Embassy.mp3",
+    "boss": "The_Jade_Escape.mp3"
+  },
   "boss": {
     "name": "Red Lantern",
     "health": 260,

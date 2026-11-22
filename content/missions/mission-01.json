@@ -4,30 +4,99 @@
   "briefing": "The coast road is the only way out of the city tonight, and the syndicate has it watched. Drive the approach, shake off whatever they send, and keep your car in one piece.",
   "road": { "seed": 7 },
   "approachLength": 6000,
-  "loadout": { "oil": 5, "smoke": 1, "caltrops": 1, "missiles": 1, "strikes": 0 },
+  "loadout": {
+    "oil": 5,
+    "smoke": 1,
+    "caltrops": 1,
+    "missiles": 1,
+    "strikes": 0
+  },
   "traffic": { "carsPerKm": 3 },
   "police": { "presence": 1 },
   "waves": [
-    { "atDistance": 300,  "kind": "Runner",  "count": 1, "spawnOffset": 450 },
-    { "atDistance": 1100, "kind": "Blocker", "count": 2, "spawnOffset": 500 },
-    { "atDistance": 2000, "kind": "Pursuer", "count": 1, "spawnOffset": -250 },
-    { "atDistance": 3000, "kind": "Runner",  "count": 3, "spawnOffset": 600 },
-    { "atDistance": 4100, "kind": "Blocker", "count": 3, "spawnOffset": 700 },
-    { "atDistance": 5200, "kind": "Pursuer", "count": 2, "spawnOffset": -250 }
+    {
+      "atDistance": 300,
+      "kind": "Runner",
+      "count": 1,
+      "spawnOffset": 450
+    },
+    {
+      "atDistance": 1100,
+      "kind": "Blocker",
+      "count": 2,
+      "spawnOffset": 500
+    },
+    {
+      "atDistance": 2000,
+      "kind": "Pursuer",
+      "count": 1,
+      "spawnOffset": -250
+    },
+    {
+      "atDistance": 3000,
+      "kind": "Runner",
+      "count": 3,
+      "spawnOffset": 600
+    },
+    {
+      "atDistance": 4100,
+      "kind": "Blocker",
+      "count": 3,
+      "spawnOffset": 700
+    },
+    {
+      "atDistance": 5200,
+      "kind": "Pursuer",
+      "count": 2,
+      "spawnOffset": -250
+    }
   ],
   "crates": [
-    { "atDistance": 1500, "lane": 1,  "item": "Missile",  "amount": 1 },
-    { "atDistance": 2600, "lane": -1, "item": "Smoke",    "amount": 1 },
-    { "atDistance": 3800, "lane": 0,  "item": "Caltrops", "amount": 1 },
-    { "atDistance": 5000, "lane": 1,  "item": "Armor",    "amount": 1 }
+    {
+      "atDistance": 1500,
+      "lane": 1,
+      "item": "Missile",
+      "amount": 1
+    },
+    {
+      "atDistance": 2600,
+      "lane": -1,
+      "item": "Smoke",
+      "amount": 1
+    },
+    {
+      "atDistance": 3800,
+      "lane": 0,
+      "item": "Caltrops",
+      "amount": 1
+    },
+    {
+      "atDistance": 5000,
+      "lane": 1,
+      "item": "Armor",
+      "amount": 1
+    }
   ],
+  "music": {
+    "theme": "Midnight_At_The_Embassy.mp3",
+    "boss": "Cold_Coffee_Standoff.mp3"
+  },
   "boss": {
     "name": "Black Heron",
     "health": 180,
     "phases": [
-      { "behaviour": "Blocker", "endsBelow": 0.6 },
-      { "behaviour": "Pursuer", "endsBelow": 0.25 },
-      { "behaviour": "Runner",  "endsBelow": 0 }
+      {
+        "behaviour": "Blocker",
+        "endsBelow": 0.6
+      },
+      {
+        "behaviour": "Pursuer",
+        "endsBelow": 0.25
+      },
+      {
+        "behaviour": "Runner",
+        "endsBelow": 0
+      }
     ]
   }
 }
