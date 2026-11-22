@@ -5,6 +5,7 @@
     <UseWPF>true</UseWPF>
     <RootNamespace>NightPursuit.App</RootNamespace>
     <AssemblyName>NightPursuit</AssemblyName>
+    <ApplicationIcon>NightPursuit.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\NightPursuit.Core\NightPursuit.Core.csproj" />
