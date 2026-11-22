@@ -1691,8 +1691,10 @@ watch it burn before the results. *Cost to change:* tuning numbers.
 90% of that speed through the spin-out, so the boss stays ahead. Your car holds its lane and eases off to keep the crash
 about 55 m ahead, braking as hard as an emergency stop (30 m/s², the brake pedal gives 14) when the boss died right in
 front of you. It always stops at least 45 m short of where the boss comes to rest. Tested for bosses killed 5 to 120 m
-ahead at up to top speed: the crash is 40 to 150 m ahead when it explodes. A boss can't be destroyed behind you (the
-rear weapons never destroy one), so that case isn't covered. *Cost to change:* tuning numbers.
+ahead at up to top speed: the crash is 40 to 150 m ahead when it explodes. A satellite strike can kill the boss up to
+150 m behind you (the final review caught that I had missed this): then the crash starts faster, up to 40 m/s faster
+than you, so it passes you and comes to rest ahead (tested at 20 and 50 m behind). A boss too far back for that crashes
+behind you, and the mirror shows it until it blows up. *Cost to change:* tuning numbers.
 
 **D184. Nothing can hurt you after the boss dies.** From the kill to the results: no damage, wreck or bust; no heat
 change; no score (a kill during the finale is worth 0); no car fires, and enemy missiles and bullets in flight are
@@ -1709,8 +1711,9 @@ the road but not the HUD, so every readout stays legible. One flash is well unde
 matters for people sensitive to flashing light, so there is no setting for it. *Cost to change:* a setting.
 
 **D187. Skipping and pausing.** Space, Enter or pad A skips to the results; a key held down from the fight doesn't (only
-a new press). A skipped finale shows and plays no explosion. While it runs, "SPACE OR ENTER: SKIP" shows low in the
-middle of the screen. P (or the window losing focus) pauses it, and resuming returns to the finale; in practice, R from
+a new press). Not in the first second, though: if you fire by tapping Space, your next tap would otherwise skip the
+crash you just earned (the reviewer's point; my call). A skipped finale shows and plays no explosion. From the first
+second, "SPACE OR ENTER: SKIP" shows low in the middle of the screen. P (or the window losing focus) pauses it, and resuming returns to the finale; in practice, R from
 that pause restarts the mission. R alone does nothing during the finale. *Cost to change:* small.
 
 **D188. How the flip is drawn.** The game draws cars from behind as flat outlines, so a car turning end over end shows
@@ -1733,3 +1736,19 @@ also draws a finale part-way through in some frames.
 4. Do 4 seconds drag after every boss? (Space or Enter skips.)
 5. Does the boss's look (fins, twin fins or dome) stay recognisable while it rolls and flips?
 6. Hold Space through the killing shot: the finale should not skip until you press again.
+7. Kill the boss with a satellite strike while it is behind you (its Pursuer phase): the crash should pass you and end
+   ahead, or show in the mirror if it was far back.
+8. The one-second wait before a skip works: right, or should skipping work at once?
+
+## Open items after Plan 7 (small, found by the final review)
+
+- The flip squashes the car's outline to show each face, and that also thins the horizontal lines while a face is
+  edge-on, for about a second. The light gaps in the outline also turn with the car. A proper fix redraws the faces
+  point by point instead of squashing them.
+- A boss beaten while you wait to respawn crashes far ahead (the new car starts 150 m back, from a standstill).
+- A few lines can mislead for a moment during the finale: "WRECKED" after a wreck in the same instant as the win (no car
+  is lost), "HEAT SET TO 50" on the respawn path, "+0" on a kill, and a strike banner already on its way.
+- A second kill in the same instant as the boss kill scores 0; scraping the guard rail during the finale can cost a
+  sliver of armor (about 10 bonus points).
+- Two tiny timing details: the hold after the explosion is 1/120 s short, and an ordinary kill in the same frame as the
+  explosion can draw its burst at the boss's wreck.
