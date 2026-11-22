@@ -36,6 +36,8 @@ public sealed class BossFinale
     public const double ExplodeAt = SpinOutSeconds + OffRoadSeconds;   // 2.5 s
     public const double HoldSeconds = 1.5;
     public const double TotalSeconds = ExplodeAt + HoldSeconds;        // 4.0 s
+    /// <summary>The finale can't be skipped before this, so a tap of fire just after the killing shot doesn't skip it.</summary>
+    public const double SkipAfterSeconds = 1.0;
     /// <summary>Where the car comes to rest, metres from the centre line: well off the 7.5 m half-width road, on the verge.</summary>
     public const double VergeLateral = 11.0;
     const double MaxLift = 1.2;
@@ -44,7 +46,7 @@ public sealed class BossFinale
     const double SpinOffTurns = 2.5;
     const double Eps = 1e-9;
 
-    readonly double _d0, _l0, _v0, _s0;
+    readonly double _d0, _l0, _v0, _s0, _square;
 
     public BossFinale(FinaleChoice choice, int bossId, double distance, double lateral, double speed, double spinAngle)
     {
@@ -54,6 +56,9 @@ public sealed class BossFinale
         _l0 = lateral;
         _v0 = Math.Max(0, speed);
         _s0 = spinAngle;
+        // A roll or flip spins out to the whole turn nearest one more turn the way it is going, so it trips square on
+        // even when it died spun out at an angle (half a turn to one and a half: never a jump).
+        _square = Math.Tau * Math.Round((spinAngle + choice.Side * Math.Tau) / Math.Tau);
         Pose(0);
         PrevRoll = Roll;
         PrevPitch = Pitch;
@@ -63,9 +68,11 @@ public sealed class BossFinale
     public FinaleChoice Choice { get; }
     public int BossId { get; }
 
+    /// <summary>Metres the car covers from the kill to where it rests, per m/s of its start speed (1.725).</summary>
+    public const double TravelPerSpeed = SpinOutSeconds * (1 + TripSpeedFraction) / 2 + TripSpeedFraction * OffRoadSeconds / 2;
+
     /// <summary>Where the car will come to rest and blow up (distance along the road), known from the start.</summary>
-    public double RestDistance =>
-        _d0 + _v0 * (SpinOutSeconds * (1 + TripSpeedFraction) / 2 + TripSpeedFraction * OffRoadSeconds / 2);
+    public double RestDistance => _d0 + _v0 * TravelPerSpeed;
     public double Elapsed { get; private set; }
 
     public double Distance { get; private set; }
@@ -138,7 +145,7 @@ public sealed class BossFinale
         if (Choice.Kind == FinaleKind.SpinOff)
             SpinAngle = _s0 + side * SpinOffTurns * Math.Tau * EaseOut(e / ExplodeAt);
         else
-            SpinAngle = _s0 + side * Math.Tau * EaseOut(Math.Min(t / SpinOutSeconds, 1));   // one whole spin: square on when it trips
+            SpinAngle = _s0 + (_square - _s0) * EaseOut(Math.Min(t / SpinOutSeconds, 1));   // square on when it trips
 
         double u = Math.Clamp((t - SpinOutSeconds) / OffRoadSeconds, 0, 1);
         double turn = Choice.Turns * Math.Tau * Smooth(u);

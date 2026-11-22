@@ -52,7 +52,7 @@ public sealed class InputHub
         // Holding a direction scrolls a menu or a letter; nothing else repeats.
         if (m is MenuKey mk && (!isRepeat || mk.Input is MenuInput.Up or MenuInput.Down or MenuInput.Left or MenuInput.Right))
             _menu.Enqueue(mk);
-        return a is not null || m is not null || key == Key.Space;
+        return a is not null || m is not null;
     }
 
     /// <summary>The menu key for a keyboard key: arrows and W A S D move (W A S D also carry their letter, for typing initials), other letters type, Enter and Space confirm, Esc goes back.</summary>

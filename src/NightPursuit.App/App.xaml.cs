@@ -91,13 +91,13 @@ public partial class App : Application
         return MissionLoader.LoadFile(path);
     }
 
-    /// <summary><c>--mission name</c> picks a practice mission in content/missions (letters, digits and '-' only); null without it.</summary>
     /// <summary>
     /// Each game picks its boss crashes from its own randomly seeded picker, so they differ from one game (and one
     /// launch) to the next. Core stays repeatable: the seed is the only thing that changes.
     /// </summary>
     static FinalePicker NewFinalePicker() => new(new NightPursuit.Core.Common.SeededRng(Random.Shared.Next()));
 
+    /// <summary><c>--mission name</c> picks a practice mission in content/missions (letters, digits and '-' only); null without it.</summary>
     static string? MissionName(string[] args)
     {
         int i = Array.IndexOf(args, "--mission");

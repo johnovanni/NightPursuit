@@ -11,7 +11,7 @@ internal static class FinaleAutopilot
     const double TargetGap = 55;
     const double GapGain = 0.8;
     /// <summary>How far short of the boss's resting place the car stops, metres.</summary>
-    const double StopShort = 45;
+    public const double StopShort = 45;
     /// <summary>Total braking in the finale, m/s²: an emergency stop, harder than the brake pedal's 14.</summary>
     public const double HardBrake = 30;
 

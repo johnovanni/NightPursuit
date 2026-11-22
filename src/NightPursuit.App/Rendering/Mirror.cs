@@ -60,7 +60,9 @@ internal static class Mirror
         for (int i = 0; i < road.Length; i++) road[i].Draw(dc, LineArt.Scenery(Neon.Cyan, bandFade[i]));
 
         // Cars far to near, then the smoke over them (a car inside it fades behind it), then hostile drops and enemy missiles.
-        foreach (var e in w.Agents.Where(e => cam.Ahead(e) is < -2.5 and > -300 && e.State != VehicleState.Wrecked)
+        // The beaten boss crashing behind you (struck from behind) shows until it blows up.
+        bool Crashing(AgentCar e) => w.Finale is { Exploded: false, Skipped: false } f && f.BossId == e.Id;
+        foreach (var e in w.Agents.Where(e => cam.Ahead(e) is < -2.5 and > -300 && (e.State != VehicleState.Wrecked || Crashing(e)))
                                   .OrderBy(e => cam.Ahead(e)))
         {
             if (!MirrorPoint(cam.Ahead(e), cam.LateralOf(e), out var g, out double s)) continue;

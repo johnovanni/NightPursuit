@@ -418,6 +418,7 @@ public sealed partial class World
 
         foreach (var t in Tracers)
         {
+            if (t.Dead) continue;   // cleared earlier in this loop (the boss kill clears enemy bullets)
             t.PrevDistance = t.Pose.Distance;
             t.PrevLateral = t.Pose.Lateral;
             t.PrevHeading = t.Pose.Heading;

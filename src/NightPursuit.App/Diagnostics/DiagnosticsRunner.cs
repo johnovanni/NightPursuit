@@ -522,7 +522,7 @@ public static class DiagnosticsRunner
             // The boss part-way through its crash: each kind and side in turn, at a moment that moves with the frame,
             // and the flash on every other one.
             beaten.State = VehicleState.Wrecked;
-            var crash = new BossFinale(new FinaleChoice((FinaleKind)(frame % 3), frame % 2 == 0 ? -1 : 1, 1 + frame / 3 % 2),
+            var crash = new BossFinale(new FinaleChoice((FinaleKind)(frame / 3 % 3), frame / 9 % 2 == 0 ? -1 : 1, 1 + frame / 18 % 2),
                                        beaten.Id, beaten.Distance, beaten.Lateral, 30, beaten.SpinAngle);
             double until = frame * 0.37 % BossFinale.ExplodeAt;
             while (crash.Elapsed < until) crash.Step(World.Step);
@@ -1050,7 +1050,6 @@ public static class DiagnosticsRunner
         run.Director.AdoptBossForDiagnostics(boss);
     }
 
-    /// <summary>The mission's boss 45 m ahead at 65% health in phase 1, spun out (open armour) with 0.5 s of shield left.</summary>
     /// <summary>
     /// The player on open road at 60 m/s with the boss 40 m ahead in the same lane; the boss is destroyed with
     /// <paramref name="choice"/> and the run plays its crash to <paramref name="at"/> seconds, feeding the effects, so a
@@ -1077,6 +1076,7 @@ public static class DiagnosticsRunner
         Progress($"finale: {choice.Kind} side {choice.Side} turns {choice.Turns} at {w.Finale?.Elapsed:0.00} s, state {run.State}, flash {effects.FlashAlpha:0.00}");
     }
 
+    /// <summary>The mission's boss 45 m ahead at 65% health in phase 1, spun out (open armour) with 0.5 s of shield left.</summary>
     static void PlaceBoss(MissionRun run, EffectList effects, string mission)
     {
         var p = run.World.Player;

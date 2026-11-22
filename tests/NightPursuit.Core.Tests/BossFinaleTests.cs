@@ -116,11 +116,19 @@ public class BossFinaleTests
     [InlineData(FinaleKind.Flip, 1)]
     public void A_roll_or_flip_trips_square_on(FinaleKind kind, int side)
     {
-        var f = Start(kind, side, spin: 0.4);
-        StepTo(f, BossFinale.SpinOutSeconds);
-        Assert.Equal(0.4 + side * Math.Tau, f.SpinAngle, Tol);
-        StepTo(f, BossFinale.ExplodeAt);
-        Assert.Equal(0.4 + side * Math.Tau, f.SpinAngle, Tol);
+        // Killed while spun out (a common kill: its armor is open), it still ends its spin square on, on a whole turn,
+        // after turning between half a turn and one and a half the way it is going.
+        foreach (double start in new[] { 0.0, 0.4, 2.0, -2.9, 7.5 })
+        {
+            var f = Start(kind, side, spin: start);
+            StepTo(f, BossFinale.SpinOutSeconds);
+            double turns = f.SpinAngle / Math.Tau;
+            Assert.Equal(Math.Round(turns), turns, 1e-6);
+            Assert.InRange(side * (f.SpinAngle - start), 0.5 * Math.Tau - Tol, 1.5 * Math.Tau + Tol);
+            double square = f.SpinAngle;
+            StepTo(f, BossFinale.ExplodeAt);
+            Assert.Equal(square, f.SpinAngle, Tol);
+        }
     }
 
     [Theory]

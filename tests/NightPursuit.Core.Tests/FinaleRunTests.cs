@@ -99,6 +99,10 @@ public class FinaleRunTests
         Assert.Equal(RunState.Playing, run.State);
         Kill(run, boss);
         run.Update(ControlFrame.Empty, 0.5);
+        run.Handle(new GameAction(ActionKind.SkipFinale));   // too soon: a tap of fire just after the kill
+        Assert.Equal(RunState.Finale, run.State);
+        for (int i = 0; i < 60; i++) run.Update(ControlFrame.Empty, Frame);
+        Assert.True(run.World.Finale!.Elapsed >= BossFinale.SkipAfterSeconds);
 
         run.Handle(new GameAction(ActionKind.SkipFinale));
         Assert.Equal(RunState.Completed, run.State);

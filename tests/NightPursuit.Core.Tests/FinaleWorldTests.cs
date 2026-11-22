@@ -63,6 +63,32 @@ public class FinaleWorldTests
     }
 
     [Fact]
+    public void Killing_the_boss_with_a_bullet_while_its_own_bullets_fly_does_not_crash()
+    {
+        // The Gunner phase always has bullets in the air: the kill clears them inside the bullet loop.
+        var (w, boss) = Setup(ahead: 20, bossSpeed: 60, playerSpeed: 60);
+        boss.Armor = 0.5;
+        boss.Shield = 0;
+        boss.Engaged = true;
+        var p = w.Player;
+        w.Tracers.Add(new Tracer { Pose = new RoadPose(p.Distance + 15, p.Lateral + 4, Math.PI), OwnerId = boss.Id, Hostile = true });
+        var fire = new ControlFrame { Fire = true };
+        for (int i = 0; i < 240 && !w.InFinale; i++) w.StepOnce(fire);
+        Assert.True(w.InFinale);
+        w.StepOnce(ControlFrame.Empty);
+        Assert.DoesNotContain(w.Tracers, t => t.Hostile);
+    }
+
+    [Fact]
+    public void The_busted_countdown_is_cleared_at_the_kill()
+    {
+        var (w, boss) = Setup();
+        w.Busted.SetHeldForDiagnostics(1.2);
+        w.Destroy(boss, KillCause.Missile);
+        Assert.Equal(0, w.Busted.Held);
+    }
+
+    [Fact]
     public void The_finale_starts_at_least_as_fast_as_the_player()
     {
         var (w, boss) = Setup(bossSpeed: 40, playerSpeed: 60);
@@ -161,6 +187,8 @@ public class FinaleWorldTests
 
         w.Destroy(boss, KillCause.Missile);
         Assert.Empty(w.EnemyMissiles);
+        Assert.All(w.Tracers.Where(t => t.Hostile), t => Assert.True(t.Dead));   // marked at the kill, dropped next step
+        w.StepOnce(ControlFrame.Empty);
         Assert.DoesNotContain(w.Tracers, t => t.Hostile);
         for (int i = 0; i < 240; i++)
         {
@@ -196,6 +224,8 @@ public class FinaleWorldTests
             data.Add(120, 60, 60, kind);    // a missile kill
             data.Add(5, 69, 69, kind);      // flat out
             data.Add(30, 40, 60, kind);     // a slow boss
+            data.Add(-20, 60, 60, kind);    // a satellite strike reaches behind you
+            data.Add(-50, 60, 60, kind);
         }
         return data;
     }
@@ -220,6 +250,23 @@ public class FinaleWorldTests
                 Assert.InRange(boomAt - p.Distance, 40, 150);
             }
             if (!double.IsNaN(boomAt)) Assert.True(p.Distance <= boomAt - 30, $"the player passed the crash: {boomAt - p.Distance:0.0} m");
+        }
+    }
+
+    [Theory]
+    [InlineData(-100)]
+    [InlineData(-150)]
+    public void A_boss_struck_far_behind_crashes_where_the_mirror_shows_it(double ahead)
+    {
+        // Too far back to pass you at any believable speed: it crashes behind you, in the mirror's view (2.5 to 300 m back).
+        var (w, boss) = Setup(ahead, 0, 60, 60, new FinaleChoice(FinaleKind.Roll, 1, 1));
+        w.Destroy(boss, KillCause.Satellite);
+        Assert.True(w.Finale!.Speed <= w.Player.Speed + 40.0 + 1e-9, "a crashing car never goes absurdly fast");
+        while (!w.Finale.Exploded)
+        {
+            w.StepOnce(ControlFrame.Empty);
+            double rel = w.Finale.Distance - w.Player.Distance;
+            Assert.True(rel >= 40 || rel is < -2.5 and > -300, $"the crash is out of view: {rel:0.0} m");
         }
     }
 

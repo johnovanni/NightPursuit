@@ -22,16 +22,33 @@ public sealed partial class World
     /// <summary>The lane centre the player's car holds during the finale: the one nearest it at the kill.</summary>
     internal double FinaleLane { get; private set; }
 
-    /// <summary>Starts the beaten boss's crash. It starts at least as fast as the player, so it pulls ahead.</summary>
+    /// <summary>The fastest a crashing boss goes, above the player's speed (m/s), so it never looks absurd.</summary>
+    const double MaxFinaleSpeedAbovePlayer = 40;
+
+    /// <summary>
+    /// Starts the beaten boss's crash. It starts at least as fast as the player, and faster when it must pass you to crash
+    /// ahead (a boss struck beside or behind you), up to 40 m/s faster; one too far back for that crashes behind you,
+    /// where the mirror shows it.
+    /// </summary>
     void StartFinale(BossCar boss)
     {
         var choice = FinaleSource();
-        Finale = new BossFinale(choice, boss.Id, boss.Distance, boss.Lateral, Math.Max(boss.Speed, Player.Speed), boss.SpinAngle);
+        double speed = Math.Max(boss.Speed, Player.Speed);
+        double stop = Player.Speed * Player.Speed / (2 * 0.9 * FinaleAutopilot.HardBrake);
+        // Fast enough to come to rest at least StopShort past where your car can stop.
+        double needed = (Player.Distance + stop + FinaleAutopilot.StopShort - boss.Distance) / BossFinale.TravelPerSpeed;
+        if (needed > speed && needed <= Player.Speed + MaxFinaleSpeedAbovePlayer) speed = needed;
+        Finale = new BossFinale(choice, boss.Id, boss.Distance, boss.Lateral, speed, boss.SpinAngle);
         FinaleLane = Track.LaneCentres.MinBy(c => Math.Abs(c - Player.Lateral));
         boss.StateTimer = double.MaxValue;   // kept until it explodes (IsGone removes it when the timer is 0)
         boss.PushVel = 0;
         Publish(new BossFinaleStarted(Time, boss.Id, choice.Kind, choice.Side));
-        ClearHostileFire();
+        // Nothing can hit you now. The kill may come from inside the bullet loop, so enemy bullets are only marked dead
+        // here (the loop skips them and drops them at its end); enemy missiles end as missed.
+        ClearEnemyMissilesAsMissed();
+        foreach (var t in Tracers)
+            if (t.Hostile) t.Dead = true;
+        Busted.Reset();   // no frozen BUSTED countdown during the finale
     }
 
     /// <summary>Moves the beaten boss along its crash; on the explosion step it blows up onto the verge and is removed.</summary>

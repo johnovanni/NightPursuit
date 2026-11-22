@@ -164,7 +164,9 @@ public sealed class MissionRun
                 else if (State == RunState.Paused) State = _pausedFrom;
                 break;
             case ActionKind.SkipFinale:
-                if (State != RunState.Finale) break;   // only a new press during the finale; never passed to the world
+                // Only during the finale and after its first second (a tap of fire just after the kill must not skip
+                // it); never passed to the world.
+                if (State != RunState.Finale || World.Finale!.Elapsed < BossFinale.SkipAfterSeconds) break;
                 World.Finale!.Skip();
                 State = RunState.Completed;
                 break;

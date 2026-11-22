@@ -188,17 +188,19 @@ internal static class Overlays
         }
     }
 
-    /// <summary>
-    /// The respawn countdown, on a dark backing box so it stays readable over the help panel or bright scenery. Paused, mission
-    /// complete and game over are screens now (ScreenHost), so nothing is drawn for them here.
-    /// </summary>
     /// <summary>The line shown while the beaten boss's crash plays.</summary>
     public const string FinaleSkipHint = "SPACE OR ENTER: SKIP";
 
+    /// <summary>
+    /// The respawn countdown, on a dark backing box so it stays readable over the help panel or bright scenery. Paused, mission
+    /// complete and game over are screens now (ScreenHost), so nothing is drawn for them here.
+    /// During the boss finale, the skip hint once skipping works (after its first second).
+    /// </summary>
     public static void DrawState(DrawingContext dc, HudLayout l, MissionRun run)
     {
         if (run.State == RunState.Finale)
         {
+            if (run.World.Finale is not { Elapsed: >= BossFinale.SkipAfterSeconds }) return;
             // Small, low and centred, clear of the crash ahead and of the notice line just above the hood.
             double k = l.T(1), size = 16, y = l.HoodTop - l.T(64);
             double hintWidth = Math.Min(l.Width - 20, l.TextWidth(FinaleSkipHint, size, bold: true) + 30 * k);
