@@ -277,8 +277,8 @@ public class BossMissionTests
         var runner = AgentCar.Create(w.NextId(), AgentKind.Runner, 200, 0, 30);
         w.Agents.Add(boss);
         w.Agents.Add(runner);
+        w.Destroy(runner, KillCause.Gunfire);   // first: once the boss is beaten, nothing scores (the finale)
         w.Destroy(boss, KillCause.Gunfire);
-        w.Destroy(runner, KillCause.Gunfire);
         Assert.Contains(w.Events, e => e is Message { Text: "BLACK HERON DESTROYED  +5000" });
         Assert.Contains(w.Events, e => e is Message m && m.Text == "RUNNER DESTROYED  +" + VehicleStats.Runner.Points);
     }

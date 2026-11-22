@@ -144,6 +144,15 @@ public sealed partial class World
             Player.Shake = Math.Max(0, Player.Shake - Step);
             CarPhysics.StepWrecked(Player, Step);
         }
+        else if (InFinale)
+        {
+            // The finale: the car drives itself (your controls are ignored) and nothing can wreck it.
+            var (auto, autoSteer, extra) = FinaleAutopilot.Drive(this, FinaleLane);
+            CarPhysics.StepPlayer(Player, auto, autoSteer, Track, Feel, Step);
+            if (extra > 0) Player.Speed = Math.Max(0, Player.Speed - extra * Step);
+            Player.GripLoss = 0;
+            Player.PunctureLeft = 0;
+        }
         else
         {
             var pedals = Scheme.Update(input, Player.Speed, Feel, Step);
@@ -175,8 +184,8 @@ public sealed partial class World
             if (Player.Armor <= 0) WreckPlayer("SCRAPED TO PIECES");     // guard-rail scraping drains armor in StepPlayer
         }
 
-        if (Player.State != VehicleState.Wrecked) CheckSpeedTraps();
-        StepWeapons(input);
+        if (Player.State != VehicleState.Wrecked && !InFinale) CheckSpeedTraps();
+        StepWeapons(InFinale ? ControlFrame.Empty : input);
         Loadout.Update(Step);
         StepMissiles();
         StepStrike();
@@ -184,13 +193,17 @@ public sealed partial class World
         StepAgents();
         Collisions.Resolve(this);
         ClearBlockedRoadblocks();
-        StepHeat();
-        if (Busted.Update(this, Step)) BustPlayer();
+        if (!InFinale)
+        {
+            StepHeat();
+            if (Busted.Update(this, Step)) BustPlayer();
+        }
         StepEnemyMissiles();            // after every move of the player this step, collisions too
 
         // Cars leave the list only now, so nothing above sees the list change mid-step.
         Agents.RemoveAll(IsGone);
         _removals.Clear();
+        if (InFinale) StepFinaleAfterBoss();
         DropBrokenRollingRoadblocks();   // before the warnings, so none is ever shown for a broken one
 
         Player.HitFlash = Math.Max(0, Player.HitFlash - Step);
@@ -259,11 +272,14 @@ public sealed partial class World
                     if (a.Faction == Faction.Police) intent = PoliceLanes.Restrain(_view, a, intent);
                     CarPhysics.StepAgent(a, intent, Step);
                     if (a is BossCar driving) KeepBossOnRoad(driving);
-                    StepAgentWeapons(a, intent);      // after the car has moved
+                    if (!InFinale) StepAgentWeapons(a, intent);      // after the car has moved; no car fires in the finale
                     break;
                 case VehicleState.Spinning:
                     CarPhysics.StepSpinning(a, Step);
                     if (a is BossCar spinning) KeepBossOnRoad(spinning);
+                    break;
+                case VehicleState.Wrecked when a is BossCar finaleBoss && Finale?.BossId == a.Id && !Finale.Exploded:
+                    StepFinaleBoss(finaleBoss);
                     break;
                 case VehicleState.Wrecked: CarPhysics.StepWrecked(a, Step); break;
             }
@@ -360,7 +376,7 @@ public sealed partial class World
     /// <summary>Hurts the player. The Message is skipped when the same reason was messaged less than <paramref name="messageGap"/> seconds ago.</summary>
     internal void DamagePlayer(double amount, string reason, double messageGap = 0)
     {
-        if (Player.State == VehicleState.Wrecked) return;
+        if (Player.State == VehicleState.Wrecked || InFinale) return;
         Player.Armor -= amount;
         Player.HitFlash = 0.35;
         Publish(new PlayerDamaged(Time, amount, reason));
@@ -374,7 +390,7 @@ public sealed partial class World
 
     internal void WreckPlayer(string reason)
     {
-        if (Player.State == VehicleState.Wrecked) return;
+        if (Player.State == VehicleState.Wrecked || InFinale) return;
         Player.Armor = 0;
         Player.State = VehicleState.Wrecked;
         Player.StateTimer = 3;
@@ -469,10 +485,12 @@ public sealed partial class World
     public void Destroy(AgentCar car, KillCause cause)
     {
         if (car.State == VehicleState.Wrecked || _removals.Contains(car)) return;
+        bool finaleRunning = InFinale;
         car.State = VehicleState.Wrecked;
         car.StateTimer = 1.5;
         var faction = car.Faction;
-        int points = faction == Faction.Hostile ? car.Stats.Points : 0;   // civilians and police never change the score
+        // Civilians and police never change the score, and nothing scores once the boss is beaten.
+        int points = faction == Faction.Hostile && !finaleRunning ? car.Stats.Points : 0;
         Score += points;
         Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points, faction));
         if (faction == Faction.Hostile)
@@ -481,6 +499,11 @@ public sealed partial class World
             Publish(new Message(Time, $"{name.ToUpperInvariant()} DESTROYED  +{points}", Tone.Good));
         }
         else PublishNonHostileDestroyed(car, faction);
+        if (car is BossCar beaten && !finaleRunning)
+        {
+            StartFinale(beaten);   // no sliding wreck: the car crashes off the road first
+            return;
+        }
         if (cause.LeavesWreck())
         {
             Hazards.Add(new Wreck
@@ -588,6 +611,11 @@ public sealed partial class World
             Add(ref h, rb.FormedSeconds); Add(ref h, rb.OffSlotSeconds); Add(ref h, rb.InGapSeconds);
         }
         Add(ref h, RollingRoadblockList.Count);
+        if (Finale is { } f)
+        {
+            Add(ref h, f.Elapsed); Add(ref h, f.Distance); Add(ref h, f.Lateral);
+            Add(ref h, f.Roll); Add(ref h, f.Pitch); Add(ref h, f.Lift);
+        }
         return h;
 
         static void Mix(ref ulong h, Vehicle v)

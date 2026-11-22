@@ -187,7 +187,9 @@ public class BossTests
         Assert.Equal(VehicleState.Wrecked, b.State);
 
         Step(w, 40);
-        Assert.DoesNotContain(b, w.Agents);                     // destroyed: removed at the end of the step
+        Assert.Contains(b, w.Agents);                           // kept for its crash (the finale)...
+        while (!w.Finale!.Exploded) Step(w, 1);
+        Assert.DoesNotContain(b, w.Agents);                     // ...and removed when it blows up
     }
 
     [Fact]

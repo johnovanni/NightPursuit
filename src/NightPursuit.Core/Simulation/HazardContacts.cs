@@ -61,7 +61,7 @@ static class HazardContacts
         }
 
         var p = w.Player;
-        if (p.State == VehicleState.Wrecked) return;
+        if (p.State == VehicleState.Wrecked || w.InFinale) return;   // in the finale the player's car passes through
         CollectCrates(w, p);
         foreach (var h in w.Hazards)
         {

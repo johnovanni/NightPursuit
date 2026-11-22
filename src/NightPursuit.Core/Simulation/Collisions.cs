@@ -34,7 +34,7 @@ public static class Collisions
         foreach (var a in w.Agents)
         {
             if (!a.IsOnRoadDriving) continue;
-            if (p.State != VehicleState.Wrecked) CarVsCar(w, a);     // the player may have been wrecked earlier in this loop
+            if (p.State != VehicleState.Wrecked && !w.InFinale) CarVsCar(w, a);   // in the finale nothing touches the player     // the player may have been wrecked earlier in this loop
             if (!a.IsOnRoadDriving) continue;
 
             foreach (var h in w.Hazards)
@@ -86,8 +86,8 @@ public static class Collisions
                 w.Destroy(a, KillCause.RanOffRoad);
         }
 
-        if (p.State != VehicleState.Wrecked) PlayerVsWrecks(w);
-        if (p.State != VehicleState.Wrecked) PlayerVsRoadblocks(w);
+        if (p.State != VehicleState.Wrecked && !w.InFinale) PlayerVsWrecks(w);
+        if (p.State != VehicleState.Wrecked && !w.InFinale) PlayerVsRoadblocks(w);
         HazardContacts.Resolve(w);
     }
 

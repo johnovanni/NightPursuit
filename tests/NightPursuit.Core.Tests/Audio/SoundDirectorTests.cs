@@ -238,6 +238,28 @@ public class SoundDirectorTests
     }
 
     [Fact]
+    public void The_boss_explosion_sound_waits_for_the_explosion()
+    {
+        var r = new Rig();
+        r.ToPlay();
+        var boss = r.Car(AgentKind.Runner, 60);
+        r.Publish(new VehicleDestroyed(0, boss.Id, AgentKind.Boss, KillCause.Missile, 5000),
+                  new BossFinaleStarted(0, boss.Id, FinaleKind.Roll, 1));
+        var kill = Assert.Single(r.Update().Cues);
+        Assert.Equal(SoundCue.Spin, kill.Cue);
+        Assert.Equal(0.5, kill.Volume, 9);                       // from the boss, 60 m ahead
+
+        r.Publish(new BossExploded(0, r.P.Distance + 60, r.P.Lateral));
+        var boom = Assert.Single(r.Update().Cues);
+        Assert.Equal(SoundCue.Explosion, boom.Cue);
+        Assert.Equal(0.5, boom.Volume, 9);                       // from where it blew up
+
+        var runner = r.Car(AgentKind.Runner, 60);
+        r.Publish(new VehicleDestroyed(0, runner.Id, AgentKind.Runner, KillCause.Gunfire, 100));
+        Assert.Equal(new[] { SoundCue.Explosion }, r.Cues());   // an ordinary kill still explodes at once
+    }
+
+    [Fact]
     public void Explosion_400_m_away_is_silent_and_60_m_away_is_half()
     {
         var r = new Rig();

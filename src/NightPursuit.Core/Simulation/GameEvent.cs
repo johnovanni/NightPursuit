@@ -1,3 +1,4 @@
+using NightPursuit.Core.Missions;
 using NightPursuit.Core.Vehicles;
 using NightPursuit.Core.Weapons;
 
@@ -41,6 +42,10 @@ public sealed record BossDamaged(double Time, double Amount, string Reason) : Ga
 public sealed record WarningRaised(double Time, WarningKind Kind, string Text) : GameEvent(Time);
 /// <summary>The mission's boss, called <paramref name="Name"/>, appeared at the end of the approach.</summary>
 public sealed record BossAppeared(double Time, string Name) : GameEvent(Time);
+/// <summary>The boss was destroyed and its crash began (it spins out toward <paramref name="Side"/>: -1 left, +1 right).</summary>
+public sealed record BossFinaleStarted(double Time, int VehicleId, FinaleKind Kind, int Side) : GameEvent(Time);
+/// <summary>The beaten boss blew up at the end of its crash, at this place on the verge.</summary>
+public sealed record BossExploded(double Time, double Distance, double Lateral) : GameEvent(Time);
 /// <summary>The boss began phase <paramref name="Phase"/> (1-based) of <paramref name="PhaseCount"/>, driving as <paramref name="Behaviour"/>.</summary>
 public sealed record BossPhaseChanged(double Time, int Phase, int PhaseCount, AgentKind Behaviour) : GameEvent(Time);
 /// <summary>The boss launched enemy missile <paramref name="MissileId"/>.</summary>

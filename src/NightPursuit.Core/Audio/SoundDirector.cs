@@ -121,7 +121,10 @@ public sealed class SoundDirector(MusicSlots music)
             {
                 case WeaponUsed u: From(w, u.OwnerId, WeaponCue(u.Weapon)); break;
                 case StrikeLanded: Play(SoundCue.StrikeBoom); break;
+                case VehicleDestroyed { Kind: AgentKind.Boss }: break;   // the boss blows up at the end of its crash (BossExploded)
                 case VehicleDestroyed d: From(w, d.VehicleId, SoundCue.Explosion); break;
+                case BossFinaleStarted f: From(w, f.VehicleId, SoundCue.Spin); break;
+                case BossExploded x: At(w, x.Distance, x.Lateral, SoundCue.Explosion); break;
                 case PlayerDamaged d: Play(SoundCue.PlayerHit, Math.Clamp(0.5 + d.Amount / 40, 0.5, 1)); break;
                 case PlayerWrecked when !busted: Play(SoundCue.PlayerWrecked); break;   // busted has its own sound
                 case PlayerBusted: Play(SoundCue.PlayerBusted); break;
@@ -179,6 +182,13 @@ public sealed class SoundDirector(MusicSlots music)
     void From(World w, int vehicleId, SoundCue cue)
     {
         if (Heard(w, vehicleId, out double volume, out double pan)) Play(cue, volume, pan);
+    }
+
+    /// <summary>A sound from a place on the road rather than from a car.</summary>
+    void At(World w, double distance, double lateral, SoundCue cue)
+    {
+        var p = w.Player;
+        if (Place(distance - p.Distance, lateral - p.Lateral, out double volume, out double pan)) Play(cue, volume, pan);
     }
 
     /// <summary>

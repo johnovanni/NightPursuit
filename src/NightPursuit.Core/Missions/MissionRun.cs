@@ -167,9 +167,8 @@ public sealed class MissionRun
         World.Scheme.Reset(0);
         // Nothing launched before the wreck is still in flight when the new car starts (no enemy missile launches while
         // wrecked); an enemy missile cleared here ends as missed, so every launch has an outcome.
-        World.ClearEnemyMissilesAsMissed();
+        World.ClearHostileFire();   // nor an enemy bullet, which could hit the new car
         World.Missiles.Clear();
-        World.Tracers.RemoveAll(t => t.Hostile);   // nor an enemy bullet, which could hit the new car
         // The boss is never cleared (Review Focus 1): it goes back 300 m ahead and eases in again.
         World.Agents.RemoveAll(a => a is not BossCar && InZone(a.Distance));
         double bossReturn = back + MissionDirector.BossAheadDistance;

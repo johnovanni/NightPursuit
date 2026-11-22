@@ -39,6 +39,8 @@ public sealed class BossFinale
     /// <summary>Where the car comes to rest, metres from the centre line: well off the 7.5 m half-width road, on the verge.</summary>
     public const double VergeLateral = 11.0;
     const double MaxLift = 1.2;
+    /// <summary>The share of its start speed the car still has when it trips at the road edge.</summary>
+    const double TripSpeedFraction = 0.9;
     const double SpinOffTurns = 2.5;
     const double Eps = 1e-9;
 
@@ -119,9 +121,14 @@ public sealed class BossFinale
         double e = Math.Min(t, ExplodeAt);
         int side = Choice.Side;
 
-        // Speed falls evenly to rest at the explosion; distance is its integral, so it never goes back.
-        Speed = t >= ExplodeAt ? 0 : _v0 * (1 - t / ExplodeAt);
-        Distance = _d0 + _v0 * (e - e * e / (2 * ExplodeAt));
+        // The car keeps most of its speed through the spin-out (down to 90%), so it stays ahead of you, then slows
+        // evenly to rest on the verge by the explosion. Distance is the integral of that speed, so it never goes back.
+        double s = Math.Min(e, SpinOutSeconds), u0 = Math.Clamp((e - SpinOutSeconds) / OffRoadSeconds, 0, 1);
+        Speed = t >= ExplodeAt ? 0
+            : t <= SpinOutSeconds ? _v0 * (1 - (1 - TripSpeedFraction) * t / SpinOutSeconds)
+            : TripSpeedFraction * _v0 * (1 - u0);
+        Distance = _d0 + _v0 * (s - (1 - TripSpeedFraction) * s * s / (2 * SpinOutSeconds))
+                       + TripSpeedFraction * _v0 * OffRoadSeconds * (u0 - u0 * u0 / 2);
         Lateral = _l0 + (side * VergeLateral - _l0) * Smooth(e / ExplodeAt);
 
         if (Choice.Kind == FinaleKind.SpinOff)

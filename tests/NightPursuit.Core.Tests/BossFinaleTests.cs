@@ -43,6 +43,17 @@ public class BossFinaleTests
         Assert.Equal(0, f.Speed, Tol);
     }
 
+    [Fact]
+    public void It_keeps_most_of_its_speed_through_the_spin_out_then_slows_to_rest()
+    {
+        var f = Start(FinaleKind.Flip, 1);
+        StepTo(f, BossFinale.SpinOutSeconds);
+        Assert.Equal(54, f.Speed, 1e-6);                                  // 90% of 60 when it trips
+        Assert.Equal(1000 + 60 * 1.2 * 0.95, f.Distance, 1e-6);           // 68.4 m during the spin-out
+        StepTo(f, BossFinale.ExplodeAt);
+        Assert.Equal(1000 + 68.4 + 54 * 1.3 / 2, f.Distance, 1e-6);      // then 35.1 m more: 103.5 m in all
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(1)]

@@ -15,6 +15,7 @@ public sealed partial class World
     /// <summary>Adds heat for <paramref name="reason"/>, publishing the change and, if the level moved, its banner and message.</summary>
     public void AddHeat(double amount, string reason)
     {
+        if (InFinale) return;   // the heat stays as it was when the boss died
         var from = Heat.Level;
         var change = Heat.Add(amount);
         if (amount != 0) Publish(new HeatChanged(Time, amount, Heat.Value, reason));
@@ -54,6 +55,7 @@ public sealed partial class World
     /// </summary>
     public void SetHeat(double value, string reason)
     {
+        if (InFinale) return;
         double before = Heat.Value;
         var from = Heat.Level;
         var change = Heat.Set(value);
@@ -64,6 +66,7 @@ public sealed partial class World
     /// <summary>The police have held you: the car is lost like a wreck, and the respawn sets the heat to 50.</summary>
     public void BustPlayer()
     {
+        if (InFinale) return;
         Player.Armor = 0;
         Player.State = VehicleState.Wrecked;
         Player.StateTimer = 3;
