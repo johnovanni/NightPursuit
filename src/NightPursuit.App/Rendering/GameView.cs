@@ -97,6 +97,7 @@ public sealed class GameView : FrameworkElement
         HoodRenderer.Draw(dc, _layout, _projector);
         EffectRenderer.DrawMuzzleFlash(dc, _layout, world, Effects);
         WindshieldRenderer.Draw(dc, _layout, world.Player);   // the glass is between you and the hood; the HUD sits on top
+        EffectRenderer.DrawFlash(dc, w, h, Effects);           // the boss explosion's flash: over the view, under every readout
         Hud.Draw(dc, _layout, run);
         WeaponPanel.Draw(dc, _layout, world);
         Mirror.Draw(dc, _layout, world, _projector);

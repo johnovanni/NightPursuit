@@ -55,6 +55,16 @@ public static class EffectRenderer
         if (hasExclude) dc.Pop();
     }
 
+    /// <summary>The one white flash of the boss explosion over the whole view (under the HUD, which is drawn after it).</summary>
+    public static void DrawFlash(DrawingContext dc, double width, double height, EffectList effects)
+    {
+        double a = effects.FlashAlpha;
+        if (a <= 0) return;
+        dc.PushOpacity(a);
+        dc.DrawRectangle(Brushes.White, null, new Rect(0, 0, width, height));
+        dc.Pop();
+    }
+
     public static void DrawExplosions(DrawingContext dc, Projector p, World w, EffectList effects)
     {
         foreach (var x in effects.Explosions)

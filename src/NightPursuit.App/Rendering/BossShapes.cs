@@ -121,4 +121,48 @@ internal static class BossShapes
         geo.Freeze();
         return geo;
     }
+
+    // ---- the boss turning end over end (the finale): its roof and underside, seen square on.
+    // Lines in (x, z): x as a fraction of the half-width, z as a fraction of the half-length, z = 1 at the nose.
+
+    static readonly (double X1, double Z1, double X2, double Z2)[] Cabin =
+    {
+        (-0.55, 0.4, 0.55, 0.4),     // the windscreen's top edge
+        (-0.55, -0.4, 0.55, -0.4),   // the rear window's top edge
+        (-0.55, 0.4, -0.55, -0.4), (0.55, 0.4, 0.55, -0.4),
+    };
+    static readonly (double, double, double, double)[] FinTops = { (-0.78, -1, -0.78, -0.5), (0.78, -1, 0.78, -0.5) };
+    static readonly (double, double, double, double)[] TwinTops =
+        { (-0.78, -1, -0.78, -0.5), (0.78, -1, 0.78, -0.5), (-0.43, -1, -0.43, -0.55), (0.43, -1, 0.43, -0.55) };
+    static readonly (double, double, double, double)[] DomeTop = Ellipse(0.45, 0.32, 0, 12);
+
+    static readonly (double, double, double, double)[] Under =
+    {
+        (-0.85, 0.62, 0.85, 0.62), (-0.85, -0.62, 0.85, -0.62),            // the two axles
+        (-0.95, 0.48, -0.95, 0.76), (0.95, 0.48, 0.95, 0.76),              // the four tyre ends
+        (-0.95, -0.48, -0.95, -0.76), (0.95, -0.48, 0.95, -0.76),
+        (0, 0.45, 0, -0.9),                                                 // the drive shaft
+    };
+
+    /// <summary>The detail lines on the roof: the cabin, and the look's fins, twin fins or dome.</summary>
+    public static IReadOnlyList<(double X1, double Z1, double X2, double Z2)> RoofLines(BossLook look) => look switch
+    {
+        BossLook.Twin => Cabin.Concat(TwinTops).ToArray(),
+        BossLook.Dome => Cabin.Concat(DomeTop).ToArray(),
+        _ => Cabin.Concat(FinTops).ToArray(),
+    };
+
+    /// <summary>The detail lines on the underside: two axles, four tyre ends and the drive shaft.</summary>
+    public static IReadOnlyList<(double X1, double Z1, double X2, double Z2)> UndersideLines(BossLook look) => Under;
+
+    static (double, double, double, double)[] Ellipse(double rx, double rz, double z0, int n)
+    {
+        var lines = new (double, double, double, double)[n];
+        for (int i = 0; i < n; i++)
+        {
+            double a = Math.Tau * i / n, b = Math.Tau * (i + 1) / n;
+            lines[i] = (rx * Math.Cos(a), z0 + rz * Math.Sin(a), rx * Math.Cos(b), z0 + rz * Math.Sin(b));
+        }
+        return lines;
+    }
 }

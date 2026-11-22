@@ -38,7 +38,7 @@ public static class VehicleRenderer
         items.Sort(FarToNear);
         foreach (var item in items)
         {
-            if (item.Car is not null) DrawRear(dc, p, item.Car, w.Time);
+            if (item.Car is not null) DrawRear(dc, p, item.Car, w.Time, w.Finale);
             else if (item.Wreck is not null) HazardRenderer.DrawWreck(dc, p, item.Wreck);
             else RoadsideRenderer.Draw(dc, p, item.Roadside!, w.Time);
         }
@@ -51,10 +51,12 @@ public static class VehicleRenderer
     static readonly List<DrawItem> Items = new();   // reused every frame (drawing happens on the UI thread only)
     static readonly Comparison<DrawItem> FarToNear = static (a, b) => b.Distance.CompareTo(a.Distance);
 
-    public static void DrawRear(DrawingContext dc, Projector p, AgentCar car, double time)
+    public static void DrawRear(DrawingContext dc, Projector p, AgentCar car, double time, BossFinale? finale = null)
     {
+        // The beaten boss is drawn through its crash until it blows up (the finale).
+        var crash = finale is { Exploded: false, Skipped: false } f && f.BossId == car.Id ? f : null;
         // A car blown up by something other than gunfire stays in the list for a moment; the explosion covers it.
-        if (car.State == VehicleState.Wrecked) return;
+        if (car.State == VehicleState.Wrecked && crash is null) return;
         double dz = p.Ahead(car);
         if (dz < 2 || dz > DrawDistance) return;
         double rear = dz - car.Stats.Length / 2;   // we see the back of the car, not its centre
@@ -65,6 +67,12 @@ public static class VehicleRenderer
         if (clip <= 0 || g.Y - roof > clip) return;   // hidden behind a hill
 
         dc.PushClip(new RectangleGeometry(new Rect(0, 0, p.Width, clip)));
+        if (crash is not null)
+        {
+            FinaleRenderer.Draw(dc, p, car, crash, g, s, time, LineArt.Fade(rear));   // no boss tag or armor bar: it is beaten
+            dc.Pop();
+            return;
+        }
         Body(dc, car, p.SpinOf(car), g, s, time, LineArt.Fade(rear));
         if (car.Kind == AgentKind.Boss && dz < BossTagDistance) BossTag(dc, g.X, g.Y - roof - 34 - 0.35 * s, s);
         if (car.Armor < car.Stats.Armor && dz < 220)
@@ -142,9 +150,10 @@ public static class VehicleRenderer
     static readonly double[] PlateHeights = { 0.78, 1.1 };
     static readonly Typeface TagFont = new(new FontFamily("Consolas"), FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
 
-    static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s, double time, double fade)
+    /// <param name="spinningLook">Draws the spin's lean and narrowing whatever the car's state (the boss's crash); null uses its state.</param>
+    internal static void Body(DrawingContext dc, AgentCar car, double spinAngle, Point g, double s, double time, double fade, bool? spinningLook = null)
     {
-        bool spinning = car.State == VehicleState.Spinning;
+        bool spinning = spinningLook ?? car.State == VehicleState.Spinning;
         double tilt = spinning ? Math.Sin(spinAngle) * 25 : 0;
         if (car.Punctured && !spinning)
             tilt += PunctureWobbleDegrees * Math.Sin(2 * Math.PI * PunctureWobbleHz * car.PunctureSeconds);

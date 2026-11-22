@@ -1672,3 +1672,64 @@ fixes are D167 to D173.
     ON (NO DEVICE).
 12. Minimise the window in the middle of a mission: the engine and siren stop at once (and come back, paused, when you
     return).
+
+## Plan 7 calls (2026-11-22, branch `plan-7-boss-finale`)
+
+The boss finale: when you beat a boss, its car spins out, leaves the road, rolls or flips (or just spins onto the
+verge), and blows up with one flash before the results. These are my calls, for you to check. Numbers jump to D181
+because the practice-options branch (`plan-6-practice`, not merged) already uses D174 to D180.
+
+**D181. Three crashes, never the same twice in a row.** Spin-off, roll or flip, left or right, with one or two turns for
+a roll or flip. Each game has its own picker, seeded at random when the game starts, so a restarted mission ends
+differently and so does the next launch. The game's own random numbers are not used, so a mission still replays the
+same traffic and enemies. *Cost to change:* small.
+
+**D182. About 4 seconds, at full speed.** 1.2 s spin-out, 1.3 s off the road, the explosion at 2.5 s, then 1.5 s to
+watch it burn before the results. *Cost to change:* tuning numbers.
+
+**D183. The boss pulls ahead and your car drives itself.** The crash starts at least as fast as you are going and keeps
+90% of that speed through the spin-out, so the boss stays ahead. Your car holds its lane and eases off to keep the crash
+about 55 m ahead, braking as hard as an emergency stop (30 m/s², the brake pedal gives 14) when the boss died right in
+front of you. It always stops at least 45 m short of where the boss comes to rest. Tested for bosses killed 5 to 120 m
+ahead at up to top speed: the crash is 40 to 150 m ahead when it explodes. A boss can't be destroyed behind you (the
+rear weapons never destroy one), so that case isn't covered. *Cost to change:* tuning numbers.
+
+**D184. Nothing can hurt you after the boss dies.** From the kill to the results: no damage, wreck or bust; no heat
+change; no score (a kill during the finale is worth 0); no car fires, and enemy missiles and bullets in flight are
+cleared; no new traffic, police, roadblocks or speed traps appear. Other cars pass through your car rather than hit it,
+and the crashing boss touches nothing. *Cost to change:* medium.
+
+**D185. A wreck or bust in the same moment you win doesn't count.** As before the finale existed, the boss kill wins:
+no spare car is lost and the BUSTED banner is taken down. Your car keeps the armor it had (0), so the bonus is what it
+always was. A boss destroyed while you wait to respawn (a missile already on its way) ends the wait at once: the spare
+car is used, as it always was, and the finale plays from the new car. *Cost to change:* small.
+
+**D186. The flash.** One white flash at the explosion, 60% strength, fading out in a quarter of a second. It covers
+the road but not the HUD, so every readout stays legible. One flash is well under the three-a-second limit that
+matters for people sensitive to flashing light, so there is no setting for it. *Cost to change:* a setting.
+
+**D187. Skipping and pausing.** Space, Enter or pad A skips to the results; a key held down from the fight doesn't (only
+a new press). A skipped finale shows and plays no explosion. While it runs, "SPACE OR ENTER: SKIP" shows low in the
+middle of the screen. P (or the window losing focus) pauses it, and resuming returns to the finale; in practice, R from
+that pause restarts the mission. R alone does nothing during the finale. *Cost to change:* small.
+
+**D188. How the flip is drawn.** The game draws cars from behind as flat outlines, so a car turning end over end shows
+each of its faces in turn while that face points at you: the rear, the underside (axles, tyre ends, drive shaft), the
+front (the rear outline upside down), then the roof (the cabin and the boss's fins, twin fins or dome). Each face is
+squashed to its height on screen, with black fills so nothing behind shows through. A roll turns the rear outline
+about its middle. The boss explosion's three bursts and its sound now come at the explosion, not at the kill; the
+spin sound plays at the kill. *Cost to change:* medium.
+
+**D189. Snapshot scenes.** `--scene finale-spinoff,finale-roll,finale-flip` with `--finale-side left,right`,
+`--finale-turns 1|2` and `--finale-at` (seconds into the crash, a comma list) draw any moment of any crash. `--stress`
+also draws a finale part-way through in some frames.
+
+## Checks only you can do (boss finale)
+
+1. Beat a few bosses and watch each kind of crash: does each one read clearly as a spin-off, a roll or a flip?
+2. Is the boss big enough on screen? Your car now holds about 55 m back (the snapshots were made at 80 m, before that
+   change, and the boss looked small).
+3. Is the flash comfortable, and is one quarter of a second right?
+4. Do 4 seconds drag after every boss? (Space or Enter skips.)
+5. Does the boss's look (fins, twin fins or dome) stay recognisable while it rolls and flips?
+6. Hold Space through the killing shot: the finale should not skip until you press again.

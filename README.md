@@ -6,6 +6,11 @@ spy-style weapons, and missions that end with a boss car.
 Status: early. `spikes/ControlsLab` is a throwaway prototype for choosing the controls; see its
 `SPIKE-NOTES.md`. Requirements, architecture and tests come next.
 
+## In play
+
+When you beat a boss, its car crashes off the road and blows up before the results: a spin-off, a roll or a flip,
+different each time. Space, Enter or pad A skips straight to the results.
+
 ## Releases
 
 Push a version tag (for example `v0.1.0`) and `.github/workflows/release.yml` tests and publishes the game,

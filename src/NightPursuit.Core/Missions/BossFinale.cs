@@ -62,6 +62,10 @@ public sealed class BossFinale
 
     public FinaleChoice Choice { get; }
     public int BossId { get; }
+
+    /// <summary>Where the car will come to rest and blow up (distance along the road), known from the start.</summary>
+    public double RestDistance =>
+        _d0 + _v0 * (SpinOutSeconds * (1 + TripSpeedFraction) / 2 + TripSpeedFraction * OffRoadSeconds / 2);
     public double Elapsed { get; private set; }
 
     public double Distance { get; private set; }

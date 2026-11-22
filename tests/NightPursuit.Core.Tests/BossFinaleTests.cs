@@ -54,6 +54,15 @@ public class BossFinaleTests
         Assert.Equal(1000 + 68.4 + 54 * 1.3 / 2, f.Distance, 1e-6);      // then 35.1 m more: 103.5 m in all
     }
 
+    [Fact]
+    public void It_knows_from_the_start_where_it_will_come_to_rest()
+    {
+        var f = Start(FinaleKind.Roll, -1);
+        Assert.Equal(1103.5, f.RestDistance, 1e-6);
+        StepTo(f, BossFinale.ExplodeAt);
+        Assert.Equal(f.RestDistance, f.Distance, 1e-6);
+    }
+
     [Theory]
     [InlineData(-1)]
     [InlineData(1)]

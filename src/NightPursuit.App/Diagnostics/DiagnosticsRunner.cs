@@ -49,7 +49,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off", "no-sound" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off", "no-sound", "finale-spinoff", "finale-roll", "finale-flip" };
 
     static string _logPath = "diagnostics.log";
 
@@ -112,6 +112,24 @@ public static class DiagnosticsRunner
             damages.Add(d);
         }
 
+        // The finale scenes: --finale-side left|right (a comma list), --finale-turns 1|2, --finale-at seconds into the crash
+        // (a comma list; files get -left / -right and -t<seconds>). 2.52 is just after the explosion: the flash.
+        var finaleSides = new List<int>();
+        foreach (string text in (Arg(args, "--finale-side") ?? "right").Split(','))
+        {
+            if (text is not ("left" or "right")) { Error($"--finale-side needs left or right (a comma list is fine), not '{text}'"); return 2; }
+            finaleSides.Add(text == "left" ? -1 : 1);
+        }
+        string turnsText = Arg(args, "--finale-turns") ?? "1";
+        if (turnsText is not ("1" or "2")) { Error($"--finale-turns needs 1 or 2, not '{turnsText}'"); return 2; }
+        var finaleTimes = new List<double>();
+        foreach (string text in (Arg(args, "--finale-at") ?? "0.6,1.6,1.9,2.52,3.2").Split(','))
+        {
+            if (!double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out double at) || !(at >= 0 && at <= BossFinale.TotalSeconds))
+            { Error($"--finale-at needs seconds from 0 to {BossFinale.TotalSeconds} (a comma list is fine), not '{text}'"); return 2; }
+            finaleTimes.Add(at);
+        }
+
         foreach (string scene in scenes)
         {
             // With several scenes, out.png becomes out-<scene>.png; each starts from its own fresh run.
@@ -121,6 +139,18 @@ public static class DiagnosticsRunner
                 {
                     // With several text sizes or window sizes, the name gets -normal or -1280x720 too.
                     string named = WithSuffix(WithSuffix(file, textSizes.Count > 1 ? TextSizeNames[(int)textSize] : null), sizes.Count > 1 ? $"{width}x{height}" : null);
+                    if (scene.StartsWith("finale-", StringComparison.Ordinal))
+                    {
+                        foreach (int side in finaleSides)
+                            foreach (double at in finaleTimes)
+                            {
+                                SnapshotFinale = (side, turnsText == "2" ? 2 : 1, at);
+                                string f = WithSuffix(WithSuffix(named, finaleSides.Count > 1 ? (side < 0 ? "left" : "right") : null),
+                                                      "t" + at.ToString(CultureInfo.InvariantCulture));
+                                RenderScene(scene, mission, seconds, width, height, f, new GameSettings { TextSize = textSize }.TextScale);
+                            }
+                        continue;
+                    }
                     foreach (double damage in damages)
                     {
                         SnapshotDamage = damage;
@@ -183,6 +213,9 @@ public static class DiagnosticsRunner
     /// <summary>The windshield damage forced on the next snapshot, or -1 to leave the run's own.</summary>
     static double SnapshotDamage = -1;
 
+    /// <summary>The side, turns and moment (seconds into the crash) of the next finale snapshot.</summary>
+    static (int Side, int Turns, double At) SnapshotFinale = (1, 1, 1.6);
+
     static void RenderScene(string scene, string mission, double seconds, int width, int height, string path, double textScale = 1)
     {
         var run = NewRun(mission);
@@ -214,6 +247,12 @@ public static class DiagnosticsRunner
         else if (scene == "sound-off") view.SoundOff = true;   // the default scene with the SOUND OFF mark
         else if (scene == "no-sound") view.NoSound = true;   // the default scene with the NO SOUND mark
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
+        else if (scene.StartsWith("finale-", StringComparison.Ordinal))
+        {
+            PlaceOnOpenRoad(run.World);
+            var kind = scene switch { "finale-spinoff" => FinaleKind.SpinOff, "finale-roll" => FinaleKind.Roll, _ => FinaleKind.Flip };
+            PlaceFinale(run, view.Effects, mission, new FinaleChoice(kind, SnapshotFinale.Side, SnapshotFinale.Turns), SnapshotFinale.At);
+        }
         if (SnapshotDamage >= 0)
         {
             // --damage N shows the windshield as if the car's armor had fallen to 100 - N.
@@ -249,7 +288,7 @@ public static class DiagnosticsRunner
     static readonly (int W, int H)[] StressSizes = { (960, 540), (320, 200), (2560, 600) };
     static readonly double[] StressDistances = { -200, -60, -20, 3, 12, 30, 80, 200, 400, 700, 1000, 1300, 1490 };
     static readonly RunState[] StressStates =
-        { RunState.Playing, RunState.Playing, RunState.Paused, RunState.Respawning, RunState.Completed, RunState.GameOver };
+        { RunState.Playing, RunState.Playing, RunState.Paused, RunState.Respawning, RunState.Finale, RunState.Completed, RunState.GameOver };
 
     /// <summary>
     /// Renders every 10 m of mission 1's road, the proving ground's and the patrol ground's, each at three window sizes (and 0 x 0), with a
@@ -361,6 +400,7 @@ public static class DiagnosticsRunner
     {
         var w = run.World;
         var p = w.Player;
+        w.SetFinaleForDiagnostics(null);   // one world serves every frame: no finale left from the last one
         p.Distance = z;
         p.Lateral = Math.Sin(z / 300) * 6;
         p.Heading = Math.Sin(z / 170) * 0.35;   // nose up to 20 degrees either way
@@ -477,6 +517,18 @@ public static class DiagnosticsRunner
         run.ForceStateForDiagnostics(RunState.Playing);
         if (state == RunState.Paused) run.Handle(new GameAction(ActionKind.Pause));
         else if (state != RunState.Playing) run.ForceStateForDiagnostics(state, 1.5);
+        if (state == RunState.Finale && w.Agents.OfType<BossCar>().FirstOrDefault() is { } beaten)
+        {
+            // The boss part-way through its crash: each kind and side in turn, at a moment that moves with the frame,
+            // and the flash on every other one.
+            beaten.State = VehicleState.Wrecked;
+            var crash = new BossFinale(new FinaleChoice((FinaleKind)(frame % 3), frame % 2 == 0 ? -1 : 1, 1 + frame / 3 % 2),
+                                       beaten.Id, beaten.Distance, beaten.Lateral, 30, beaten.SpinAngle);
+            double until = frame * 0.37 % BossFinale.ExplodeAt;
+            while (crash.Elapsed < until) crash.Step(World.Step);
+            w.SetFinaleForDiagnostics(crash);
+            if (frame % 2 == 0) view.Effects.FlashAge = 0.05;
+        }
         view.ShowHelp = (frame / StressStates.Length) % 2 == 0;
         for (int i = 0; i < frame % 5; i++)   // 0 to 4 messages, every tone
             w.Publish(new Message(w.Time - i * 0.5, $"STRESS MESSAGE {i}  +{100 * i}", (Tone)((frame + i) % 3)));
@@ -999,6 +1051,32 @@ public static class DiagnosticsRunner
     }
 
     /// <summary>The mission's boss 45 m ahead at 65% health in phase 1, spun out (open armour) with 0.5 s of shield left.</summary>
+    /// <summary>
+    /// The player on open road at 60 m/s with the boss 40 m ahead in the same lane; the boss is destroyed with
+    /// <paramref name="choice"/> and the run plays its crash to <paramref name="at"/> seconds, feeding the effects, so a
+    /// moment just after the explosion (2.5 s) shows the flash and the bursts.
+    /// </summary>
+    static void PlaceFinale(MissionRun run, EffectList effects, string mission, FinaleChoice choice, double at)
+    {
+        var w = run.World;
+        var p = w.Player;
+        p.Speed = 60;
+        var boss = BossCar.Create(w.NextId(), LoadBoss(mission), p.Distance + 40, p.Lateral, 60);
+        boss.Armor = 1;
+        boss.PhaseIndex = boss.Definition.Phases.Count - 1;
+        AddBoss(run, boss, effects);
+        w.FinaleSource = () => choice;
+        w.Destroy(boss, KillCause.Missile);
+        effects.Absorb(w);
+        while (run.State is RunState.Playing or RunState.Finale && w.Finale is { } f && f.Elapsed < at - 1e-9)
+        {
+            run.Update(ControlFrame.Empty, World.Step);
+            effects.Absorb(w);
+            effects.Update(World.Step);
+        }
+        Progress($"finale: {choice.Kind} side {choice.Side} turns {choice.Turns} at {w.Finale?.Elapsed:0.00} s, state {run.State}, flash {effects.FlashAlpha:0.00}");
+    }
+
     static void PlaceBoss(MissionRun run, EffectList effects, string mission)
     {
         var p = run.World.Player;

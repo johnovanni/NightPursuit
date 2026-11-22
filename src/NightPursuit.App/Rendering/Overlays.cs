@@ -192,8 +192,20 @@ internal static class Overlays
     /// The respawn countdown, on a dark backing box so it stays readable over the help panel or bright scenery. Paused, mission
     /// complete and game over are screens now (ScreenHost), so nothing is drawn for them here.
     /// </summary>
+    /// <summary>The line shown while the beaten boss's crash plays.</summary>
+    public const string FinaleSkipHint = "SPACE OR ENTER: SKIP";
+
     public static void DrawState(DrawingContext dc, HudLayout l, MissionRun run)
     {
+        if (run.State == RunState.Finale)
+        {
+            // Small, low and centred, clear of the crash ahead and of the notice line just above the hood.
+            double k = l.T(1), size = 16, y = l.HoodTop - l.T(64);
+            double hintWidth = Math.Min(l.Width - 20, l.TextWidth(FinaleSkipHint, size, bold: true) + 30 * k);
+            dc.DrawRectangle(Neon.PanelFill, null, new Rect(l.HalfWidth - hintWidth / 2, y - 4 * k, Math.Max(0, hintWidth), 28 * k));
+            l.Centered(dc, FinaleSkipHint, y, size, Neon.TextWhite);
+            return;
+        }
         if (run.State != RunState.Respawning) return;
         var w = run.World;
         double boxWidth = Math.Min(l.Width - 20, l.T(760));

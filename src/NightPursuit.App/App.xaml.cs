@@ -45,8 +45,8 @@ public partial class App : Application
 
             var flow = new ScreenFlow(
                 isPractice => isPractice && practice is not null
-                    ? new Game(new[] { practice }, feel, settings, practice: true)
-                    : new Game(campaign, feel, settings),
+                    ? new Game(new[] { practice }, feel, settings, practice: true, finales: NewFinalePicker())
+                    : new Game(campaign, feel, settings, finales: NewFinalePicker()),
                 feel, settings, scores, store);
             if (practice is not null) flow.StartGame(practice: true);
             // After StartGame, so a load problem shows on the first screen (the title, or the practice briefing) instead of being cleared by it.
@@ -92,6 +92,12 @@ public partial class App : Application
     }
 
     /// <summary><c>--mission name</c> picks a practice mission in content/missions (letters, digits and '-' only); null without it.</summary>
+    /// <summary>
+    /// Each game picks its boss crashes from its own randomly seeded picker, so they differ from one game (and one
+    /// launch) to the next. Core stays repeatable: the seed is the only thing that changes.
+    /// </summary>
+    static FinalePicker NewFinalePicker() => new(new NightPursuit.Core.Common.SeededRng(Random.Shared.Next()));
+
     static string? MissionName(string[] args)
     {
         int i = Array.IndexOf(args, "--mission");

@@ -73,6 +73,12 @@ public sealed partial class World
         Tracers.RemoveAll(t => t.Hostile);
     }
 
+    /// <summary>
+    /// DIAGNOSTICS ONLY (used by <c>--stress</c>, which reuses one world for every frame, to draw a finale in some frames and
+    /// none in others). The game never calls this: a finale starts only when the boss is destroyed.
+    /// </summary>
+    public void SetFinaleForDiagnostics(BossFinale? finale) => Finale = finale;
+
     /// <summary>Takes down the banner on screen now (a "BUSTED" banner from the step the boss died, which no longer applies).</summary>
     internal void ClearAnnouncement() => _announcement = null;
 }

@@ -71,6 +71,15 @@ public sealed class EffectList
     /// <summary>The muzzle flash is shown for this many seconds of world time after a shot.</summary>
     public const double MuzzleFlashSeconds = 0.05;
 
+    /// <summary>The flash's peak strength (0.6 white) and how long it takes to fade out, seconds.</summary>
+    public const double FlashPeak = 0.6, FlashSeconds = 0.25;
+
+    /// <summary>Seconds since the boss explosion's flash began (infinity when there is none). Frozen behind screens, like the explosions.</summary>
+    public double FlashAge { get; set; } = double.PositiveInfinity;
+
+    /// <summary>How strong the white flash is now: 0.6 at the explosion, fading to 0 over 0.25 s. One per boss.</summary>
+    public double FlashAlpha => FlashAge is >= 0 and < FlashSeconds ? FlashPeak * (1 - FlashAge / FlashSeconds) : 0;
+
     public void Spawn(double distance, double lateral) => _explosions.Add(new Explosion(distance, lateral, _nextSeed++));
 
     /// <summary>A boss kill: three staggered explosions over 0.6 s (the first now).</summary>
@@ -112,13 +121,26 @@ public sealed class EffectList
         if (shot) MarkShot(w.Time, w.Loadout.Guns.LeftGun);
 
         if (w.Events.Count == 0) return;   // nothing happened this advance
+        // The beaten boss blows up at the end of its crash: the three bursts and the one flash.
+        foreach (var x in w.Events.OfType<BossExploded>())
+        {
+            SpawnBossKill(x.Distance, x.Lateral);
+            FlashAge = 0;
+        }
         var destroyed = w.Events.OfType<VehicleDestroyed>().ToList();
         if (destroyed.Count == 0) return;
-        // A kill that leaves a wreck (gunfire, missile, strike) puts it at the car's last position; the newest wrecks belong to the newest kills.
+        // A kill that leaves a wreck (gunfire, missile, strike) puts it at the car's last position; the newest wrecks belong
+        // to the newest kills. The boss leaves none at its kill: it crashes first (the finale).
         var wrecks = w.Hazards.OfType<Wreck>().ToList();
-        int wreckIndex = wrecks.Count - destroyed.Count(e => e.Cause.LeavesWreck());
+        int wreckIndex = wrecks.Count - destroyed.Count(e => e.Cause.LeavesWreck() && e.Kind != AgentKind.Boss);
         foreach (var e in destroyed)
         {
+            if (e.Kind == AgentKind.Boss)
+            {
+                if (e.Cause == KillCause.Satellite && w.Agents.FirstOrDefault(a => a.Id == e.VehicleId) is { } beaten)
+                    SpawnBeam(beaten.Distance, beaten.Lateral);
+                continue;   // its explosion waits for the end of the crash
+            }
             double distance, lateral;
             if (e.Cause.LeavesWreck())
             {
@@ -132,8 +154,7 @@ public sealed class EffectList
                 if (car is null) continue;
                 (distance, lateral) = (car.Distance, car.Lateral);
             }
-            if (e.Kind == AgentKind.Boss) SpawnBossKill(distance, lateral);
-            else Spawn(distance, lateral);
+            Spawn(distance, lateral);
             if (e.Cause == KillCause.Satellite) SpawnBeam(distance, lateral);
         }
     }
@@ -148,6 +169,7 @@ public sealed class EffectList
     /// <summary>Forgets every effect (a new run, or a diagnostic scene that places its own).</summary>
     public void Clear()
     {
+        FlashAge = double.PositiveInfinity;
         _explosions.Clear();
         _beams.Clear();
         _pending.Clear();
@@ -157,6 +179,7 @@ public sealed class EffectList
 
     public void Update(double seconds)
     {
+        FlashAge += seconds;
         foreach (var x in _explosions) x.Age += seconds;
         _explosions.RemoveAll(x => x.Age >= Explosion.Life);
         for (int i = _pending.Count - 1; i >= 0; i--)

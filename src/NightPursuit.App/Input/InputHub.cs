@@ -45,11 +45,14 @@ public sealed class InputHub
             _ => null,
         };
         if (a is GameAction ga && !isRepeat) _actions.Enqueue(ga);
+        // Enter or a new press of Space skips the boss's crash (ignored at any other time). A key held down from the
+        // fight repeats, and repeats never skip.
+        if (key is Key.Enter or Key.Space && !isRepeat) _actions.Enqueue(new GameAction(ActionKind.SkipFinale));
         MenuKey? m = MenuKeyFor(key);
         // Holding a direction scrolls a menu or a letter; nothing else repeats.
         if (m is MenuKey mk && (!isRepeat || mk.Input is MenuInput.Up or MenuInput.Down or MenuInput.Left or MenuInput.Right))
             _menu.Enqueue(mk);
-        return a is not null || m is not null;
+        return a is not null || m is not null || key == Key.Space;
     }
 
     /// <summary>The menu key for a keyboard key: arrows and W A S D move (W A S D also carry their letter, for typing initials), other letters type, Enter and Space confirm, Esc goes back.</summary>
