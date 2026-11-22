@@ -8,7 +8,8 @@ using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Missions;
 
-public enum RunState { Playing, Paused, Respawning, Completed, GameOver }
+/// <summary>Finale: the boss is beaten and its crash plays (about 4 s) before the run is Completed.</summary>
+public enum RunState { Playing, Paused, Respawning, Finale, Completed, GameOver }
 
 /// <summary>What a run carries in from the one before it (a fresh game uses the defaults).</summary>
 public sealed record RunStart(int Score = 0, int SpareCars = 3, int SchemeIndex = 0);
@@ -25,7 +26,9 @@ public sealed class MissionRun
     readonly MissionDefinition _def;
     readonly FeelSettings _feel;
     readonly int _seed;
+    readonly Func<FinaleChoice>? _nextFinale;
     double _crashAt;
+    RunState _pausedFrom = RunState.Playing;
 
     public World World { get; private set; } = null!;
     public MissionDirector Director { get; private set; } = null!;
@@ -35,12 +38,15 @@ public sealed class MissionRun
 
     public RunStart Start { get; }
 
-    public MissionRun(MissionDefinition def, FeelSettings feel, int seed, RunStart? start = null)
+    /// <param name="nextFinale">Gives the boss's crash when it dies (a game passes its picker); null always gives
+    /// <see cref="FinaleChoice.Default"/>.</param>
+    public MissionRun(MissionDefinition def, FeelSettings feel, int seed, RunStart? start = null, Func<FinaleChoice>? nextFinale = null)
     {
         Start = start ?? new RunStart();
         _def = def;
         _feel = feel;
         _seed = seed;
+        _nextFinale = nextFinale;
         Rebuild();
     }
 
@@ -51,6 +57,7 @@ public sealed class MissionRun
         World.Score = Start.Score;
         World.Player.SpareCars = Start.SpareCars;
         if (Start.SchemeIndex != 0) World.Handle(new GameAction(ActionKind.SelectScheme, Start.SchemeIndex));
+        World.FinaleSource = _nextFinale ?? (() => FinaleChoice.Default);
         Director = new MissionDirector(_def);
         State = RunState.Playing;
         StateTimer = 0;
@@ -67,6 +74,10 @@ public sealed class MissionRun
             case RunState.Respawning:
                 World.Advance(ControlFrame.Empty, frameSeconds, AfterRespawningStep);   // the world keeps moving while the wreck coasts
                 break;
+
+            case RunState.Finale:
+                World.Advance(ControlFrame.Empty, frameSeconds, AfterFinaleStep);   // the car drives itself
+                break;
         }
     }
 
@@ -76,14 +87,56 @@ public sealed class MissionRun
     bool AfterPlayingStep()
     {
         Director.Update(World);
-        if (Director.Completed) { State = RunState.Completed; return true; }   // crossing the finish beats a wreck in the same step
+        if (Director.Completed)   // beating the boss (or crossing the finish) beats a wreck in the same step
+        {
+            if (World.InFinale) EnterFinale();
+            else State = RunState.Completed;
+            return true;
+        }
         if (World.Player.State != VehicleState.Wrecked) return false;
         OnWrecked();
         return true;
     }
 
+    bool AfterFinaleStep()
+    {
+        if (!World.Finale!.Done) return false;
+        State = RunState.Completed;
+        return true;
+    }
+
+    /// <summary>
+    /// The boss is beaten: its crash plays before the run is Completed. A wreck or bust earlier in the same step does not
+    /// count (no spare car is lost, as before the finale existed): the car drives on with the armor it had.
+    /// </summary>
+    void EnterFinale()
+    {
+        var p = World.Player;
+        if (p.State == VehicleState.Wrecked)
+        {
+            p.State = VehicleState.Driving;
+            p.StateTimer = 0;
+        }
+        if (World.BustedPending)
+        {
+            World.BustedPending = false;
+            World.ClearAnnouncement();   // the BUSTED banner no longer applies
+        }
+        State = RunState.Finale;
+        StateTimer = 0;
+    }
+
     bool AfterRespawningStep()
     {
+        if (World.InFinale)
+        {
+            // The boss died while the new car was on its way (a missile or strike already in flight): the respawn
+            // happens now, using the spare as it always did, and the finale plays from the new car.
+            Respawn();
+            Director.Update(World);
+            EnterFinale();
+            return true;
+        }
         StateTimer -= World.Step;
         if (StateTimer > 0) return false;
         Respawn();
@@ -103,8 +156,17 @@ public sealed class MissionRun
                 else World.Publish(new Message(World.Time, "PRESS P TO PAUSE, THEN R TO RESTART", Tone.Info));
                 break;
             case ActionKind.Pause:
-                if (State == RunState.Playing) State = RunState.Paused;
-                else if (State == RunState.Paused) State = RunState.Playing;
+                if (State is RunState.Playing or RunState.Finale)
+                {
+                    _pausedFrom = State;
+                    State = RunState.Paused;
+                }
+                else if (State == RunState.Paused) State = _pausedFrom;
+                break;
+            case ActionKind.SkipFinale:
+                if (State != RunState.Finale) break;   // only a new press during the finale; never passed to the world
+                World.Finale!.Skip();
+                State = RunState.Completed;
                 break;
             default:
                 if (State == RunState.Playing) World.Handle(a);

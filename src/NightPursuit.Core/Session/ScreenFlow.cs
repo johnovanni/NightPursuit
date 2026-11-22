@@ -411,7 +411,7 @@ public sealed class ScreenFlow
         switch (a.Kind)
         {
             case ActionKind.ToggleHelp:
-                _pausedForHelp = run.State == RunState.Playing;
+                _pausedForHelp = run.State is RunState.Playing or RunState.Finale;
                 if (_pausedForHelp) run.Handle(new GameAction(ActionKind.Pause));
                 Open(Screen.Controls);
                 break;
@@ -450,6 +450,6 @@ public sealed class ScreenFlow
     public void FocusLost()
     {
         if (Current != Screen.Play || Game?.Run is not { } run) return;
-        if (run.State == RunState.Playing) run.Handle(new GameAction(ActionKind.Pause));
+        if (run.State is RunState.Playing or RunState.Finale) run.Handle(new GameAction(ActionKind.Pause));
     }
 }

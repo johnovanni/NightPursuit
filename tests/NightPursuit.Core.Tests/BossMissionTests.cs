@@ -265,8 +265,10 @@ public class BossMissionTests
         run.World.Destroy(boss, KillCause.Missile);
         Assert.Contains(run.World.Events, e => e is Message { Text: "TEST DESTROYED  +5000", Tone: Tone.Good });
         run.Update(ControlFrame.Empty, World.Step);
-        Assert.Equal(RunState.Completed, run.State);
+        Assert.Equal(RunState.Finale, run.State);          // its crash plays first
         Assert.True(run.Director.Completed);
+        for (int i = 0; i < 1000 && run.State == RunState.Finale; i++) run.Update(ControlFrame.Empty, 1 / 60.0);
+        Assert.Equal(RunState.Completed, run.State);
     }
 
     [Fact]
@@ -443,13 +445,14 @@ public class BossMissionTests
         boss.PushVel = 0;
         run.World.Destroy(boss, KillCause.Rammed);
         double at = boss.Distance;
-        WaitForRespawn(run);
-        Assert.Equal(RunState.Playing, run.State);
+        // The kill ends the wait at once: the respawn happens now and the boss's crash plays (the finale).
+        run.Update(ControlFrame.Empty, World.Step);
+        Assert.Equal(RunState.Finale, run.State);
         Assert.Contains(boss, run.World.Agents);
         Assert.Equal(VehicleState.Wrecked, boss.State);
-        Assert.Equal(at, boss.Distance);
+        Assert.True(boss.Distance >= at);
 
-        run.Update(ControlFrame.Empty, World.Step);
+        for (int i = 0; i < 1000 && run.State == RunState.Finale; i++) run.Update(ControlFrame.Empty, 1 / 60.0);
         Assert.Equal(RunState.Completed, run.State);
     }
 

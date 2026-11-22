@@ -1,3 +1,4 @@
+using NightPursuit.Core.Common;
 using NightPursuit.Core.Control;
 using NightPursuit.Core.Missions;
 using NightPursuit.Core.Simulation;
@@ -13,7 +14,10 @@ public sealed class Game
     int _score;
     int _spareCars = 3;
 
-    public Game(IReadOnlyList<MissionDefinition> missions, FeelSettings feel, GameSettings settings, bool practice = false, int seed = 1)
+    /// <param name="finales">Picks each boss crash for the whole game (the App seeds one from the clock); null makes one
+    /// from <paramref name="seed"/>.</param>
+    public Game(IReadOnlyList<MissionDefinition> missions, FeelSettings feel, GameSettings settings, bool practice = false, int seed = 1,
+        FinalePicker? finales = null)
     {
         if (missions.Count == 0) throw new ArgumentException("A game needs at least one mission.", nameof(missions));
         Missions = missions;
@@ -21,7 +25,11 @@ public sealed class Game
         _settings = settings;
         Practice = practice;
         _seed = seed;
+        Finales = finales ?? new FinalePicker(new SeededRng(seed));
     }
+
+    /// <summary>Picks every boss crash in this game, so no two in a row are alike, restarts included.</summary>
+    public FinalePicker Finales { get; }
 
     public IReadOnlyList<MissionDefinition> Missions { get; }
     public int MissionIndex { get; private set; }
@@ -41,7 +49,7 @@ public sealed class Game
     public void StartMission()
     {
         if (Stage != GameStage.Briefing) return;
-        Run = new MissionRun(Mission, _feel, _seed + MissionIndex, new RunStart(_score, _spareCars, _settings.SchemeIndex));
+        Run = new MissionRun(Mission, _feel, _seed + MissionIndex, new RunStart(_score, _spareCars, _settings.SchemeIndex), Finales.Next);
         Stage = GameStage.Playing;
     }
 

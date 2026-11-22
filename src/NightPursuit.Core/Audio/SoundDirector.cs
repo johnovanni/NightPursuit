@@ -258,7 +258,7 @@ public sealed class SoundDirector(MusicSlots music)
     static LiveState Live(ScreenFlow flow)
     {
         if (flow.Current != Screen.Play || flow.Game?.Run is not { } run
-            || run.State is not (RunState.Playing or RunState.Respawning)) return LiveState.Silent;
+            || run.State is not (RunState.Playing or RunState.Respawning or RunState.Finale)) return LiveState.Silent;
         var w = run.World;
         var p = w.Player;
         double speed = Math.Max(0, p.Speed);
