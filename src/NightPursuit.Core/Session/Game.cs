@@ -39,6 +39,8 @@ public sealed class Game
     /// <summary>Null in Briefing; the last run is kept afterwards so the frozen road can show behind a screen.</summary>
     public MissionRun? Run { get; private set; }
     public MissionBonus? LastBonus { get; private set; }
+    /// <summary>Spare cars the last mission bonus earned (the 25,000-point marks it passed), for the results screen.</summary>
+    public int LastExtraCars { get; private set; }
     public bool QuitEarly { get; private set; }
 
     public int Score => Stage == GameStage.Playing && Run is not null ? Run.World.Score : _score;
@@ -50,6 +52,7 @@ public sealed class Game
     {
         if (Stage != GameStage.Briefing) return;
         Run = new MissionRun(Mission, _feel, _seed + MissionIndex, new RunStart(_score, _spareCars, _settings.SchemeIndex), Finales.Next);
+        LastExtraCars = 0;
         Stage = GameStage.Playing;
     }
 
@@ -59,11 +62,21 @@ public sealed class Game
         Run.Update(held, seconds);
         if (Run.State == RunState.Completed)
         {
-            bool carLost = Run.World.Player.SpareCars < Run.Start.SpareCars;
+            bool carLost = Run.World.Player.CarsLost > 0;   // not spare cars at start and end: an extra car would hide a loss
             LastBonus = MissionBonus.For(Mission, Run.World.Player.Armor, carLost);
             _score = Run.World.Score + LastBonus.Total;
             _spareCars = Run.World.Player.SpareCars;
+            LastExtraCars = ExtraCars.Kept(ExtraCars.Earned(Run.World.Score, _score), _spareCars);
+            _spareCars += LastExtraCars;
             Stage = GameStage.MissionComplete;
+        }
+        else if (Run.State == RunState.Escaped)
+        {
+            // You keep the points; the escape costs a spare car, and with none left the game is over (owner, 2026-11-23).
+            _score = Run.World.Score;
+            int spares = Run.World.Player.SpareCars;
+            _spareCars = Math.Max(0, spares - 1);
+            Stage = spares <= 0 ? GameStage.GameOver : GameStage.MissionFailed;
         }
         else if (Run.State == RunState.GameOver)
         {
@@ -88,13 +101,21 @@ public sealed class Game
     public bool RestartMission()
     {
         if (!Practice || Run is null || !Run.CanRestart) return false;
-        if (Stage is not (GameStage.Playing or GameStage.MissionComplete or GameStage.GameOver)) return false;
+        if (Stage is not (GameStage.Playing or GameStage.MissionComplete or GameStage.GameOver or GameStage.MissionFailed)) return false;
         Run.Handle(new GameAction(ActionKind.Restart));
         Stage = GameStage.Playing;
         QuitEarly = false;
         // The rebuild restores the scheme the run started with; the player may have changed it since.
         Run.World.Handle(new GameAction(ActionKind.SelectScheme, _settings.SchemeIndex));
         return true;
+    }
+
+    /// <summary>After the boss escaped: back to the same mission's briefing, with the score and spare cars it left.</summary>
+    public void RetryMission()
+    {
+        if (Stage != GameStage.MissionFailed) return;
+        Run = null;
+        Stage = GameStage.Briefing;
     }
 
     public void Continue()

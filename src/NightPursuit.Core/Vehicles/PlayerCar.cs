@@ -4,6 +4,9 @@ public sealed class PlayerCar() : Vehicle(VehicleStats.Player)
 {
     public override Faction Faction => Faction.Player;
 
+    /// <summary>Cars wrecked and replaced in this run (an earned extra car doesn't hide one from the clean bonus).</summary>
+    public int CarsLost { get; set; }
+
     /// <summary>Pedal and wheel positions as last applied (for the HUD).</summary>
     public double Throttle { get; set; }
     public double Brake { get; set; }

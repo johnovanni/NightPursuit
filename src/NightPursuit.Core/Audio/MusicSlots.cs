@@ -56,7 +56,7 @@ public sealed class MusicSlots(MusicManifest manifest)
             Screen.Play or Screen.Pause when _bossSeen && mission?.Boss is { } boss => (MusicSlot.BossTheme, boss),
             Screen.Play or Screen.Pause => (MusicSlot.MissionTheme, mission?.Theme),
             Screen.MissionComplete => (MusicSlot.Results, manifest.Results),
-            Screen.GameOver => Fallback(MusicSlot.GameOver, manifest.GameOver),
+            Screen.GameOver or Screen.MissionFailed => Fallback(MusicSlot.GameOver, manifest.GameOver),
             Screen.Finished => Fallback(MusicSlot.Finished, manifest.Finished),
             _ => (MusicSlot.None, null),
         };

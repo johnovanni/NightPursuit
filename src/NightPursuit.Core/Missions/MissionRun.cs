@@ -8,8 +8,11 @@ using NightPursuit.Core.Weapons;
 
 namespace NightPursuit.Core.Missions;
 
-/// <summary>Finale: the boss is beaten and its crash plays (about 4 s) before the run is Completed.</summary>
-public enum RunState { Playing, Paused, Respawning, Finale, Completed, GameOver }
+/// <summary>
+/// Finale: the boss is beaten and its crash plays (about 4 s) before the run is Completed. Escaped: the boss got away
+/// (the mission failed).
+/// </summary>
+public enum RunState { Playing, Paused, Respawning, Finale, Completed, GameOver, Escaped }
 
 /// <summary>What a run carries in from the one before it (a fresh game uses the defaults).</summary>
 public sealed record RunStart(int Score = 0, int SpareCars = 3, int SchemeIndex = 0);
@@ -37,6 +40,8 @@ public sealed class MissionRun
     public double StateTimer { get; private set; }
 
     public RunStart Start { get; }
+    /// <summary>Watches for the boss getting away (its warning and countdown are drawn from here).</summary>
+    public BossEscapeWatch Escape { get; private set; } = new();
 
     /// <param name="nextFinale">Gives the boss's crash when it dies (a game passes its picker); null always gives
     /// <see cref="FinaleChoice.Default"/>.</param>
@@ -59,6 +64,7 @@ public sealed class MissionRun
         if (Start.SchemeIndex != 0) World.Handle(new GameAction(ActionKind.SelectScheme, Start.SchemeIndex));
         World.FinaleSource = _nextFinale ?? (() => FinaleChoice.Default);
         Director = new MissionDirector(_def);
+        Escape = new BossEscapeWatch();
         State = RunState.Playing;
         StateTimer = 0;
     }
@@ -91,6 +97,12 @@ public sealed class MissionRun
         {
             if (World.InFinale) EnterFinale();
             else State = RunState.Completed;
+            return true;
+        }
+        if (Escape.Update(World, Director.Boss, World.Step))
+        {
+            World.Publish(new Message(World.Time, "THE BOSS ESCAPED", Tone.Bad));
+            State = RunState.Escaped;
             return true;
         }
         if (World.Player.State != VehicleState.Wrecked) return false;
@@ -144,7 +156,7 @@ public sealed class MissionRun
     }
 
     /// <summary>R restarts only when the run is paused or over, so one stray key can't throw a run away (decision D13).</summary>
-    public bool CanRestart => State is RunState.Paused or RunState.Completed or RunState.GameOver;
+    public bool CanRestart => State is RunState.Paused or RunState.Completed or RunState.GameOver or RunState.Escaped;
 
     public void Handle(GameAction a)
     {
@@ -208,6 +220,7 @@ public sealed class MissionRun
         bool InZone(double d) => d >= back - RespawnClearRadius && d <= crash + RespawnClearRadius;
         p.Distance = back;
         p.SpareCars--;
+        p.CarsLost++;
         p.Armor = 100;
         p.WorstDamage = 0;   // a new car, a clean windshield
         p.Speed = 0;

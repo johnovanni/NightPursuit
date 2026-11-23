@@ -3,7 +3,7 @@ using NightPursuit.Core.Missions;
 
 namespace NightPursuit.Core.Session;
 
-public enum Screen { Title, Briefing, Play, Pause, Settings, Controls, QuitConfirm, MissionComplete, GameOver, Finished, EnterInitials, HighScores }
+public enum Screen { Title, Briefing, Play, Pause, Settings, Controls, QuitConfirm, MissionComplete, GameOver, Finished, EnterInitials, HighScores, MissionFailed }
 
 /// <summary>Which screen is showing and what each key does there. The game is stepped only while the screen is Play.</summary>
 public sealed class ScreenFlow
@@ -204,6 +204,7 @@ public sealed class ScreenFlow
                 break;
             case Screen.QuitConfirm: OnQuitConfirm(key); break;
             case Screen.MissionComplete: OnMissionComplete(key); break;
+            case Screen.MissionFailed: OnMissionFailed(key); break;
             case Screen.GameOver:
             case Screen.Finished: OnEnd(key); break;
             case Screen.EnterInitials: OnInitials(key); break;
@@ -363,6 +364,16 @@ public sealed class ScreenFlow
         Go(g.Stage == GameStage.Finished ? Screen.Finished : Screen.Briefing);
     }
 
+    /// <summary>The boss escaped: Enter tries the mission again from its briefing; R in practice restarts it at once.</summary>
+    void OnMissionFailed(MenuKey key)
+    {
+        var g = Game!;
+        if (IsLetter(key, 'R') && g.Practice) { Restart(); return; }
+        if (key.Input != MenuInput.Confirm) return;
+        g.RetryMission();
+        Go(Screen.Briefing);
+    }
+
     void OnEnd(MenuKey key)
     {
         var g = Game!;
@@ -444,6 +455,7 @@ public sealed class ScreenFlow
         if (g.Stage == GameStage.MissionComplete) Go(Screen.MissionComplete);
         else if (g.Stage == GameStage.GameOver) Go(Screen.GameOver);
         else if (g.Stage == GameStage.Finished) Go(Screen.Finished);
+        else if (g.Stage == GameStage.MissionFailed) Go(Screen.MissionFailed);
         else if (g.Run?.State == RunState.Paused) Go(Screen.Pause);
     }
 

@@ -123,7 +123,7 @@ public sealed partial class World
                     EnemyMissile.GunTargetHalfLength, EnemyMissile.GunTargetHalfWidth, EnemyMissile.GunTargetMargin)) continue;
             t.Dead = true;
             m.Dead = true;
-            Score += EnemyMissile.ShotDownPoints;
+            AddScore(EnemyMissile.ShotDownPoints);
             Publish(new EnemyMissileEnded(Time, m.Id, MissileResult.ShotDown));
             Publish(new Message(Time, $"MISSILE SHOT DOWN +{EnemyMissile.ShotDownPoints}", Tone.Good));
             return true;

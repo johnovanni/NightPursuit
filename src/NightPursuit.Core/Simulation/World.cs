@@ -483,6 +483,22 @@ public sealed partial class World
     /// Kills an enemy car and scores it. Gunfire, missiles and satellite strikes leave a sliding <see cref="Wreck"/> and removes the car at the end of
     /// the step; other causes keep the car as Wrecked for 1.5 s, then it is removed.
     /// </summary>
+    /// <summary>
+    /// Adds points to the score, and a spare car (with "EXTRA CAR") for each 25,000-point mark passed, up to 5 spare cars.
+    /// Every score change in play goes through here.
+    /// </summary>
+    public void AddScore(int points)
+    {
+        if (points <= 0) return;
+        int before = Score;
+        Score += points;
+        int kept = ExtraCars.Kept(ExtraCars.Earned(before, Score), Player.SpareCars);
+        if (kept <= 0) return;
+        Player.SpareCars += kept;
+        Publish(new ExtraCarEarned(Time, kept));
+        Publish(new Message(Time, "EXTRA CAR", Tone.Good));
+    }
+
     public void Destroy(AgentCar car, KillCause cause)
     {
         if (car.State == VehicleState.Wrecked || _removals.Contains(car)) return;
@@ -492,7 +508,7 @@ public sealed partial class World
         var faction = car.Faction;
         // Civilians and police never change the score, and nothing scores once the boss is beaten.
         int points = faction == Faction.Hostile && !finaleRunning ? car.Stats.Points : 0;
-        Score += points;
+        AddScore(points);
         Publish(new VehicleDestroyed(Time, car.Id, car.Kind, cause, points, faction));
         if (faction == Faction.Hostile)
         {

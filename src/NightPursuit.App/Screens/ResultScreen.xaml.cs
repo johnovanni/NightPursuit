@@ -36,6 +36,9 @@ public partial class ResultScreen : UserControl
                     Add(BonusLine($"ARMOR LEFT {b.ArmorLeft} X 10", b.ArmorPoints), "TextBody", "TextWhite");
                     Add(BonusLine(b.NoCarLost ? "NO CAR LOST" : "A CAR WAS LOST", b.CleanPoints), "TextBody", "TextWhite");
                 }
+                // The bonus passed a 25,000-point mark (an extra car earned in play says so in the message line instead).
+                if (g.LastExtraCars > 0)
+                    Add(g.LastExtraCars == 1 ? "EXTRA CAR" : $"{g.LastExtraCars} EXTRA CARS", "TextHeading", "TextGreen", bold: true, top: 10);
                 Add($"SCORE {g.Score:00000}   SPARE CARS {g.SpareCars}", "TextHeading", "TextCyan", bold: true, top: 14);
                 KeyText.Text = g.Practice ? PracticeKeysFor(g) : g.MissionIndex + 1 < g.Missions.Count ? "ENTER  NEXT MISSION" : "ENTER  CONTINUE";
                 break;
