@@ -45,9 +45,9 @@ public sealed class InputHub
             _ => null,
         };
         if (a is GameAction ga && !isRepeat) _actions.Enqueue(ga);
-        // Enter or a new press of Space skips the boss's crash (ignored at any other time). A key held down from the
-        // fight repeats, and repeats never skip.
-        if (key is Key.Enter or Key.Space && !isRepeat) _actions.Enqueue(new GameAction(ActionKind.SkipFinale));
+        // Enter skips the boss's crash (ignored at any other time). Never Space: it is the fire key, and pressing it again
+        // and again in the fight skipped the crash as soon as skipping was allowed (owner, 2026-11-22).
+        if (key == Key.Enter && !isRepeat) _actions.Enqueue(new GameAction(ActionKind.SkipFinale));
         MenuKey? m = MenuKeyFor(key);
         // Holding a direction scrolls a menu or a letter; nothing else repeats.
         if (m is MenuKey mk && (!isRepeat || mk.Input is MenuInput.Up or MenuInput.Down or MenuInput.Left or MenuInput.Right))

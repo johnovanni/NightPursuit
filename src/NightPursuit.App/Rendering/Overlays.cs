@@ -189,7 +189,7 @@ internal static class Overlays
     }
 
     /// <summary>The line shown while the beaten boss's crash plays.</summary>
-    public const string FinaleSkipHint = "SPACE OR ENTER: SKIP";
+    public const string FinaleSkipHint = "ENTER OR PAD Y: SKIP";
 
     /// <summary>
     /// The respawn countdown, on a dark backing box so it stays readable over the help panel or bright scenery. Paused, mission

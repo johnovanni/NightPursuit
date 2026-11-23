@@ -9,7 +9,7 @@ Status: early. `spikes/ControlsLab` is a throwaway prototype for choosing the co
 ## In play
 
 When you beat a boss, its car crashes off the road and blows up before the results: a spin-off, a roll or a flip,
-different each time. Space, Enter or pad A skips straight to the results.
+different each time. Enter (or Y on a gamepad) skips straight to the results.
 
 ## Releases
 

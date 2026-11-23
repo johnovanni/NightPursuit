@@ -1710,7 +1710,7 @@ car is used, as it always was, and the finale plays from the new car. *Cost to c
 the road but not the HUD, so every readout stays legible. One flash is well under the three-a-second limit that
 matters for people sensitive to flashing light, so there is no setting for it. *Cost to change:* a setting.
 
-**D187. Skipping and pausing.** Space, Enter or pad A skips to the results; a key held down from the fight doesn't (only
+**D187. Skipping and pausing.** (Keys changed by D190.) Space, Enter or pad A skips to the results; a key held down from the fight doesn't (only
 a new press). Not in the first second, though: if you fire by tapping Space, your next tap would otherwise skip the
 crash you just earned (the reviewer's point; my call). A skipped finale shows and plays no explosion. From the first
 second, "SPACE OR ENTER: SKIP" shows low in the middle of the screen. P (or the window losing focus) pauses it, and resuming returns to the finale; in practice, R from
@@ -1752,3 +1752,11 @@ also draws a finale part-way through in some frames.
   sliver of armor (about 10 bonus points).
 - Two tiny timing details: the hold after the explosion is 1/120 s short, and an ordinary kill in the same frame as the
   explosion can draw its burst at the boss's wreck.
+
+## After your first play of the finale (2026-11-22)
+
+**D190. Skip is Enter (or Y on a gamepad), never the fire button.** You saw only the start of a flip, then the results.
+The cause: Space and pad A skipped the finale, but they are also the fire buttons, so the next press of fire after the
+first second skipped the crash you had just earned. Holding fire never skipped; pressing it again did. Now only Enter
+and pad Y (cruise, which does nothing during the finale) skip it, and the hint reads "ENTER OR PAD Y: SKIP". The
+one-second wait stays. *Cost to change:* small.

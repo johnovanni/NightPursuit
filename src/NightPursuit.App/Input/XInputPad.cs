@@ -79,7 +79,8 @@ public sealed class XInputPad
         if ((pressed & DPadDown) != 0) actions.Enqueue(new GameAction(ActionKind.LeverDown));
         if ((pressed & Start) != 0) actions.Enqueue(new GameAction(ActionKind.Pause));
         if ((pressed & Back) != 0) actions.Enqueue(new GameAction(ActionKind.Restart));
-        if ((pressed & A) != 0) actions.Enqueue(new GameAction(ActionKind.SkipFinale));   // a new press only: held A is fire
+        // Y skips the boss's crash. Never A: it is the fire button (see InputHub). Y is cruise, which does nothing then.
+        if ((pressed & Y) != 0) actions.Enqueue(new GameAction(ActionKind.SkipFinale));
 
         if ((pressed & DPadUp) != 0) menu.Enqueue(new MenuKey(MenuInput.Up));
         if ((pressed & DPadDown) != 0) menu.Enqueue(new MenuKey(MenuInput.Down));
