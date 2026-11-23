@@ -279,6 +279,7 @@ public class BossEscapeTests
         EscapeNow(g);
         Assert.Equal(GameStage.MissionFailed, g.Stage);
         Assert.Equal(1500, g.Score);
+        Assert.True(g.BossEscaped);
         Assert.Equal(1, g.SpareCars);
 
         g.RetryMission();
@@ -301,6 +302,7 @@ public class BossEscapeTests
         Assert.Equal(GameStage.GameOver, g.Stage);
         Assert.Equal(1200, g.Score);
         Assert.Equal(0, g.SpareCars);
+        Assert.True(g.BossEscaped);                             // the game-over screen says why
     }
 
     // ---- the screens ----

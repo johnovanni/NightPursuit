@@ -59,6 +59,13 @@ public sealed class BossMind
     public const double ReverseSeconds = 5, RamGivesUpBeyond = 120;
     /// <summary>What the ram costs you (armor points) and the boss (share of its full health).</summary>
     public const double RamHurtsYou = 10, RamHurtsBoss = 0.04;
+    /// <summary>Shooting back that hasn't started aiming in this long, s, has failed and ends.</summary>
+    public const double ShootBackMustAimWithin = 3.5;   // the gunner holds 2.5 s between bursts
+    /// <summary>
+    /// It only chooses to shoot back within this far ahead of you, m: braking hard from 90 mph it still slides on a little,
+    /// and its gunner aims from no farther than 90 m.
+    /// </summary>
+    public const double ShootBackWithin = 70;
 
     public BossTactic Tactic { get; private set; }
     public RamStage RamStage { get; private set; }
@@ -76,6 +83,9 @@ public sealed class BossMind
     double _yourArmorAtStart;
     BossTactic? _started;
     bool _reversingCue;
+    bool _aimed;
+    /// <summary>Weapon tactics and rams already tried while you have been hanging back without a break: not tried again.</summary>
+    readonly HashSet<BossTactic> _triedThisSpell = new();
 
     /// <summary>The tactic started since the last call, for the world to announce (each is announced once).</summary>
     public BossTactic? TakeStarted()
@@ -137,6 +147,7 @@ public sealed class BossMind
         double dD = b.Distance - p.Distance;
         bool hanging = dD > 0 && p.Speed < HangBackSpeed;
 
+        if (!hanging) _triedThisSpell.Clear();   // you sped up (or it is not ahead): everything is fair again
         if (Tactic != BossTactic.None && Step(b, view, phase, dD, hanging, dt) is { } running) return running;
 
         HangingBack = hanging ? HangingBack + dt : 0;
@@ -173,6 +184,8 @@ public sealed class BossMind
         LastFailed = BossTactic.None;
         _started = null;
         _reversingCue = false;
+        _aimed = false;
+        _triedThisSpell.Clear();
     }
 
     static DriveIntent Floor(BossCar b, WorldView view, DriveIntent phase)
@@ -202,14 +215,16 @@ public sealed class BossMind
             return;
         }
 
+        // Shooting back only from where its gunner can aim (beyond 90 m it would just sit in your sights).
         var weapon = b.Phase.Behaviour switch
         {
-            AgentKind.Gunner => BossTactic.ShootBack,
+            AgentKind.Gunner when dD <= ShootBackWithin => BossTactic.ShootBack,
             AgentKind.Dropper when DropperDriver.NextDrop(b.Arms) is not null => BossTactic.DropHazards,
             _ => BossTactic.None,
         };
+        if (_triedThisSpell.Contains(weapon)) weapon = BossTactic.None;
         bool hurt = b.HealthFraction <= RamAboveHealth;
-        bool canRam = cunning >= 3 && !hurt && b.Shield <= 0 && dD <= RamWithin;
+        bool canRam = cunning >= 3 && !hurt && b.Shield <= 0 && dD <= RamWithin && !_triedThisSpell.Contains(BossTactic.ReverseRam);
         Start(Pick(cunning, weapon, canRam, hurt, p.Armor <= YouBadlyHurt, LastFailed, view.Rng), p.Armor);
     }
 
@@ -221,6 +236,8 @@ public sealed class BossMind
         HangingBack = 0;
         _yourArmorAtStart = yourArmor;
         _started = t;
+        _aimed = false;
+        if (t != BossTactic.Run) _triedThisSpell.Add(t);
     }
 
     /// <summary>Ends the current tactic; one that did you no harm is remembered as failed.</summary>
@@ -251,13 +268,17 @@ public sealed class BossMind
             case BossTactic.ShootBack:
             case BossTactic.DropHazards:
                 bool samePhase = b.Phase.Behaviour == (Tactic == BossTactic.ShootBack ? AgentKind.Gunner : AgentKind.Dropper);
-                if (!samePhase || !hanging || TacticTime >= WeaponSeconds)
+                if (Tactic == BossTactic.ShootBack && GunnerDriver.IsAiming(b)) _aimed = true;
+                bool neverAimed = Tactic == BossTactic.ShootBack && !_aimed && TacticTime >= ShootBackMustAimWithin;
+                if (!samePhase || !hanging || neverAimed || TacticTime >= WeaponSeconds)
                 {
                     bool chain = samePhase && hanging && b.Definition.Cunning >= 5;
                     End(p.Armor, chain);
                     return Tactic == BossTactic.Run ? phase with { TargetSpeed = RunSpeed(b, view) } : null;
                 }
-                return phase;   // its phase drives at its own pace, under the floor if need be
+                // Shooting back: its phase drives at its own pace, under the floor if need be. Dropping keeps the floor
+                // (the design: only shooting back and the ram go under it).
+                return Tactic == BossTactic.ShootBack ? phase with { BrakeRate = RamBrake } : Floor(b, view, phase);
 
             case BossTactic.ReverseRam:
                 if (dD <= 0) { End(p.Armor, chainRun: false); return null; }                  // you got past it

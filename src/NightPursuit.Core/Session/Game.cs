@@ -42,6 +42,8 @@ public sealed class Game
     /// <summary>Spare cars the last mission bonus earned (the 25,000-point marks it passed), for the results screen.</summary>
     public int LastExtraCars { get; private set; }
     public bool QuitEarly { get; private set; }
+    /// <summary>True when the last run ended with the boss getting away (the failed and game-over screens say so).</summary>
+    public bool BossEscaped => Run?.State == RunState.Escaped;
 
     public int Score => Stage == GameStage.Playing && Run is not null ? Run.World.Score : _score;
     public int SpareCars => Stage == GameStage.Playing && Run is not null ? Run.World.Player.SpareCars : _spareCars;

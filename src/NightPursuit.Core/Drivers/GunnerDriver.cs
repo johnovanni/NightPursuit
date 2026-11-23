@@ -14,7 +14,9 @@ public sealed class GunnerDriver : IDriver
     const double OvertakeBelow = 25, HoldFrom = 35;
     const double HoldGapWanted = 45, HoldGain = 0.8, HoldSpeedRange = 10;
     const double HoldSeconds = 2.5, AimSeconds = 0.6, BurstSeconds = 0.45;
-    const double AimLateral = 2, AimMin = 25, AimMax = 90, LaneLimit = 5;
+    const double AimLateral = 2, AimMin = 25, LaneLimit = 5;
+    /// <summary>The farthest ahead of the player it aims from, m.</summary>
+    public const double AimMax = 90;
 
     public sealed class State
     {

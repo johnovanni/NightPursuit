@@ -51,6 +51,7 @@ public partial class ResultScreen : UserControl
                 break;
             case Screen.GameOver:
                 TitleText.Text = g.QuitEarly ? "GAME ENDED" : "GAME OVER";
+                if (g.BossEscaped) Add("THE BOSS ESCAPED ON YOUR LAST CAR", "TextHeading", "TextRed", bold: true);
                 Add($"MISSION REACHED {g.MissionReached} OF {g.Missions.Count}", "TextHeading", "TextWhite");
                 Add($"FINAL SCORE {g.Score:00000}", "TextHeading", "TextCyan", bold: true, top: 10);
                 KeyText.Text = g.Practice ? PracticeKeysFor(g) : "ENTER  CONTINUE";

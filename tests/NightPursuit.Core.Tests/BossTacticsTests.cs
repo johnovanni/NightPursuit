@@ -296,7 +296,7 @@ public class BossTacticsTests
     public void A_tactic_that_did_you_no_harm_is_remembered_as_failed()
     {
         var w = Straight();
-        var b = Spawn(w, First(AgentKind.Gunner, 4), 30);
+        var b = Spawn(w, First(AgentKind.Gunner, 4), 15);
         w.Player.Armor = 30;                                    // badly hurt: a cunning-4 Gunner shoots back
         Assert.NotNull(UntilTactic(w, b, 10));
         Assert.Equal(BossTactic.ShootBack, b.Mind.Tactic);
@@ -339,7 +339,7 @@ public class BossTacticsTests
     public void Shoot_back_and_drop_lift_the_floor_for_up_to_6_s()
     {
         var w = Straight();
-        var b = Spawn(w, First(AgentKind.Gunner, 4), 30);
+        var b = Spawn(w, First(AgentKind.Gunner, 4), 15);
         w.Player.Armor = 30;
         double start = UntilTactic(w, b, 10)!.Value;
         Assert.Equal(BossTactic.ShootBack, b.Mind.Tactic);
@@ -356,7 +356,7 @@ public class BossTacticsTests
 
         // A cunning-5 boss chains a run onto it.
         var w5 = Straight();
-        var b5 = Spawn(w5, First(AgentKind.Gunner, 5), 30);
+        var b5 = Spawn(w5, First(AgentKind.Gunner, 5), 15);
         w5.Player.Armor = 30;
         UntilTactic(w5, b5, 10);
         Assert.Equal(BossTactic.ShootBack, b5.Mind.Tactic);
@@ -365,7 +365,7 @@ public class BossTacticsTests
 
         // Speeding up ends it at once and the floor comes back.
         var wf = Straight();
-        var bf = Spawn(wf, First(AgentKind.Gunner, 4), 30);
+        var bf = Spawn(wf, First(AgentKind.Gunner, 4), 15);
         wf.Player.Armor = 30;
         UntilTactic(wf, bf, 10);
         Hold(wf, 30);
@@ -504,5 +504,82 @@ public class BossTacticsTests
             return w.StateHash();
         }
         Assert.Equal(Play(), Play());
+    }
+
+    // ---- final review fixes ----
+
+    /// <summary>The longest unbroken time an engaged boss stayed ahead within the guns' 380 m, and the armor you lost.</summary>
+    static (double Longest, double ArmorLost) InRange(AgentKind phase, int cunning, double playerSpeed, int seed, double seconds = 120)
+    {
+        var w = Straight(seed);
+        var b = Spawn(w, First(phase, cunning), 60, speed: 45);
+        double run = 0, longest = 0, lost = 0;
+        for (int i = 0; i < seconds * 120 && b.State != VehicleState.Wrecked; i++)
+        {
+            double armor = w.Player.Armor;
+            Hold(w, playerSpeed);
+            lost += Math.Max(0, armor - w.Player.Armor);
+            w.Player.Armor = 100;                               // never wrecked: the test is about the boss
+            double gap = Gap(w, b);
+            run = gap > 0 && gap <= 380 ? run + World.Step : 0;
+            longest = Math.Max(longest, run);
+        }
+        return (longest, lost);
+    }
+
+    /// <summary>
+    /// Review Focus 1 at every cunning: stopping or crawling never keeps a Gunner- or Dropper-phase boss in your sights for
+    /// long. Its tactics may bring it close for a while, but then it goes (final review, Critical 1).
+    /// </summary>
+    [Theory]
+    [InlineData(AgentKind.Gunner, 0.0)]
+    [InlineData(AgentKind.Gunner, 10.0)]
+    [InlineData(AgentKind.Dropper, 0.0)]
+    [InlineData(AgentKind.Dropper, 10.0)]
+    public void Stopping_never_parks_a_boss_in_your_sights_at_any_cunning(AgentKind phase, double playerSpeed)
+    {
+        for (int cunning = 2; cunning <= 6; cunning++)
+            for (int seed = 1; seed <= 6; seed++)
+            {
+                var (longest, _) = InRange(phase, cunning, playerSpeed, seed);
+                Assert.True(longest <= 25, $"{phase} cunning {cunning} seed {seed} at {playerSpeed} m/s: {longest:0.0} s in range");
+            }
+    }
+
+    [Fact]
+    public void Dropping_hazards_keeps_the_floor()
+    {
+        var w = Straight();
+        var b = Spawn(w, First(AgentKind.Dropper, 4), 30);
+        UntilTactic(w, b, 10);
+        Assert.Equal(BossTactic.DropHazards, b.Mind.Tactic);
+        for (int i = 0; i < 3 * 120 && b.Mind.Tactic == BossTactic.DropHazards; i++)
+        {
+            Hold(w, 0);
+            Assert.True(b.Speed >= BossMind.FloorSpeed - 1e-9, $"{b.Speed:0.0} m/s");
+        }
+    }
+
+    [Fact]
+    public void It_only_shoots_back_from_within_its_aim_range()
+    {
+        var w = Straight();
+        var b = Spawn(w, First(AgentKind.Gunner, 4), 150);
+        w.Player.Armor = 30;                                    // badly hurt: shooting back would fit, but it is too far to aim
+        UntilTactic(w, b, 10);
+        Assert.NotEqual(BossTactic.ShootBack, b.Mind.Tactic);
+    }
+
+    [Fact]
+    public void After_the_ram_you_are_not_rammed_again()
+    {
+        var (w, b) = RamScene();
+        for (int i = 0; i < 12 * 120 && b.Mind.Tactic == BossTactic.ReverseRam; i++) Hold(w, 15);
+        Assert.Contains(w.Events, e => e is PlayerDamaged { Reason: "THE BOSS BACKED INTO YOU" });
+        Assert.True(w.Player.Speed <= Math.Max(0, b.Speed) + 1e-9, $"you {w.Player.Speed:0.0}, boss {b.Speed:0.0}");
+        // You drive on with the gas held: the boss takes off and you never hit it from behind.
+        for (int i = 0; i < 3 * 120; i++) w.StepOnce(new ControlFrame { Gas = true });
+        Assert.DoesNotContain(w.Events, e => e is PlayerDamaged { Reason: "RAMMED" });
+        Assert.Single(w.Events.OfType<PlayerDamaged>(), e => e.Reason == "THE BOSS BACKED INTO YOU");
     }
 }

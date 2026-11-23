@@ -1823,3 +1823,21 @@ lost" bonus now counts cars actually lost, because an earned car would otherwise
 5. Drive at a steady 90 mph on cruise behind a Pursuer phase: it should still drop back and attack.
 6. Earn an extra car at 25,000 points: is "EXTRA CAR" in the message line noticeable enough, or should it get a banner?
 
+## After the Plan 8 final review (2026-11-23)
+
+**D200. Shooting back and dropping no longer park the boss in your sights.** The reviewer found that with you stopped,
+a boss "shooting back" from beyond its gunner's 90 m aim range just stopped there and never fired, and a dropper's
+hazards landed far ahead of a car that never reached them: 28 to 62 seconds in your gun range for free, the very thing
+this plan set out to end. Now: it only shoots back from within 70 m, brakes hard to get into its aim range, and gives up
+(counted as failed) if it hasn't started aiming within 3.5 s; dropping hazards keeps the 90 mph floor, as the design
+said; and while you keep hanging back without a break it never tries the same weapon or ram twice, so it ends up running.
+A test now checks every cunning level, Gunner and Dropper phases, stopped and crawling: never more than 25 s in range.
+*Cost to change:* tuning.
+
+**D201. Being backed into stops you.** After the reverse ram your car kept rolling into the stopped boss and took the
+ordinary "RAMMED" damage too (about 20 armor in all, not 10). Now the ram stops your car and the boss can't be touched
+again for 0.75 s, by which time it is driving off. *Cost to change:* small.
+
+**D202. An escape on your last car says so.** The game-over screen adds "THE BOSS ESCAPED ON YOUR LAST CAR" in red, so
+the end of the game never comes without a visible reason. *Cost to change:* none.
+

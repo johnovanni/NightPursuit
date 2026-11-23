@@ -53,6 +53,8 @@ public sealed partial class World
         var p = Player;
         p.Distance = b.Distance - (b.Stats.Length + p.Stats.Length) / 2;
         b.Speed = 0;
+        p.Speed = 0;                          // being backed into stops you, so you don't run straight into it again
+        b.ContactCooldown = 0.75;
         p.Shake = 0.35;
         DamagePlayer(BossMind.RamHurtsYou, "THE BOSS BACKED INTO YOU");
         double hurt = Math.Min(BossMind.RamHurtsBoss * b.MaxHealth, Math.Max(0, b.Armor - 0.01 * b.MaxHealth));
