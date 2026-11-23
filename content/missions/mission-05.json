@@ -117,6 +117,7 @@
   },
   "boss": {
     "name": "Silver Kite",
+    "cunning": 5,
     "health": 340,
     "look": "Fin",
     "phases": [

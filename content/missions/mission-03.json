@@ -105,6 +105,7 @@
   },
   "boss": {
     "name": "Red Lantern",
+    "cunning": 3,
     "health": 260,
     "look": "Dome",
     "phases": [

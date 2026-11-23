@@ -6,8 +6,8 @@ namespace NightPursuit.Core.Drivers;
 
 /// <summary>
 /// Drives a <see cref="BossCar"/>. It eases in at your speed - 10 m/s until you are within 140 m or hit it (call 21);
-/// then its current phase's behaviour drives it, slowed by caltrops, and a leash keeps it from being lost: far behind it
-/// closes at +25 m/s, far ahead it waits for you.
+/// then its current phase's behaviour drives it, held by its <see cref="BossMind"/> at or above 90 mph, slowed by
+/// caltrops, and far behind you it closes at +25 m/s. Far ahead it no longer waits for you: it can get away (Plan 8).
 /// </summary>
 public sealed class BossDriver : IDriver
 {
@@ -15,7 +15,7 @@ public sealed class BossDriver : IDriver
     const double RunnerGapWanted = 70, RunnerGain = 0.6, RunnerRange = 10;
     const double TopSpeed = 88;
     const double PassFromBehind = 10, PassUntilAhead = 60, PassExtra = 15;
-    const double LeashBehind = 120, LeashCatchUp = 25, LeashAhead = 600, LeashWait = 15;
+    const double LeashBehind = 120, LeashCatchUp = 25;
 
     public static readonly BossDriver Instance = new();
 
@@ -46,9 +46,9 @@ public sealed class BossDriver : IDriver
         };
 
         intent = PassWhenLeftBehind(b, view, intent, dD, delay, dt);
+        intent = b.Mind.Apply(b, view, intent, dt);
         if (b.SlowLeft > 0) intent = intent with { TargetSpeed = intent.TargetSpeed * BossDamage.CaltropSlowFactor };
         if (dD < -LeashBehind) intent = intent with { TargetSpeed = Math.Min(TopSpeed, p.Speed + LeashCatchUp) };
-        else if (dD > LeashAhead) intent = intent with { TargetSpeed = p.Speed - LeashWait };
         return intent with
         {
             TargetSpeed = Math.Max(0, intent.TargetSpeed),       // never reverses toward a stopped player

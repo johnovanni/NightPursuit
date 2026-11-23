@@ -99,6 +99,7 @@
   },
   "boss": {
     "name": "Iron Gull",
+    "cunning": 2,
     "health": 220,
     "look": "Twin",
     "phases": [

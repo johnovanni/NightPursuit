@@ -136,6 +136,7 @@
   },
   "boss": {
     "name": "Obsidian Crown",
+    "cunning": 6,
     "health": 400,
     "look": "Dome",
     "phases": [

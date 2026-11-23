@@ -14,7 +14,9 @@ public sealed class BossPursuitDriver : IDriver
     const double AttackWithin = 60, LevelWithin = 3;
     const double OvertakeTopSpeed = 88, OvertakeExtra = 12, PulledAhead = 60;
     const double HoldSeconds = 2.5, HoldGapWanted = 70, HoldGain = 0.8, HoldRange = 10;
-    const double DropBackSlower = 8, DropBackUntil = 8;
+    const double DropBackUntil = 8;
+    /// <summary>How much slower than you it drives while dropping back for the next attack, m/s.</summary>
+    public const double DropBackSlower = 8;
 
     public static readonly BossPursuitDriver Instance = new();
 

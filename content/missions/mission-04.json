@@ -112,6 +112,7 @@
   },
   "boss": {
     "name": "Grey Warden",
+    "cunning": 4,
     "health": 300,
     "look": "Twin",
     "phases": [

@@ -143,8 +143,8 @@ public static class MissionLoader
         {
             if (el.ValueKind != JsonValueKind.Object) throw Fail("boss must be an object");
             foreach (var prop in el.EnumerateObject())
-                if (prop.Name is not ("name" or "health" or "phases" or "look"))
-                    throw Fail($"boss.{prop.Name} is not a known field (name, health, phases, look)");
+                if (prop.Name is not ("name" or "health" or "phases" or "look" or "cunning"))
+                    throw Fail($"boss.{prop.Name} is not a known field (name, health, phases, look, cunning)");
 
             string name = Str(el, "name", "boss.name");
             if (string.IsNullOrWhiteSpace(name)) throw Fail("boss.name must not be empty");
@@ -167,7 +167,11 @@ public static class MissionLoader
                 if (lookEl.ValueKind != JsonValueKind.String || !TryEnumName(lookText, out look))
                     throw Fail($"boss.look must be Fin, Twin or Dome, not '{lookText}'");
             }
-            return new BossDefinition(name, health, phases, look);
+            int cunning = 1;
+            if (el.TryGetProperty("cunning", out var cunningEl)
+                && (cunningEl.ValueKind != JsonValueKind.Number || !cunningEl.TryGetInt32(out cunning) || cunning is < 1 or > 6))
+                throw Fail("boss.cunning must be a whole number from 1 to 6");
+            return new BossDefinition(name, health, phases, look, cunning);
         }
 
         /// <summary>

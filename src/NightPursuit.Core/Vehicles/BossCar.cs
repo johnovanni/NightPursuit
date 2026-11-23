@@ -53,6 +53,8 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
     public double? PassLane { get; set; }
     /// <summary>Wreck avoidance while passing.</summary>
     public AvoidMemory PassAvoid { get; } = new();
+    /// <summary>Its own will: the 90 mph floor, and the tactics it picks when you hang back.</summary>
+    public BossMind Mind { get; } = new();
 
     /// <summary>
     /// Puts it back on the road at <paramref name="distance"/> in the centre lane, driving straight at
@@ -78,6 +80,7 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
         ArrivalAvoid.Active = false;
         PassAvoid.Active = false;
         AheadMemory.Active = false;
+        Mind.Reset();
         SnapPrev();            // a teleport: not drawn sweeping in
     }
 

@@ -248,15 +248,6 @@ public class BossTests
         Assert.NotNull(caughtAt);
     }
 
-    [Fact]
-    public void Boss_far_ahead_waits_for_you()
-    {
-        var w = Straight();
-        var b = Spawn(w, Two, 700, speed: 52);
-        for (int i = 0; i < 3 * 120; i++) Step(w, 50);
-        Assert.Equal(35, b.Speed, 1);                           // your speed - 15
-    }
-
     [Theory]
     [InlineData(AgentKind.Blocker, 0, 0)]
     [InlineData(AgentKind.Armored, 0, 0)]

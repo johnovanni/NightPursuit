@@ -83,6 +83,7 @@
   },
   "boss": {
     "name": "Black Heron",
+    "cunning": 1,
     "health": 180,
     "phases": [
       {
