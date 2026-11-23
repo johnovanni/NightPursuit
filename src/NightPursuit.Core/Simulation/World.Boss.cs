@@ -29,6 +29,38 @@ public sealed partial class World
             NextPhase(b);
     }
 
+    /// <summary>
+    /// Shows what the boss's mind just started, so nothing depends on sound: a run and shooting back get a banner (a drop
+    /// has the dropper's own warning), and the reverse ram its "BOSS REVERSING" banner when the lights come on.
+    /// </summary>
+    void AnnounceBossMind(BossCar b)
+    {
+        if (b.Mind.TakeStarted() is { } t)
+        {
+            Publish(new BossTacticStarted(Time, b.Id, t));
+            if (t == BossTactic.Run) Announce("BOSS MAKING A RUN FOR IT", "CATCH IT BEFORE IT GETS AWAY", 2.5, urgent: true);
+            else if (t == BossTactic.ShootBack) Announce("BOSS SHOOTING BACK", "CHANGE LANES", 2.5, urgent: true);
+        }
+        if (b.Mind.TakeReversingCue()) Announce("BOSS REVERSING", "GET OUT OF ITS WAY", 2.5, urgent: true);
+    }
+
+    /// <summary>
+    /// The boss backed into you on purpose (its reverse ram): 10 armor points off you, 4% of its full health off it (never
+    /// enough to finish it), no blame or heat for you; the cars are parted and it takes off.
+    /// </summary>
+    internal void BossBackedIntoPlayer(BossCar b)
+    {
+        var p = Player;
+        p.Distance = b.Distance - (b.Stats.Length + p.Stats.Length) / 2;
+        b.Speed = 0;
+        p.Shake = 0.35;
+        DamagePlayer(BossMind.RamHurtsYou, "THE BOSS BACKED INTO YOU");
+        double hurt = Math.Min(BossMind.RamHurtsBoss * b.MaxHealth, Math.Max(0, b.Armor - 0.01 * b.MaxHealth));
+        if (hurt > 0) DamageBoss(b, hurt, KillCause.Rammed, "BACKED INTO YOU");
+        b.HitFlash = 0.1;
+        b.Mind.BackedIntoYou();
+    }
+
     void NextPhase(BossCar b)
     {
         b.PhaseIndex++;

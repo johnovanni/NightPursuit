@@ -55,6 +55,8 @@ public sealed class BossCar(BossDefinition def) : AgentCar(AgentKind.Boss, Vehic
     public AvoidMemory PassAvoid { get; } = new();
     /// <summary>Its own will: the 90 mph floor, and the tactics it picks when you hang back.</summary>
     public BossMind Mind { get; } = new();
+    /// <summary>Its reversing lights show (the second before it backs into you, and while it does).</summary>
+    public bool ReversingLights => Mind.ReversingLights;
 
     /// <summary>
     /// Puts it back on the road at <paramref name="distance"/> in the centre lane, driving straight at

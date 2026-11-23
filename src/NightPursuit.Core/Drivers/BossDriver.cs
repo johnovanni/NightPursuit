@@ -51,7 +51,8 @@ public sealed class BossDriver : IDriver
         if (dD < -LeashBehind) intent = intent with { TargetSpeed = Math.Min(TopSpeed, p.Speed + LeashCatchUp) };
         return intent with
         {
-            TargetSpeed = Math.Max(0, intent.TargetSpeed),       // never reverses toward a stopped player
+            // Never reverses toward you, except when it means to: backing into you (Plan 8).
+            TargetSpeed = b.Mind.Reversing ? intent.TargetSpeed : Math.Max(0, intent.TargetSpeed),
             FireMissile = WantsMissile(b, view, dD),
         };
     }

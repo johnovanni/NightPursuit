@@ -19,6 +19,8 @@ public sealed class WorldView(World world)
     /// <summary>True when the player's guns fired a tracer this step.</summary>
     public bool PlayerFiring => world.PlayerFiredThisStep;
     public double Time => world.Time;
+    /// <summary>The player's car's top speed as tuned now, m/s.</summary>
+    public double PlayerTopSpeed => world.Feel.MaxSpeed;
 
     /// <summary>False while the car is blinded by smoke.</summary>
     public bool CanSeePlayer(AgentCar self) => self.Blinded <= 0;

@@ -26,6 +26,8 @@ public sealed record Message(double Time, string Text, Tone Tone) : GameEvent(Ti
 public sealed record VehicleDestroyed(double Time, int VehicleId, AgentKind Kind, KillCause Cause, int Points, Faction Faction = Faction.Hostile) : GameEvent(Time);
 
 public sealed record PlayerDamaged(double Time, double Amount, string Reason) : GameEvent(Time);
+/// <summary>The boss started a tactic because you hung back (Plan 8).</summary>
+public sealed record BossTacticStarted(double Time, int BossId, NightPursuit.Core.Drivers.BossTactic Tactic) : GameEvent(Time);
 /// <summary>The score passed a 25,000-point mark and <paramref name="Cars"/> spare cars were added (never above 5).</summary>
 public sealed record ExtraCarEarned(double Time, int Cars) : GameEvent(Time);
 

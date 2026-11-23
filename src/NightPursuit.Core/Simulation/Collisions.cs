@@ -110,6 +110,12 @@ public static class Collisions
 
         if (overlapZ / contactZ < overlapX / halfW)
         {
+            // The boss backing into you on purpose: its own path, never your fault (Plan 8).
+            if (dz > 0 && a is BossCar { Mind.Reversing: true } reversing && reversing.Speed < 0)
+            {
+                w.BossBackedIntoPlayer(reversing);
+                return;
+            }
             double rel = Math.Abs(p.Speed - a.Speed);
             if (dz > 0)
             {

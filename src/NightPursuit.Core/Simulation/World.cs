@@ -264,6 +264,7 @@ public sealed partial class World
                     bool blind = a.Blinded > 0;
                     var driver = blind ? BlindDriver.Instance : a.Driver;   // DriverState is untouched, so the plan resumes
                     var intent = driver.Decide(a, _view, Step);
+                    if (a is BossCar minded) AnnounceBossMind(minded);
                     // A blinded car can't see the car ahead either, which is how cars collide inside smoke.
                     if (!blind)
                         intent = DriverHelpers.KeepClearOfCarAhead(a, _view, intent, a.AheadMemory, DriverHelpers.ReactionDelay(a.Kind), Step);

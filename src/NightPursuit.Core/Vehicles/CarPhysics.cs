@@ -51,7 +51,8 @@ public static class CarPhysics
     public static void StepAgent(Vehicle car, DriveIntent intent, double dt)
     {
         double target = Math.Min(intent.TargetSpeed, car.Stats.TopSpeed);
-        car.Speed = MathX.MoveToward(car.Speed, target, (car.Speed < target ? car.Stats.Accel : 10) * dt);
+        double brake = intent.BrakeRate > 0 ? intent.BrakeRate : 10;
+        car.Speed = MathX.MoveToward(car.Speed, target, (car.Speed < target ? car.Stats.Accel : brake) * dt);
         double steer = Math.Clamp((intent.TargetLateral - car.Lateral) * 1.8, -car.Stats.SideSpeed, car.Stats.SideSpeed);
         car.LateralVel = steer + car.PushVel;
         car.PushVel *= Math.Exp(-1.2 * dt);
