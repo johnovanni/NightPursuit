@@ -110,6 +110,7 @@ public sealed class GameView : FrameworkElement
             Overlays.DrawMessages(dc, _layout, world, bossBar);
             Overlays.DrawAnnouncement(dc, _layout, world, bossBar);
             Overlays.DrawBusted(dc, _layout, world);   // after the banner, so nothing covers the countdown
+            Overlays.DrawEscape(dc, _layout, run);     // the same place; not while busted
         }
         Overlays.DrawDamageAndOffRoad(dc, _layout, run);
         if (ShowHelp) Overlays.DrawHelp(dc, _layout);

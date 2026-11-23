@@ -49,7 +49,7 @@ public static class DiagnosticsRunner
         }
     }
 
-    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off", "no-sound", "finale-spinoff", "finale-roll", "finale-flip" };
+    static readonly string[] Scenes = { "default", "close-cars", "offroad", "uphill", "wreck", "arsenal", "strike", "enemies", "boss", "boss-mirror", "missile-warning", "weapons-hud", "boss-lock", "help", "traffic", "police", "roadblock", "busted", "sound-off", "no-sound", "finale-spinoff", "finale-roll", "finale-flip", "escape", "reversing" };
 
     static string _logPath = "diagnostics.log";
 
@@ -244,6 +244,8 @@ public static class DiagnosticsRunner
         else if (scene == "police") { PlaceOnOpenRoad(run.World); PlacePolice(run.World, view.Effects); }
         else if (scene == "roadblock") { PlaceOnOpenRoad(run.World); PlaceRoadblock(run.World, view.Effects); }
         else if (scene == "busted") { PlaceOnOpenRoad(run.World); PlaceBusted(run.World, view.Effects); }
+        else if (scene == "escape") { PlaceOnOpenRoad(run.World); PlaceEscape(run, view.Effects, mission); }
+        else if (scene == "reversing") { PlaceOnOpenRoad(run.World); PlaceReversing(run, view.Effects, mission); }
         else if (scene == "sound-off") view.SoundOff = true;   // the default scene with the SOUND OFF mark
         else if (scene == "no-sound") view.NoSound = true;   // the default scene with the NO SOUND mark
         else if (scene == "help") view.ShowHelp = true;   // the F1 help over the default scene
@@ -288,7 +290,7 @@ public static class DiagnosticsRunner
     static readonly (int W, int H)[] StressSizes = { (960, 540), (320, 200), (2560, 600) };
     static readonly double[] StressDistances = { -200, -60, -20, 3, 12, 30, 80, 200, 400, 700, 1000, 1300, 1490 };
     static readonly RunState[] StressStates =
-        { RunState.Playing, RunState.Playing, RunState.Paused, RunState.Respawning, RunState.Finale, RunState.Completed, RunState.GameOver };
+        { RunState.Playing, RunState.Playing, RunState.Paused, RunState.Respawning, RunState.Finale, RunState.Completed, RunState.GameOver, RunState.Escaped };
 
     /// <summary>
     /// Renders every 10 m of mission 1's road, the proving ground's and the patrol ground's, each at three window sizes (and 0 x 0), with a
@@ -529,6 +531,10 @@ public static class DiagnosticsRunner
             w.SetFinaleForDiagnostics(crash);
             if (frame % 2 == 0) view.Effects.FlashAge = 0.05;
         }
+        // The escape box on every fourth frame (any gap and seconds left), and the boss's reversing lights on even frames.
+        run.Escape.SetForDiagnostics(600 + frame * 37 % 600, frame % 21, warning: frame % 4 == 1);
+        if (frame % 2 == 0 && w.Agents.OfType<BossCar>().FirstOrDefault(b => b.State != VehicleState.Wrecked) is { } reversing)
+            reversing.Mind.SetRamForDiagnostics(frame % 4 == 0 ? RamStage.Lights : RamStage.Reverse);
         view.ShowHelp = (frame / StressStates.Length) % 2 == 0;
         for (int i = 0; i < frame % 5; i++)   // 0 to 4 messages, every tone
             w.Publish(new Message(w.Time - i * 0.5, $"STRESS MESSAGE {i}  +{100 * i}", (Tone)((frame + i) % 3)));
@@ -938,6 +944,29 @@ public static class DiagnosticsRunner
     }
 
     /// <summary>Heat 80 (Pursuit), the player stopped, a cruiser 8 m behind and the busted countdown 1.4 s in (BUSTED IN 2).</summary>
+    /// <summary>The boss 700 m ahead and getting away: the escape box with 12 s left.</summary>
+    static void PlaceEscape(MissionRun run, EffectList effects, string mission)
+    {
+        var p = run.World.Player;
+        p.Speed = 15;
+        var boss = BossCar.Create(run.World.NextId(), LoadBoss(mission), p.Distance + 700, p.Lateral, 56);
+        AddBoss(run, boss, effects);
+        run.Escape.SetForDiagnostics(700, 12);
+    }
+
+    /// <summary>The boss 30 m ahead, stopped with its reversing lights on, and its "BOSS REVERSING" banner.</summary>
+    static void PlaceReversing(MissionRun run, EffectList effects, string mission)
+    {
+        var w = run.World;
+        var p = w.Player;
+        p.Speed = 8;
+        var boss = BossCar.Create(w.NextId(), LoadBoss(mission), p.Distance + 30, p.Lateral, 0);
+        AddBoss(run, boss, effects);
+        boss.Mind.SetRamForDiagnostics(RamStage.Lights);
+        w.Announce("BOSS REVERSING", "GET OUT OF ITS WAY", 2.5, urgent: true);
+        for (int i = 0; i < 48; i++) w.StepOnce(ControlFrame.Empty);   // 0.4 s: the banner has faded in; the lights last 1 s
+    }
+
     static void PlaceBusted(World w, EffectList effects)
     {
         var p = w.Player;

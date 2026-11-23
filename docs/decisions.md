@@ -1760,3 +1760,66 @@ The cause: Space and pad A skipped the finale, but they are also the fire button
 first second skipped the crash you had just earned. Holding fire never skipped; pressing it again did. Now only Enter
 and pad Y (cruise, which does nothing during the finale) skip it, and the hint reads "ENTER OR PAD Y: SKIP". The
 one-second wait stays. *Cost to change:* small.
+
+## Plan 8 calls (2026-11-23, branch `plan-8-boss-tactics`)
+
+Boss tactics, part 1: the boss no longer slows down with you, it can get away, it reacts when you hang back, and it gets
+smarter mission by mission; plus an extra car every 25,000 points. The numbers you approved in the design (90 mph floor,
+125-140 mph running pace, 45 mph for hanging back, 600 m / 20 s / 1,200 m, the reaction times and the cunning table,
+the ram's 80 m, 10 points, 4% and 40%) are as approved. These are the calls I made while building it, for you to check.
+
+**D191. The floor only holds while the boss is ahead of you.** "Never follows you below 90 mph" is about a boss parked
+in front of your guns. Beside you or behind, its old driving stays, because the passing rules must be free to stay
+slower than you: without that, a boss behind you in your lane would have been pushed into the back of a stopped car.
+*Cost to change:* small.
+
+**D192. A Pursuer dropping back for its next attack may go down to 72 mph.** At exactly 90 mph (say, on cruise
+control) the floor kept it from ever getting behind you, and its whole attack cycle stalled. *Cost to change:* tuning.
+
+**D193. The reverse ram brakes hard.** At the cars' usual braking the boss needed 80 m to stop from 90 mph, and could
+almost never back into you. It now stops at 25 m/s² (about the rate a wrecked car slides to a stop), shows its lights
+for 1 second, then reverses at up to 25 mph. It gives up and takes off if it hasn't touched you after 5 seconds of
+reversing, if you are more than 120 m back, or if it drops to 40% health or is shielded during the ram. If you get past
+it, the ram simply ends. *Cost to change:* tuning.
+
+**D194. The ram can never finish the boss.** It only rams above 40% health, and its own 4% is also capped so it always
+leaves the boss some health. A boss killed by your guns while reversing still gets its crash and explosion (the crash
+starts no slower than your own speed). *Cost to change:* none.
+
+**D195. How each tactic ends.** A run ends when you are back within 200 m and no longer hanging back (or you pass it).
+Shooting back and dropping hazards end after 6 seconds, when you speed back up, or when the boss changes phase; a
+cunning-5 or -6 boss then makes a run for it, but only if you are still hanging back. A tactic that did you no damage
+counts as failed, and a cunning-6 boss won't try that one again next time (a run never counts as failed). *Cost to
+change:* tuning.
+
+**D196. The Pursuer that can't get behind you.** The first time you hang back while it is trying to get behind you, a
+cunning 1-3 boss gives up and passes you (its phase carries on, and if you keep hanging back the normal choice follows);
+from cunning 4 it makes a run for it straight away. *Cost to change:* small.
+
+**D197. What you see.** A run: the banner "BOSS MAKING A RUN FOR IT / CATCH IT BEFORE IT GETS AWAY". Shooting back:
+"BOSS SHOOTING BACK / CHANGE LANES", with the gunner's usual aim warning. Dropping: the dropper's usual warnings only
+(the design said so). The ram: "BOSS REVERSING / GET OUT OF ITS WAY" and two white reversing lights low on the back of
+the boss when the lights come on, a second before it moves. Getting away: the busted countdown's box (busted wins if
+both happen), "BOSS GETTING AWAY" flashing amber and red twice a second (it never disappears), with "700 M AHEAD   12 S
+LEFT" under it. *Cost to change:* small.
+
+**D198. The failed screen.** "MISSION FAILED", "THE BOSS ESCAPED" in red, "YOU LOSE A SPARE CAR", then your score and
+spare cars; Enter tries again from the briefing. It plays the game-over music. In practice, R restarts at once, which (as
+every practice restart does) starts from the mission's beginning, so no car is taken. *Cost to change:* small.
+
+**D199. Extra cars.** One for each 25,000-point mark your total passes, from any points (kills, missiles shot down, the
+mission bonus); never above 5 spare cars, and a car earned at 5 is not kept. In play it says "EXTRA CAR" in the message
+line and the car icons go up; from the mission bonus, "EXTRA CAR" shows in green on the results screen. The "no car
+lost" bonus now counts cars actually lost, because an earned car would otherwise hide one. *Cost to change:* small.
+
+## Checks only you can do (boss tactics)
+
+1. Stop or crawl behind a boss in each mission: it should never sit in front of your guns, and mission 1's boss should
+   simply run.
+2. Is 20 seconds of "BOSS GETTING AWAY" fair from a standstill? Is the flashing comfortable to read?
+3. The reverse ram: is the 1-second warning (banner and lights) enough to steer out of its way? Does the hard stop look
+   right?
+4. Do later bosses feel smarter (mission 4 on), without mission 1 getting harder?
+5. Drive at a steady 90 mph on cruise behind a Pursuer phase: it should still drop back and attack.
+6. Earn an extra car at 25,000 points: is "EXTRA CAR" in the message line noticeable enough, or should it get a banner?
+

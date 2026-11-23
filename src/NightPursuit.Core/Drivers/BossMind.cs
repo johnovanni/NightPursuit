@@ -155,6 +155,14 @@ public sealed class BossMind
         Start(BossTactic.Run, yourArmor: _yourArmorAtStart);
     }
 
+    /// <summary>DIAGNOSTICS ONLY (the reversing snapshot): puts the boss in its reverse ram at <paramref name="stage"/>.</summary>
+    public void SetRamForDiagnostics(RamStage stage)
+    {
+        Tactic = BossTactic.ReverseRam;
+        RamStage = stage;
+        TacticTime = 0;
+    }
+
     /// <summary>Forgets everything (a respawn puts the boss back to ease in again).</summary>
     public void Reset()
     {

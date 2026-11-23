@@ -126,6 +126,24 @@ internal static class Overlays
         l.Centered(dc, "SPEED UP TO BREAK FREE", top + 56 * kt, 18, Neon.TextAmber);
     }
 
+    /// <summary>
+    /// The boss getting away: the busted countdown's box (busted wins when both are on), its title flashing amber and
+    /// red twice a second (it never disappears), with how far ahead the boss is and the seconds left before it escapes.
+    /// </summary>
+    public static void DrawEscape(DrawingContext dc, HudLayout l, MissionRun run)
+    {
+        var w = run.World;
+        if (!run.Escape.Warning || w.Busted.Counting || run.State != RunState.Playing) return;
+        double k = l.K, kt = l.T(1), boxWidth = Math.Max(0, Math.Min(l.Width - 20, 470 * k + l.Grow(60))), boxHeight = 88 * kt;
+        double boxTop = Math.Min(l.Height * 0.70 - 8 * k, l.HoodTop - boxHeight - 2 * k), top = boxTop + 8 * kt;
+        var box = new Rect(l.HalfWidth - boxWidth / 2, boxTop, boxWidth, boxHeight);
+        dc.DrawRectangle(Neon.PanelFill, null, box);
+        LineArt.Brackets(dc, box, 14 * k, LineArt.Gauge);
+        bool red = (int)(w.Time * 4) % 2 == 1;
+        l.Centered(dc, "BOSS GETTING AWAY", top, 44, red ? Neon.TextRed : Neon.TextAmber);
+        l.Centered(dc, $"{run.Escape.Gap:0} M AHEAD   {Math.Ceiling(run.Escape.SecondsLeft):0} S LEFT", top + 56 * kt, 18, Neon.TextWhite);
+    }
+
     /// <summary>Half the height of a warning chevron, in 1280x720 pixels (times the scale).</summary>
     const double ChevronHalfHeight = 26;
 

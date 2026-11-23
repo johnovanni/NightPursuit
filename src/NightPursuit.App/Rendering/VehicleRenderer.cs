@@ -401,6 +401,16 @@ public static class VehicleRenderer
                 }
                 jag.Draw(dc, LineArt.Detail(LineArt.ColorOf(Neon.OpenArmor), fade));
             }
+            if (boss is { ReversingLights: true })   // backing up: two short white bars low on the back, either side
+            {
+                double lightHalf = 0.13 * BossShapes.Widening(look), lightAt = 0.74 * BossShapes.Widening(look);
+                foreach (int side in Projector.Sides)
+                {
+                    var light = new Rect(P(side * lightAt - lightHalf, 0.46), P(side * lightAt + lightHalf, 0.38));
+                    dc.DrawRectangle(Neon.TextWhite, null, light);
+                    LineArt.Draw(dc, new RectangleGeometry(light), LineArt.Detail(Neon.White, fade));
+                }
+            }
         }
         else
         {

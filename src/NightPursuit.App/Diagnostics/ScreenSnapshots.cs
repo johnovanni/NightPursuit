@@ -25,7 +25,7 @@ public static class ScreenSnapshots
     const double Dt = 1.0 / 120;
     const double DriveSeconds = 12;   // as the --scene default: far enough along that the frozen road behind a screen is real road
 
-    static readonly string[] ScreenNames = { "title", "settings", "pause", "quit", "briefing", "briefing-all", "controls", "complete", "gameover", "ended", "finished", "initials", "highscores" };
+    static readonly string[] ScreenNames = { "title", "settings", "pause", "quit", "briefing", "briefing-all", "controls", "complete", "complete-extra", "mission-failed", "gameover", "ended", "finished", "initials", "highscores" };
     const string BriefingAll = "briefing-all";
 
     // Made up for the pictures: initials, score, mission reached, finished all six.
@@ -181,6 +181,14 @@ public static class ScreenSnapshots
                 Play(flow, view, practice);
                 ForceStage(flow, GameStage.MissionComplete, practice ? 0 : 3, 31250);
                 break;
+            case "complete-extra":   // the bonus passed 25,000: "EXTRA CAR" under the bonus lines
+                Play(flow, view, practice);
+                ForceStage(flow, GameStage.MissionComplete, practice ? 0 : 3, 26250, extraCars: 1);
+                break;
+            case "mission-failed":
+                Play(flow, view, practice);
+                ForceStage(flow, GameStage.MissionFailed, practice ? 0 : 2, 9850);
+                break;
             case "gameover":
                 Play(flow, view, practice);
                 ForceStage(flow, GameStage.GameOver, practice ? 0 : 2, 7200);
@@ -219,7 +227,7 @@ public static class ScreenSnapshots
     /// Puts the playing game into a result stage as the player would see it, without playing it: the diagnostic sets the game's own
     /// state (stage, mission index, score, a sample bonus), then lets the flow notice it on its next update.
     /// </summary>
-    static void ForceStage(ScreenFlow flow, GameStage stage, int missionIndex, int score)
+    static void ForceStage(ScreenFlow flow, GameStage stage, int missionIndex, int score, int extraCars = 0)
     {
         var game = flow.Game!;
         const BindingFlags Any = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
@@ -228,9 +236,14 @@ public static class ScreenSnapshots
         typeof(Game).GetField("_spareCars", Any)!.SetValue(game, 2);
         if (stage == GameStage.MissionComplete)
             typeof(Game).GetProperty(nameof(Game.LastBonus), Any)!.SetValue(game, MissionBonus.For(game.Mission, 62.7, carLost: false));
+        typeof(Game).GetProperty(nameof(Game.LastExtraCars), Any)!.SetValue(game, extraCars);
         typeof(Game).GetProperty(nameof(Game.Stage), Any)!.SetValue(game, stage);
         flow.Update(ControlFrame.Empty, 0);
-        Expect(flow, stage switch { GameStage.MissionComplete => Screen.MissionComplete, GameStage.GameOver => Screen.GameOver, _ => Screen.Finished }, stage.ToString());
+        Expect(flow, stage switch
+        {
+            GameStage.MissionComplete => Screen.MissionComplete, GameStage.GameOver => Screen.GameOver,
+            GameStage.MissionFailed => Screen.MissionFailed, _ => Screen.Finished,
+        }, stage.ToString());
     }
 
     /// <summary>

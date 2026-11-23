@@ -5,7 +5,7 @@ using NightPursuit.Core.Session;
 namespace NightPursuit.App.Screens;
 
 /// <summary>
-/// The mission-complete (with its bonus lines), game-over and finished-all screens. Every figure is words (NFR-3).
+/// The mission-complete (with its bonus lines), mission-failed (the boss escaped), game-over and finished-all screens. Every figure is words (NFR-3).
 /// Confirming is ignored until the confirm and fire controls have been released once (GameLoop), so a player still firing
 /// as the mission ends does not skip the screen.
 /// </summary>
@@ -41,6 +41,13 @@ public partial class ResultScreen : UserControl
                     Add(g.LastExtraCars == 1 ? "EXTRA CAR" : $"{g.LastExtraCars} EXTRA CARS", "TextHeading", "TextGreen", bold: true, top: 10);
                 Add($"SCORE {g.Score:00000}   SPARE CARS {g.SpareCars}", "TextHeading", "TextCyan", bold: true, top: 14);
                 KeyText.Text = g.Practice ? PracticeKeysFor(g) : g.MissionIndex + 1 < g.Missions.Count ? "ENTER  NEXT MISSION" : "ENTER  CONTINUE";
+                break;
+            case Screen.MissionFailed:
+                TitleText.Text = "MISSION FAILED";
+                Add("THE BOSS ESCAPED", "TextHeading", "TextRed", bold: true);
+                Add("YOU LOSE A SPARE CAR", "TextHeading", "TextAmber");
+                Add($"SCORE {g.Score:00000}   SPARE CARS {g.SpareCars}", "TextHeading", "TextCyan", bold: true, top: 14);
+                KeyText.Text = g.Practice ? "ENTER  TRY AGAIN   R  RESTART" : "ENTER  TRY AGAIN";
                 break;
             case Screen.GameOver:
                 TitleText.Text = g.QuitEarly ? "GAME ENDED" : "GAME OVER";

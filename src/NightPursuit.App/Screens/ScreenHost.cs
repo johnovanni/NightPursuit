@@ -73,7 +73,7 @@ public sealed class ScreenHost : ContentControl
         }
         else if (flow.Current == Screen.Controls)
             view = _controls;
-        else if (flow.Current is Screen.MissionComplete or Screen.GameOver or Screen.Finished)
+        else if (flow.Current is Screen.MissionComplete or Screen.MissionFailed or Screen.GameOver or Screen.Finished)
         {
             _result.Update(flow);
             view = _result;

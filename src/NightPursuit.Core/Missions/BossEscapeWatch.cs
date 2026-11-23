@@ -45,6 +45,14 @@ public sealed class BossEscapeWatch
         return SecondsLeft <= 1e-9;
     }
 
+    /// <summary>DIAGNOSTICS ONLY (the escape snapshot): shows the warning at <paramref name="gap"/> metres with <paramref name="secondsLeft"/> to go.</summary>
+    public void SetForDiagnostics(double gap, double secondsLeft, bool warning = true)
+    {
+        Gap = gap;
+        SecondsLeft = secondsLeft;
+        Warning = warning;
+    }
+
     void Clear()
     {
         Warning = false;
